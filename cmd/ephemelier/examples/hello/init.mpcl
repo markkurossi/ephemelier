@@ -1,0 +1,22 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"ephemelier/kernel"
+)
+
+// XXX Syscall undefined as return type
+func main(g, e int32) ([]byte, uint16, uint8, int32, []byte, int32) {
+	_ = intern(Init)
+
+	var mem [4]byte
+	msg := []byte("Hello, world\n")
+
+	return mem, intern(StHelloResult), kernel.SysWrite, 0, msg, len(msg)
+}

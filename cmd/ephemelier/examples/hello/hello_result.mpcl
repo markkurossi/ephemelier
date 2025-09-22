@@ -1,0 +1,41 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"crypto/cipher/gcm"
+	"ephemelier/kernel"
+)
+
+const (
+	MemSize = gcm.NonceSize + 256 + gcm.TagSize
+	IOSize  = 256
+)
+
+type Garbler struct {
+	privShare [16]byte
+	mem       [MemSize]byte
+	arg0      int32
+	arg1      int32
+	argBuf    [IOSize]byte
+}
+
+type Evaluator struct {
+	privShare [16]byte
+	arg0      int32
+	argBuf    [IOSize]byte
+}
+
+// XXX Syscall undefined as return type
+func main(g Garbler, e Evaluator) (
+	[]byte, uint16, uint8, int32, []byte, int32) {
+
+	var buf []byte
+
+	return g.mem, 0, kernel.SysExit, 0, buf, 0
+}

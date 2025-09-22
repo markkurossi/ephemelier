@@ -1,0 +1,14 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package kernel
+
+type Errno = int32
+
+const (
+	EINVAL = 22
+)

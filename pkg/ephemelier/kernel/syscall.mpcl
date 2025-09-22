@@ -1,0 +1,21 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package kernel
+
+// XXX type Syscall uint8
+type Syscall = uint8
+
+const (
+	SysExit      = 1
+	SysFork      = 2
+	SysRead      = 3
+	SysWrite     = 4
+	SysOpen      = 5
+	SysClose     = 6
+	SysGetrandom = 7
+)
