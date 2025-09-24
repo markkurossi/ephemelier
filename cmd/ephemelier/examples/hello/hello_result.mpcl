@@ -35,7 +35,10 @@ type Evaluator struct {
 func main(g Garbler, e Evaluator) (
 	[]byte, uint16, uint8, int32, []byte, int32) {
 
-	var buf []byte
+	var retval int32
+	if g.arg0 < 0 {
+		retval = 1
+	}
 
-	return g.mem, 0, kernel.SysExit, 0, buf, 0
+	return g.mem, 0, kernel.SysExit, retval, nil, 0
 }
