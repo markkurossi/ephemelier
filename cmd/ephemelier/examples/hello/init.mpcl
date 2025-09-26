@@ -11,12 +11,13 @@ import (
 	"ephemelier/kernel"
 )
 
-// XXX Syscall undefined as return type
-func main(g, e int32) ([]byte, uint16, uint8, int32, []byte, int32) {
+func main(g, e [16]byte) (
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+
 	_ = intern(Init)
 
 	var mem [4]byte
-	msg := []byte("Hello, world\n")
+	msg := []byte("Hello, world!\n")
 
 	return mem, intern(StHelloResult), kernel.SysWrite, 0, msg, len(msg)
 }

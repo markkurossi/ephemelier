@@ -21,8 +21,8 @@ type Garbler struct {
 	privShare [16]byte
 	mem       [MemSize]byte
 	arg0      int32
-	arg1      int32
 	argBuf    [IOSize]byte
+	arg1      int32
 }
 
 type Evaluator struct {
@@ -31,9 +31,8 @@ type Evaluator struct {
 	argBuf    [IOSize]byte
 }
 
-// XXX Syscall undefined as return type
 func main(g Garbler, e Evaluator) (
-	[]byte, uint16, uint8, int32, []byte, int32) {
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
 	var retval int32
 	if g.arg0 < 0 {

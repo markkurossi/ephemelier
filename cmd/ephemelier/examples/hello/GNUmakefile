@@ -8,4 +8,4 @@ clean:
 	rm -f $(CIRUITS)
 
 %.mpclc : %.mpcl
-	garbled -pkgpath ../../../../pkg -circ $+
+	garbled -sids symtab -pkgpath ../../../../pkg -circ $+

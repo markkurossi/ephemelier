@@ -7,10 +7,13 @@
 
 package kernel
 
-// XXX type Syscall uint8
+type PC = uint16
+
+// Syscall defines the system calls.
 type Syscall = uint8
 
 const (
+	// SysExit exits the process.
 	SysExit      = 1
 	SysFork      = 2
 	SysRead      = 3
