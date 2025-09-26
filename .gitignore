@@ -33,3 +33,4 @@ go.work.sum
 
 cmd/ephemelier/ephemelier
 *.mpclc
+,*
