@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/markkurossi/mpc/compiler/utils"
 	"github.com/markkurossi/mpc/p2p"
 )
 
@@ -66,12 +65,16 @@ const (
 
 // Kernel implements the Ephemelier kernel.
 type Kernel struct {
-	params *utils.Params
+	Params Params
 }
 
 // New creates a new kernel.
-func New() *Kernel {
-	return &Kernel{}
+func New(params *Params) *Kernel {
+	kern := &Kernel{}
+	if params != nil {
+		kern.Params = *params
+	}
+	return kern
 }
 
 // CreateProcess creates a new process.

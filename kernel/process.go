@@ -20,10 +20,6 @@ import (
 	"github.com/markkurossi/mpc/p2p"
 )
 
-const (
-	verboseMPC = false
-)
-
 var (
 	oti = ot.NewCO()
 )
@@ -38,6 +34,14 @@ type Process struct {
 	mem  []byte
 	pc   uint16
 	fds  map[int32]FD
+}
+
+func (proc *Process) diagnostics() bool {
+	return proc.kern.Params.Diagnostics
+}
+
+func (proc *Process) verbose() bool {
+	return proc.kern.Params.Verbose
 }
 
 // SetProgram sets the program for the process.
@@ -113,7 +117,7 @@ func (proc *Process) runEvaluator() error {
 				}
 			}
 
-			if verboseMPC {
+			if proc.diagnostics() {
 				state.Circ.PrintInputs(circuit.IDEvaluator, inputs)
 			}
 
@@ -122,11 +126,11 @@ func (proc *Process) runEvaluator() error {
 				return err
 			}
 			result, err := circuit.Evaluator(proc.conn, oti, state.Circ,
-				input, verboseMPC)
+				input, proc.verbose())
 			if err != nil {
 				return err
 			}
-			if verboseMPC {
+			if proc.diagnostics() {
 				mpc.PrintResults(result, state.Circ.Outputs)
 			}
 
@@ -135,10 +139,9 @@ func (proc *Process) runEvaluator() error {
 			if err != nil {
 				return err
 			}
-			if false {
-				sys.Print()
+			if proc.kern.Params.Trace {
+				ktrace(proc.pc, sys)
 			}
-			strace(proc.pc, sys)
 
 			switch sys.call {
 			case SysExit:
@@ -193,7 +196,7 @@ run:
 			inputs = append(inputs, fmt.Sprintf("%d", sys.arg1))
 		}
 
-		if verboseMPC {
+		if proc.diagnostics() {
 			state.Circ.PrintInputs(circuit.IDGarbler, inputs)
 		}
 
@@ -202,11 +205,11 @@ run:
 			return err
 		}
 		result, err := circuit.Garbler(proc.conn, oti, state.Circ, input,
-			verboseMPC)
+			proc.verbose())
 		if err != nil {
 			return err
 		}
-		if verboseMPC {
+		if proc.diagnostics() {
 			mpc.PrintResults(result, state.Circ.Outputs)
 		}
 
@@ -219,10 +222,9 @@ run:
 			// Store memory only if returned.
 			proc.mem = sys.mem
 		}
-		if false {
-			sys.Print()
+		if proc.kern.Params.Trace {
+			ktrace(proc.pc, sys)
 		}
-		strace(proc.pc, sys)
 
 		proc.pc = sys.pc
 
@@ -307,7 +309,7 @@ func decodeSysall(sys *syscall, values []interface{}) error {
 	return nil
 }
 
-func strace(pc uint16, sys *syscall) {
+func ktrace(pc uint16, sys *syscall) {
 	fmt.Printf("%04x: %s", pc, sys.call)
 	switch sys.call {
 	case SysExit:

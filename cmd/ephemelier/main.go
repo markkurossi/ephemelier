@@ -12,49 +12,38 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
-	"path"
 
 	"github.com/markkurossi/ephemelier/eef"
 	"github.com/markkurossi/ephemelier/kernel"
-	"github.com/markkurossi/mpc/compiler/utils"
 	"github.com/markkurossi/mpc/ot"
 	"github.com/markkurossi/mpc/p2p"
 )
 
 var (
-	params  *utils.Params
 	oti     ot.OT
 	mpcPort = ":9000"
 	cmdPort = ":8080"
 	states  = make(map[string]map[string][]byte)
 	bo      = binary.BigEndian
-	kern    = *kernel.New()
+	kern    *kernel.Kernel
 )
 
 func main() {
 	evaluator := flag.Bool("e", false, "evaluator / garbler mode")
 	fVerbose := flag.Bool("v", false, "verbose output")
 	fDiagnostics := flag.Bool("d", false, "diagnostics output")
+	ktrace := flag.Bool("ktrace", false, "kernel trace")
 	flag.Parse()
 
 	log.SetFlags(0)
 
-	params = utils.NewParams()
-	defer params.Close()
+	kern = kernel.New(&kernel.Params{
+		Trace:       *ktrace,
+		Verbose:     *fVerbose,
+		Diagnostics: *fDiagnostics,
+	})
 
 	oti = ot.NewCO()
-
-	params.Verbose = *fVerbose
-	params.Diagnostics = *fDiagnostics
-	params.OptPruneGates = true
-
-	params.PkgPath = append(params.PkgPath,
-		path.Join(os.Getenv("HOME"),
-			"go/src/github.com/markkurossi/ephemelier/pkg"))
-
-	fmt.Printf("PkgPath: %v\n", params.PkgPath)
-	fmt.Printf("SymbolIDs: %v\n", params.SymbolIDs)
 
 	mode := "Garbler"
 	if *evaluator {
