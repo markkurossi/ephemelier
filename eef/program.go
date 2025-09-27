@@ -4,7 +4,8 @@
 // All rights reserved.
 //
 
-package kernel
+// Package eef implements support for Ephemelier Executable Files (EEF).
+package eef
 
 import (
 	"fmt"
@@ -16,19 +17,22 @@ import (
 	"github.com/markkurossi/mpc/compiler/utils"
 )
 
+// Program defines EEF program.
 type Program struct {
 	Name   string
 	Init   *Circuit
-	byName map[string]*Circuit
-	byPC   map[int]*Circuit
+	ByName map[string]*Circuit
+	ByPC   map[int]*Circuit
 }
 
+// Circuit implements a program state.
 type Circuit struct {
 	Name string
 	PC   int
 	Circ *circuit.Circuit
 }
 
+// NewProgram parses the EEF file.
 func NewProgram(file string) (*Program, error) {
 	entries, err := os.ReadDir(file)
 	if err != nil {
@@ -37,8 +41,8 @@ func NewProgram(file string) (*Program, error) {
 	params := utils.NewParams()
 	prog := &Program{
 		Name:   file,
-		byName: make(map[string]*Circuit),
-		byPC:   make(map[int]*Circuit),
+		ByName: make(map[string]*Circuit),
+		ByPC:   make(map[int]*Circuit),
 	}
 
 	for _, entry := range entries {
@@ -60,24 +64,24 @@ func NewProgram(file string) (*Program, error) {
 				Circ: c,
 			}
 
-			prog.byName[circ.Name] = circ
+			prog.ByName[circ.Name] = circ
 		}
 	}
 
 	// Create mappings from PC to circuit.
-	for name, circ := range prog.byName {
+	for name, circ := range prog.ByName {
 		id, ok := params.SymbolIDs[name]
 		if !ok {
 			return nil, fmt.Errorf("symbol %v undefined in PC map", name)
 		}
 		circ.PC = id
-		prog.byPC[id] = circ
+		prog.ByPC[id] = circ
 
 		if name == "Init" {
 			prog.Init = circ
 		}
 	}
-	for pc, circ := range prog.byPC {
+	for pc, circ := range prog.ByPC {
 		fmt.Printf("%-4d %-16s\t#gates=%-5d #wires=%v\n", pc, circ.Name,
 			circ.Circ.NumGates, circ.Circ.NumWires)
 	}

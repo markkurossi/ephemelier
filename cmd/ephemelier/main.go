@@ -15,6 +15,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/markkurossi/ephemelier/eef"
 	"github.com/markkurossi/ephemelier/kernel"
 	"github.com/markkurossi/mpc/compiler/utils"
 	"github.com/markkurossi/mpc/ot"
@@ -107,7 +108,7 @@ func garblerMode(file string) error {
 	defer mpc.Close()
 	proc := kern.CreateProcess(p2p.NewConn(mpc), kernel.RoleGarbler)
 
-	prog, err := kernel.NewProgram(file)
+	prog, err := eef.NewProgram(file)
 	if err != nil {
 		return err
 	}

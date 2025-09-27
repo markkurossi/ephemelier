@@ -13,6 +13,7 @@ import (
 	"github.com/markkurossi/mpc/p2p"
 )
 
+// Syscall defines system calls.
 type Syscall uint8
 
 func (call Syscall) String() string {
@@ -23,6 +24,7 @@ func (call Syscall) String() string {
 	return fmt.Sprintf("{Syscall %d}", call)
 }
 
+// System calls.
 const (
 	SysExit Syscall = iota + 1
 	SysFork
@@ -43,21 +45,26 @@ var syscallNames = map[Syscall]string{
 	SysGetrandom: "getrandom",
 }
 
+// Role defines the process roles.
 type Role int
 
+// Process roles.
 const (
 	RoleGarbler Role = iota
 	RoleEvaluator
 )
 
+// Kernel implements the Ephemelier kernel.
 type Kernel struct {
 	params *utils.Params
 }
 
+// New creates a new kernel.
 func New() *Kernel {
 	return &Kernel{}
 }
 
+// CreateProcess creates a new process.
 func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role) *Process {
 	return &Process{
 		kern: kern,

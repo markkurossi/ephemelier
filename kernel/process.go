@@ -14,6 +14,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/markkurossi/ephemelier/eef"
 	"github.com/markkurossi/mpc"
 	"github.com/markkurossi/mpc/circuit"
 	"github.com/markkurossi/mpc/ot"
@@ -28,17 +29,19 @@ var (
 	oti = ot.NewCO()
 )
 
+// Process defines a kernel process.
 type Process struct {
 	kern *Kernel
 	role Role
 	conn *p2p.Conn
-	prog *Program
+	prog *eef.Program
 	key  []byte
 	mem  []byte
 	pc   uint16
 }
 
-func (proc *Process) SetProgram(prog *Program) error {
+// SetProgram sets the program for the process.
+func (proc *Process) SetProgram(prog *eef.Program) error {
 	var key [16]byte
 	_, err := rand.Read(key[:])
 	if err != nil {
@@ -50,6 +53,7 @@ func (proc *Process) SetProgram(prog *Program) error {
 	return nil
 }
 
+// Run runs the process.
 func (proc *Process) Run() (err error) {
 	defer proc.conn.Close()
 
@@ -76,7 +80,7 @@ func (proc *Process) runEvaluator() error {
 			}
 			return err
 		}
-		prog, err := NewProgram(programName)
+		prog, err := eef.NewProgram(programName)
 		if err != nil {
 			return err
 		}
@@ -146,7 +150,7 @@ func (proc *Process) runEvaluator() error {
 			}
 
 			proc.pc = sys.pc
-			state, ok = proc.prog.byPC[int(proc.pc)]
+			state, ok = proc.prog.ByPC[int(proc.pc)]
 			if !ok {
 				return fmt.Errorf("invalid PC: %v", proc.pc)
 			}
@@ -237,7 +241,7 @@ run:
 			sys.arg1 = 0
 		}
 
-		state, ok = proc.prog.byPC[int(proc.pc)]
+		state, ok = proc.prog.ByPC[int(proc.pc)]
 		if !ok {
 			return fmt.Errorf("invalid PC: %v", proc.pc)
 		}
