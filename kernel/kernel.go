@@ -8,9 +8,19 @@ package kernel
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/markkurossi/mpc/compiler/utils"
 	"github.com/markkurossi/mpc/p2p"
+)
+
+// Errno defines error numbers.
+type Errno int32
+
+// Error numbers.
+const (
+	EBADF  Errno = 9
+	EINVAL Errno = 22
 )
 
 // Syscall defines system calls.
@@ -66,9 +76,15 @@ func New() *Kernel {
 
 // CreateProcess creates a new process.
 func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role) *Process {
-	return &Process{
+	proc := &Process{
 		kern: kern,
 		role: role,
 		conn: conn,
+		fds:  make(map[int32]FD),
 	}
+	proc.fds[0] = NewFileFD(os.Stdin)
+	proc.fds[1] = NewFileFD(os.Stdout)
+	proc.fds[2] = NewFileFD(os.Stderr)
+
+	return proc
 }

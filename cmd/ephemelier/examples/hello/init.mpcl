@@ -19,5 +19,5 @@ func main(g, e [16]byte) (
 	var mem [4]byte
 	msg := []byte("Hello, world!\n")
 
-	return mem, intern(StHelloResult), kernel.SysWrite, 0, msg, len(msg)
+	return mem, intern(StHelloResult), kernel.SysWrite, 1, msg, len(msg)
 }

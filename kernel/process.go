@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 
 	"github.com/markkurossi/ephemelier/eef"
 	"github.com/markkurossi/mpc"
@@ -38,6 +37,7 @@ type Process struct {
 	key  []byte
 	mem  []byte
 	pc   uint16
+	fds  map[int32]FD
 }
 
 // SetProgram sets the program for the process.
@@ -231,11 +231,11 @@ run:
 			break run
 
 		case SysWrite:
-			n, err := os.Stdout.Write(sys.argBuf[:sys.arg1])
-			if err != nil {
-				sys.arg0 = -22
+			fd, ok := proc.fds[sys.arg0]
+			if !ok {
+				sys.arg0 = int32(-EBADF)
 			} else {
-				sys.arg0 = int32(n)
+				sys.arg0 = int32(fd.Write(sys.argBuf[:sys.arg1]))
 			}
 			sys.argBuf = nil
 			sys.arg1 = 0
