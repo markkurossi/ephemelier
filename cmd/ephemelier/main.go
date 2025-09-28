@@ -145,7 +145,7 @@ func console() error {
 		}
 		log.Printf("New console connection from %s", conn.RemoteAddr())
 		fd := kernel.NewSocketFD(conn)
-		err = garblerMode("examples/hello", fd, fd.Copy(), fd.Copy())
+		err = garblerMode("examples/sh", fd, fd.Copy(), fd.Copy())
 		if err != nil {
 			return err
 		}

@@ -111,10 +111,14 @@ func (proc *Process) runEvaluator() error {
 			var ok bool
 			var inputs []string
 
+			numInputs := state.Circ.Inputs[1].Len()
+
 			// The first input is always the key share.
 			inputs = append(inputs, fmt.Sprintf("0x%x", proc.key))
-			if state.Name != "Init" {
+			if numInputs > 1 {
 				inputs = append(inputs, fmt.Sprintf("%d", sys.arg0))
+			}
+			if numInputs > 2 {
 				if len(sys.argBuf) == 0 {
 					inputs = append(inputs, "0")
 				} else {
@@ -152,6 +156,10 @@ func (proc *Process) runEvaluator() error {
 			case SysExit:
 				break run
 
+			case SysRead:
+				sys.arg0 = 0
+				sys.argBuf = nil
+
 			case SysWrite:
 				sys.arg0 = 0
 				sys.argBuf = nil
@@ -188,16 +196,28 @@ run:
 		var ok bool
 		var inputs []string
 
+		numInputs := state.Circ.Inputs[0].Len()
+
 		// The first input is always the key share.
 		inputs = append(inputs, fmt.Sprintf("0x%x", proc.key))
-		if state.Name != "Init" {
-			inputs = append(inputs, fmt.Sprintf("0x%x", proc.mem))
+		if numInputs > 1 {
+			if len(proc.mem) == 0 {
+				inputs = append(inputs, "0")
+			} else {
+				inputs = append(inputs, fmt.Sprintf("0x%x", proc.mem))
+			}
+		}
+		if numInputs > 2 {
 			inputs = append(inputs, fmt.Sprintf("%d", sys.arg0))
+		}
+		if numInputs > 3 {
 			if len(sys.argBuf) == 0 {
 				inputs = append(inputs, "0")
 			} else {
 				inputs = append(inputs, fmt.Sprintf("0x%x", sys.argBuf))
 			}
+		}
+		if numInputs > 4 {
 			inputs = append(inputs, fmt.Sprintf("%d", sys.arg1))
 		}
 
@@ -236,6 +256,17 @@ run:
 		switch sys.call {
 		case SysExit:
 			break run
+
+		case SysRead:
+			fd, ok := proc.fds[sys.arg0]
+			if !ok {
+				sys.arg0 = int32(-EBADF)
+			} else {
+				sys.argBuf = make([]byte, int(sys.arg1))
+				sys.arg0 = int32(fd.Read(sys.argBuf))
+				fmt.Printf("SysRead: %x\n", sys.argBuf[:sys.arg0])
+			}
+			sys.arg1 = 0
 
 		case SysWrite:
 			fd, ok := proc.fds[sys.arg0]
@@ -319,6 +350,9 @@ func ktrace(pc uint16, sys *syscall) {
 	switch sys.call {
 	case SysExit:
 		fmt.Printf("(%d)", sys.arg0)
+
+	case SysRead:
+		fmt.Printf("(%d, %d)", sys.arg0, sys.arg1)
 
 	case SysWrite:
 		fmt.Printf("(%d, %x, %d)", sys.arg0, sys.argBuf[:sys.arg1], sys.arg1)
