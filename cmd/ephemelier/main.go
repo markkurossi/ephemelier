@@ -69,7 +69,8 @@ func main() {
 		var wg sync.WaitGroup
 		for _, arg := range flag.Args() {
 			wg.Go(func() {
-				err = garblerMode(arg, stdin, stdout, stderr)
+				err = garblerMode(arg, stdin.Copy(), stdout.Copy(),
+					stderr.Copy())
 				if err != nil {
 					log.Print(err)
 				}
@@ -103,12 +104,12 @@ func evaluatorMode() error {
 		log.Printf("New MPC connection from %s", conn.RemoteAddr())
 
 		proc := kern.CreateProcess(p2p.NewConn(conn), kernel.RoleEvaluator,
-			stdin, stdout, stderr)
+			stdin.Copy(), stdout.Copy(), stderr.Copy())
 		go proc.Run()
 	}
 }
 
-func garblerMode(file string, stdin, stdout, stderr kernel.FD) error {
+func garblerMode(file string, stdin, stdout, stderr *kernel.FD) error {
 	// Connect to evaluator.
 	mpc, err := net.Dial("tcp", mpcPort)
 	if err != nil {
@@ -144,7 +145,7 @@ func console() error {
 		}
 		log.Printf("New console connection from %s", conn.RemoteAddr())
 		fd := kernel.NewSocketFD(conn)
-		err = garblerMode("examples/hello", fd, fd, fd)
+		err = garblerMode("examples/hello", fd, fd.Copy(), fd.Copy())
 		if err != nil {
 			return err
 		}

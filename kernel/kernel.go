@@ -78,13 +78,13 @@ func New(params *Params) *Kernel {
 
 // CreateProcess creates a new process.
 func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
-	stdin, stdout, stderr FD) *Process {
+	stdin, stdout, stderr *FD) *Process {
 
 	proc := &Process{
 		kern: kern,
 		role: role,
 		conn: conn,
-		fds:  make(map[int32]FD),
+		fds:  make(map[int32]*FD),
 	}
 	proc.fds[0] = stdin
 	proc.fds[1] = stdout

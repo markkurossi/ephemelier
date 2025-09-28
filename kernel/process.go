@@ -33,7 +33,7 @@ type Process struct {
 	key  []byte
 	mem  []byte
 	pc   uint16
-	fds  map[int32]FD
+	fds  map[int32]*FD
 }
 
 func (proc *Process) diagnostics() bool {

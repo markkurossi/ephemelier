@@ -18,10 +18,10 @@ type FDSocket struct {
 }
 
 // NewSocketFD creates a new socket FD.
-func NewSocketFD(conn net.Conn) *FDSocket {
-	return &FDSocket{
+func NewSocketFD(conn net.Conn) *FD {
+	return NewFD(&FDSocket{
 		conn: conn,
-	}
+	})
 }
 
 // Close implements FD.Close.

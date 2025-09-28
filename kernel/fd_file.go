@@ -18,10 +18,10 @@ type FDFile struct {
 }
 
 // NewFileFD creates a new file FD.
-func NewFileFD(f *os.File) *FDFile {
-	return &FDFile{
+func NewFileFD(f *os.File) *FD {
+	return NewFD(&FDFile{
 		f: f,
-	}
+	})
 }
 
 // Close implements FD.Close.

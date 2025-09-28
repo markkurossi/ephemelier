@@ -12,16 +12,67 @@ import (
 	"io/fs"
 )
 
-// FD implements a file descriptor.
-type FD interface {
+// FD defines a file descriptor.
+type FD struct {
+	refcount int
+	impl     FDImpl
+}
+
+// NewFD creates a new FD for the implementation.
+func NewFD(impl FDImpl) *FD {
+	return &FD{
+		refcount: 1,
+		impl:     impl,
+	}
+}
+
+// Copy creates a copy of the FD. The copy shares the underlying FD
+// implementation i.e. this adds a reference for the FD instance and
+// returns it.
+func (fd *FD) Copy() *FD {
+	if fd.refcount > 0 {
+		fd.refcount++
+	}
+	return fd
+}
+
+// Close removes a reference from the FD. If this was the last
+// reference, the underlying implementation is closed.
+func (fd *FD) Close() int {
+	if fd.refcount == 0 {
+		return 0
+	}
+	fd.refcount--
+	if fd.refcount > 0 {
+		return 0
+	}
+	return fd.impl.Close()
+}
+
+// Read reads data to the buffer b from the underlying FD
+// implementation. It returns the number of bytes read or -Errno on
+// error.
+func (fd *FD) Read(b []byte) int {
+	return fd.impl.Read(b)
+}
+
+// Write writes data from the buffer b to the underlying FD
+// implementation. It returns the number of bytes written or -Errno on
+// error.
+func (fd *FD) Write(b []byte) int {
+	return fd.impl.Write(b)
+}
+
+// FDImpl is the implementation of a file descriptor.
+type FDImpl interface {
 	Close() int
 	Read(b []byte) int
 	Write(b []byte) int
 }
 
 var (
-	_ FD = &FDFile{}
-	_ FD = &FDSocket{}
+	_ FDImpl = &FDFile{}
+	_ FDImpl = &FDSocket{}
 )
 
 func mapError(err error) int {
