@@ -8,7 +8,6 @@ package kernel
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/markkurossi/mpc/p2p"
 )
@@ -78,16 +77,18 @@ func New(params *Params) *Kernel {
 }
 
 // CreateProcess creates a new process.
-func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role) *Process {
+func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
+	stdin, stdout, stderr FD) *Process {
+
 	proc := &Process{
 		kern: kern,
 		role: role,
 		conn: conn,
 		fds:  make(map[int32]FD),
 	}
-	proc.fds[0] = NewFileFD(os.Stdin)
-	proc.fds[1] = NewFileFD(os.Stdout)
-	proc.fds[2] = NewFileFD(os.Stderr)
+	proc.fds[0] = stdin
+	proc.fds[1] = stdout
+	proc.fds[2] = stderr
 
 	return proc
 }

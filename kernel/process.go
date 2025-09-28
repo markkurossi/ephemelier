@@ -71,6 +71,11 @@ func (proc *Process) Run() (err error) {
 	if err != nil {
 		log.Printf("process error: %v", err)
 	}
+	// Close all FDs.
+	for _, fd := range proc.fds {
+		fd.Close()
+	}
+
 	return err
 }
 

@@ -6,6 +6,12 @@
 
 package kernel
 
+import (
+	"errors"
+	"io"
+	"io/fs"
+)
+
 // FD implements a file descriptor.
 type FD interface {
 	Close() int
@@ -15,4 +21,16 @@ type FD interface {
 
 var (
 	_ FD = &FDFile{}
+	_ FD = &FDSocket{}
 )
+
+func mapError(err error) int {
+	if err == nil {
+		return 0
+	}
+	var perr *fs.PathError
+	if errors.As(err, &perr) || errors.Is(err, io.EOF) {
+		return int(-EBADF)
+	}
+	return int(-EINVAL)
+}

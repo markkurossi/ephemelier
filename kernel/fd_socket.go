@@ -9,30 +9,30 @@ package kernel
 import (
 	"errors"
 	"io"
-	"os"
+	"net"
 )
 
-// FDFile implements file FDs.
-type FDFile struct {
-	f *os.File
+// FDSocket implements socket FDs.
+type FDSocket struct {
+	conn net.Conn
 }
 
-// NewFileFD creates a new file FD.
-func NewFileFD(f *os.File) *FDFile {
-	return &FDFile{
-		f: f,
+// NewSocketFD creates a new socket FD.
+func NewSocketFD(conn net.Conn) *FDSocket {
+	return &FDSocket{
+		conn: conn,
 	}
 }
 
 // Close implements FD.Close.
-func (fd *FDFile) Close() int {
-	err := fd.f.Close()
+func (fd *FDSocket) Close() int {
+	err := fd.conn.Close()
 	return mapError(err)
 }
 
 // Close implements FD.Read.
-func (fd *FDFile) Read(b []byte) int {
-	n, err := fd.f.Read(b)
+func (fd *FDSocket) Read(b []byte) int {
+	n, err := fd.conn.Read(b)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return 0
@@ -43,8 +43,8 @@ func (fd *FDFile) Read(b []byte) int {
 }
 
 // Close implements FD.Write.
-func (fd *FDFile) Write(b []byte) int {
-	n, err := fd.f.Write(b)
+func (fd *FDSocket) Write(b []byte) int {
+	n, err := fd.conn.Write(b)
 	if err != nil {
 		return mapError(err)
 	}
