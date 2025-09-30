@@ -43,8 +43,7 @@ func main(g Garbler, e Evaluator) (
 	var size int32
 
 	g.arg0 -= 2
-
-	for i := 0; i < IOSize; i++ {
+	for i := 0; i < len(g.argBuf); i++ {
 		if i < g.arg0 {
 			size = n + i
 			msg[size] = g.argBuf[i]

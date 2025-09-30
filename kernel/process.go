@@ -354,7 +354,8 @@ run:
 			} else {
 				sys.argBuf = make([]byte, int(sys.arg1))
 				sys.arg0 = int32(fd.Read(sys.argBuf))
-				fmt.Printf("SysRead: %x\n", sys.argBuf[:sys.arg0])
+				sys.argBuf = sys.argBuf[:sys.arg0]
+				fmt.Printf("SysRead: %x\n", sys.argBuf)
 			}
 			sys.arg1 = 0
 
