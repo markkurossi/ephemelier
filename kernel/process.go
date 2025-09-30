@@ -355,7 +355,6 @@ run:
 				sys.argBuf = make([]byte, int(sys.arg1))
 				sys.arg0 = int32(fd.Read(sys.argBuf))
 				sys.argBuf = sys.argBuf[:sys.arg0]
-				fmt.Printf("SysRead: %x\n", sys.argBuf)
 			}
 			sys.arg1 = 0
 
@@ -440,7 +439,7 @@ func decodeSysall(sys *syscall, values []interface{}) error {
 }
 
 func ktrace(pc uint16, sys *syscall) {
-	fmt.Printf("%04x=>%04x: %s", pc, sys.pc, sys.call)
+	fmt.Printf("%04x->%04x: %s", pc, sys.pc, sys.call)
 	switch sys.call {
 	case SysExit:
 		fmt.Printf("(%d)", sys.arg0)

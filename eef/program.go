@@ -102,11 +102,11 @@ func NewProgram(file string) (*Program, error) {
 	}
 	for pc, circ := range prog.ByPC {
 		fmt.Printf("%-4d %-16s", pc, circ.Name)
-
 		if circ.Circ != nil {
-			fmt.Printf("\t#gates=%-5d #wires=%v\n",
+			fmt.Printf("\t#gates=%-5d #wires=%v",
 				circ.Circ.NumGates, circ.Circ.NumWires)
 		}
+		fmt.Println()
 	}
 	if prog.Init == nil {
 		return nil, fmt.Errorf("init undefined in program '%v'", file)
