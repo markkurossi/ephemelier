@@ -7,15 +7,19 @@
 package kernel
 
 import (
+	"bytes"
 	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 
 	"github.com/markkurossi/ephemelier/eef"
 	"github.com/markkurossi/mpc"
 	"github.com/markkurossi/mpc/circuit"
+	"github.com/markkurossi/mpc/compiler"
+	"github.com/markkurossi/mpc/compiler/utils"
 	"github.com/markkurossi/mpc/ot"
 	"github.com/markkurossi/mpc/p2p"
 )
@@ -26,14 +30,15 @@ var (
 
 // Process defines a kernel process.
 type Process struct {
-	kern *Kernel
-	role Role
-	conn *p2p.Conn
-	prog *eef.Program
-	key  []byte
-	mem  []byte
-	pc   uint16
-	fds  map[int32]*FD
+	kern        *Kernel
+	role        Role
+	conn        *p2p.Conn
+	prog        *eef.Program
+	mpclcParams *utils.Params
+	key         []byte
+	mem         []byte
+	pc          uint16
+	fds         map[int32]*FD
 }
 
 func (proc *Process) diagnostics() bool {
@@ -53,6 +58,14 @@ func (proc *Process) SetProgram(prog *eef.Program) error {
 	}
 	proc.prog = prog
 	proc.key = key[:]
+
+	proc.mpclcParams = utils.NewParams()
+	proc.mpclcParams.Verbose = proc.verbose()
+	proc.mpclcParams.Diagnostics = proc.diagnostics()
+	proc.mpclcParams.PkgPath = []string{
+		"../../pkg",
+	}
+	proc.mpclcParams.SymbolIDs = prog.Symtab
 
 	return nil
 }
@@ -109,9 +122,15 @@ func (proc *Process) runEvaluator() error {
 	run:
 		for {
 			var ok bool
+			var numInputs int
 			var inputs []string
 
-			numInputs := state.Circ.Inputs[1].Len()
+			if state.Circ != nil {
+				numInputs = state.Circ.Inputs[1].Len()
+			} else {
+				// Dynamic MPCL has always full signature.
+				numInputs = 3
+			}
 
 			// The first input is always the key share.
 			inputs = append(inputs, fmt.Sprintf("0x%x", proc.key))
@@ -126,25 +145,55 @@ func (proc *Process) runEvaluator() error {
 				}
 			}
 
-			if proc.diagnostics() {
-				state.Circ.PrintInputs(circuit.IDEvaluator, inputs)
-			}
+			var outputs circuit.IO
+			var result []*big.Int
 
-			input, err := state.Circ.Inputs[1].Parse(inputs)
-			if err != nil {
-				return err
-			}
-			result, err := circuit.Evaluator(proc.conn, oti, state.Circ,
-				input, proc.verbose())
-			if err != nil {
-				return err
-			}
-			if proc.diagnostics() {
-				mpc.PrintResults(result, state.Circ.Outputs)
+			if state.Circ != nil {
+				// Pre-compiled circuit.
+				if proc.diagnostics() {
+					state.Circ.PrintInputs(circuit.IDEvaluator, inputs)
+				}
+
+				input, err := state.Circ.Inputs[1].Parse(inputs)
+				if err != nil {
+					return err
+				}
+				result, err = circuit.Evaluator(proc.conn, oti, state.Circ,
+					input, proc.verbose())
+				if err != nil {
+					return err
+				}
+				outputs = state.Circ.Outputs
+
+				if proc.diagnostics() {
+					mpc.PrintResults(result, state.Circ.Outputs)
+				}
+			} else {
+				// Streaming MPCL.
+				sizes, err := circuit.InputSizes(inputs)
+				if err != nil {
+					return err
+				}
+				err = proc.conn.SendInputSizes(sizes)
+				if err != nil {
+					return err
+				}
+				err = proc.conn.Flush()
+				if err != nil {
+					return err
+				}
+				outputs, result, err = circuit.StreamEvaluator(proc.conn, oti,
+					inputs, proc.verbose())
+				if err != nil {
+					return err
+				}
+				if proc.diagnostics() {
+					mpc.PrintResults(result, outputs)
+				}
 			}
 
 			// Decode syscall.
-			err = decodeSysall(sys, mpc.Results(result, state.Circ.Outputs))
+			err = decodeSysall(sys, mpc.Results(result, outputs))
 			if err != nil {
 				return err
 			}
@@ -163,6 +212,9 @@ func (proc *Process) runEvaluator() error {
 			case SysWrite:
 				sys.arg0 = 0
 				sys.argBuf = nil
+
+			default:
+				return fmt.Errorf("invalid syscall: %v", sys.call)
 			}
 
 			proc.pc = sys.pc
@@ -191,12 +243,19 @@ func (proc *Process) runGarbler() error {
 	// Run program.
 	state := proc.prog.Init
 	sys := new(syscall)
+	inputSizes := make([][]int, 2)
 run:
 	for {
 		var ok bool
+		var numInputs int
 		var inputs []string
 
-		numInputs := state.Circ.Inputs[0].Len()
+		if state.Circ != nil {
+			numInputs = state.Circ.Inputs[0].Len()
+		} else {
+			// Dynamic MPCL has always full signature
+			numInputs = 5
+		}
 
 		// The first input is always the key share.
 		inputs = append(inputs, fmt.Sprintf("0x%x", proc.key))
@@ -221,25 +280,56 @@ run:
 			inputs = append(inputs, fmt.Sprintf("%d", sys.arg1))
 		}
 
-		if proc.diagnostics() {
-			state.Circ.PrintInputs(circuit.IDGarbler, inputs)
-		}
+		var outputs circuit.IO
+		var result []*big.Int
 
-		input, err := state.Circ.Inputs[0].Parse(inputs)
-		if err != nil {
-			return err
-		}
-		result, err := circuit.Garbler(proc.conn, oti, state.Circ, input,
-			proc.verbose())
-		if err != nil {
-			return err
-		}
-		if proc.diagnostics() {
-			mpc.PrintResults(result, state.Circ.Outputs)
+		if state.Circ != nil {
+			// Pre-compiled circuit.
+			if proc.diagnostics() {
+				state.Circ.PrintInputs(circuit.IDGarbler, inputs)
+			}
+
+			input, err := state.Circ.Inputs[0].Parse(inputs)
+			if err != nil {
+				return err
+			}
+			result, err = circuit.Garbler(proc.conn, oti, state.Circ, input,
+				proc.verbose())
+			if err != nil {
+				return err
+			}
+			outputs = state.Circ.Outputs
+
+			if proc.diagnostics() {
+				mpc.PrintResults(result, state.Circ.Outputs)
+			}
+		} else {
+			// Streaming MPCL.
+			sizes, err := circuit.InputSizes(inputs)
+			if err != nil {
+				return err
+			}
+			inputSizes[0] = sizes
+
+			sizes, err = proc.conn.ReceiveInputSizes()
+			if err != nil {
+				return err
+			}
+			inputSizes[1] = sizes
+
+			outputs, result, err = compiler.New(proc.mpclcParams).Stream(
+				proc.conn, oti, state.Name, bytes.NewReader(state.DMPCL),
+				inputs, inputSizes)
+			if err != nil {
+				return err
+			}
+			if proc.diagnostics() {
+				mpc.PrintResults(result, outputs)
+			}
 		}
 
 		// Decode syscall.
-		err = decodeSysall(sys, mpc.Results(result, state.Circ.Outputs))
+		err = decodeSysall(sys, mpc.Results(result, outputs))
 		if err != nil {
 			return err
 		}
@@ -277,6 +367,9 @@ run:
 			}
 			sys.argBuf = nil
 			sys.arg1 = 0
+
+		default:
+			return fmt.Errorf("invalid syscall: %v", sys.call)
 		}
 
 		state, ok = proc.prog.ByPC[int(proc.pc)]
@@ -346,7 +439,7 @@ func decodeSysall(sys *syscall, values []interface{}) error {
 }
 
 func ktrace(pc uint16, sys *syscall) {
-	fmt.Printf("%04x: %s", pc, sys.call)
+	fmt.Printf("%04x=>%04x: %s", pc, sys.pc, sys.call)
 	switch sys.call {
 	case SysExit:
 		fmt.Printf("(%d)", sys.arg0)
@@ -358,5 +451,4 @@ func ktrace(pc uint16, sys *syscall) {
 		fmt.Printf("(%d, %x, %d)", sys.arg0, sys.argBuf[:sys.arg1], sys.arg1)
 	}
 	fmt.Println()
-
 }

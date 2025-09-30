@@ -21,14 +21,14 @@ type Garbler struct {
 	privShare [16]byte
 	mem       [MemSize]byte
 	arg0      int32
-	argBuf    [IOSize]byte
+	argBuf    []byte
 	arg1      int32
 }
 
 type Evaluator struct {
 	privShare [16]byte
 	arg0      int32
-	argBuf    [IOSize]byte
+	argBuf    []byte
 }
 
 func main(g Garbler, e Evaluator) (

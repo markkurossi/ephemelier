@@ -9,6 +9,7 @@ package eef
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,15 +22,17 @@ import (
 type Program struct {
 	Name   string
 	Init   *Circuit
+	Symtab map[string]int
 	ByName map[string]*Circuit
 	ByPC   map[int]*Circuit
 }
 
 // Circuit implements a program state.
 type Circuit struct {
-	Name string
-	PC   int
-	Circ *circuit.Circuit
+	Name  string
+	PC    int
+	Circ  *circuit.Circuit
+	DMPCL []byte
 }
 
 // NewProgram parses the EEF file.
@@ -38,7 +41,6 @@ func NewProgram(file string) (*Program, error) {
 	if err != nil {
 		return nil, err
 	}
-	params := utils.NewParams()
 	prog := &Program{
 		Name:   file,
 		ByName: make(map[string]*Circuit),
@@ -50,10 +52,12 @@ func NewProgram(file string) (*Program, error) {
 		path := filepath.Join(file, name)
 
 		if name == "symtab" {
+			params := utils.NewParams()
 			err = params.LoadSymbolIDs(path)
 			if err != nil {
 				return nil, err
 			}
+			prog.Symtab = params.SymbolIDs
 		} else if circuit.IsFilename(name) {
 			c, err := circuit.Parse(path)
 			if err != nil {
@@ -65,12 +69,27 @@ func NewProgram(file string) (*Program, error) {
 			}
 
 			prog.ByName[circ.Name] = circ
+		} else if strings.HasSuffix(name, ".dmpcl") {
+			f, err := os.Open(path)
+			if err != nil {
+				return nil, err
+			}
+			data, err := io.ReadAll(f)
+			f.Close()
+			if err != nil {
+				return nil, err
+			}
+			dmpcl := &Circuit{
+				Name:  makeName(name),
+				DMPCL: data,
+			}
+			prog.ByName[dmpcl.Name] = dmpcl
 		}
 	}
 
 	// Create mappings from PC to circuit.
 	for name, circ := range prog.ByName {
-		id, ok := params.SymbolIDs[name]
+		id, ok := prog.Symtab[name]
 		if !ok {
 			return nil, fmt.Errorf("symbol %v undefined in PC map", name)
 		}
@@ -82,8 +101,12 @@ func NewProgram(file string) (*Program, error) {
 		}
 	}
 	for pc, circ := range prog.ByPC {
-		fmt.Printf("%-4d %-16s\t#gates=%-5d #wires=%v\n", pc, circ.Name,
-			circ.Circ.NumGates, circ.Circ.NumWires)
+		fmt.Printf("%-4d %-16s", pc, circ.Name)
+
+		if circ.Circ != nil {
+			fmt.Printf("\t#gates=%-5d #wires=%v\n",
+				circ.Circ.NumGates, circ.Circ.NumWires)
+		}
 	}
 	if prog.Init == nil {
 		return nil, fmt.Errorf("init undefined in program '%v'", file)

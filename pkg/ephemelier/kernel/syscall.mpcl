@@ -16,9 +16,11 @@ const (
 	// SysExit exits the process.
 	SysExit      = 1
 	SysFork      = 2
-	SysRead      = 3
-	SysWrite     = 4
-	SysOpen      = 5
-	SysClose     = 6
-	SysGetrandom = 7
+	SysPeek      = 3
+	SysRead      = 4
+	SysSkip      = 5
+	SysWrite     = 6
+	SysOpen      = 7
+	SysClose     = 8
+	SysGetrandom = 9
 )
