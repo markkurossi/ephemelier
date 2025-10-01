@@ -34,28 +34,19 @@ type Evaluator struct {
 func main(g Garbler, e Evaluator) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
-	if g.arg0 < 0 {
-		return nil, 0, kernel.SysExit, 1, nil, 0
-	}
+	// XXX This zeroes output i.e. different sized arguments is not
+	// deterministic.
+	//
+	// if g.arg0 < 0 {
+	// 	return nil, 0, kernel.SysExit, 1, nil, 0
+	// }
 
 	var msg [300]byte
-	n := copy(msg, []byte("Hello, "))
-	var size int32
+	size := copy(msg, []byte("Hello, "))
+	size += copy(msg[size:], g.argBuf)
 
-	g.arg0 -= 2
-	for i := 0; i < len(g.argBuf); i++ {
-		if i < g.arg0 {
-			size = n + i
-			msg[size] = g.argBuf[i]
-		} else if i == g.arg0 {
-			size = n + i
-			msg[size] = '!'
-		} else if i == g.arg0+1 {
-			size = n + i
-			msg[size] = '\n'
-		}
-	}
-	size++
+	msg[size-2] = '!'
+	msg[size-1] = '\n'
 
 	return nil, intern(StWriteResult), kernel.SysWrite, 1, msg, size
 }
