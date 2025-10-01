@@ -62,6 +62,7 @@ func (proc *Process) SetProgram(prog *eef.Program) error {
 	proc.mpclcParams = utils.NewParams()
 	proc.mpclcParams.Verbose = proc.verbose()
 	proc.mpclcParams.Diagnostics = proc.diagnostics()
+	proc.mpclcParams.MPCLCErrorLoc = true
 	proc.mpclcParams.PkgPath = []string{
 		"../../pkg",
 	}
