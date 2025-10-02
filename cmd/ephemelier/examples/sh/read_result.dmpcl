@@ -34,12 +34,9 @@ type Evaluator struct {
 func main(g Garbler, e Evaluator) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
-	// XXX This zeroes output i.e. different sized arguments is not
-	// deterministic.
-	//
-	// if g.arg0 < 0 {
-	// 	return nil, 0, kernel.SysExit, 1, nil, 0
-	// }
+	if g.arg0 < 0 {
+		return nil, 0, kernel.SysExit, 1, nil, 0
+	}
 
 	var msg [300]byte
 	size := copy(msg, []byte("Hello, "))
