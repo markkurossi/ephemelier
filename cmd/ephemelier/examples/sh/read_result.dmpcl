@@ -12,14 +12,9 @@ import (
 	"ephemelier/kernel"
 )
 
-const (
-	MemSize = gcm.NonceSize + 256 + gcm.TagSize
-	IOSize  = 256
-)
-
 type Garbler struct {
 	privShare [16]byte
-	mem       [MemSize]byte
+	mem       []byte
 	arg0      int32
 	argBuf    []byte
 	arg1      int32

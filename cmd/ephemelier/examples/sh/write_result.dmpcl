@@ -12,23 +12,18 @@ import (
 	"ephemelier/kernel"
 )
 
-const (
-	MemSize = gcm.NonceSize + 256 + gcm.TagSize
-	IOSize  = 256
-)
-
 type Garbler struct {
 	privShare [16]byte
-	mem       [MemSize]byte
+	mem       []byte
 	arg0      int32
-	argBuf    [IOSize]byte
+	argBuf    []byte
 	arg1      int32
 }
 
 type Evaluator struct {
 	privShare [16]byte
 	arg0      int32
-	argBuf    [IOSize]byte
+	argBuf    []byte
 }
 
 func main(g Garbler, e Evaluator) (
