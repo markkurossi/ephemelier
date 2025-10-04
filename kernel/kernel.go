@@ -43,6 +43,7 @@ const (
 	SysOpen
 	SysClose
 	SysGetrandom
+	SysYield
 )
 
 var syscallNames = map[Syscall]string{
@@ -55,6 +56,7 @@ var syscallNames = map[Syscall]string{
 	SysOpen:      "open",
 	SysClose:     "close",
 	SysGetrandom: "getrandom",
+	SysYield:     "yield",
 }
 
 // Role defines the process roles.

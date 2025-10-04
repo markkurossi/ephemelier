@@ -8,7 +8,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/cipher/gcm"
 	"ephemelier/kernel"
 )
@@ -33,16 +32,8 @@ func main(g Garbler, e Evaluator) (
 	if g.arg0 < 0 {
 		return nil, 0, kernel.SysExit, 1, nil, 0
 	}
-	if bytes.Compare(g.argBuf[:len(g.argBuf)-2], []byte("exit")) == 0 {
-		return nil, 0, kernel.SysExit, 0, nil, 0
-	}
 
-	var msg [300]byte
-	size := copy(msg, []byte("Hello, "))
-	size += copy(msg[size:], g.argBuf)
+	prompt := []byte("esh $ ")
 
-	msg[size-2] = '!'
-	msg[size-1] = '\n'
-
-	return nil, intern(StWriteResult), kernel.SysWrite, 1, msg, size
+	return nil, intern(StPromptResult), kernel.SysWrite, 1, prompt, len(prompt)
 }

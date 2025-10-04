@@ -13,4 +13,4 @@ clean:
 	garbled -sids symtab -pkgpath ../../../../pkg -circ $+
 
 %.stamp : %.dmpcl
-	garbled -sids symtab -pkgpath ../../../../pkg -circ -suffix stamp -i 0,0,0,0,0 -pi 0,0,0 $+
+	garbled -sids symtab -pkgpath ../../../../pkg -circ -suffix stamp -i 0,0,0,0x00000000,0 -pi 0,0,0 $+

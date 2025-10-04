@@ -16,5 +16,7 @@ func main(g, e [16]byte) (
 
 	_ = intern(Init)
 
-	return nil, intern(StReadResult), kernel.SysRead, 0, nil, 256
+	motd := []byte("Ephemelier v0.0 - Copyright (c) 2025 Markku Rossi\r\n")
+
+	return nil, intern(StPrompt), kernel.SysWrite, 1, motd, len(motd)
 }

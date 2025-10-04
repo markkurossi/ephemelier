@@ -214,6 +214,10 @@ func (proc *Process) runEvaluator() error {
 				sys.arg0 = 0
 				sys.argBuf = nil
 
+			case SysYield:
+				sys.arg0 = 0
+				sys.argBuf = nil
+
 			default:
 				return fmt.Errorf("invalid syscall: %v", sys.call)
 			}
@@ -368,6 +372,10 @@ run:
 			}
 			sys.argBuf = nil
 			sys.arg1 = 0
+
+		case SysYield:
+			sys.arg0 = 0
+			sys.argBuf = nil
 
 		default:
 			return fmt.Errorf("invalid syscall: %v", sys.call)
