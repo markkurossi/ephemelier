@@ -90,11 +90,12 @@ func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
 	kern.NextPID++
 
 	proc := &Process{
-		kern: kern,
-		role: role,
-		pid:  kern.NextPID,
-		conn: conn,
-		fds:  make(map[int32]*FD),
+		kern:    kern,
+		role:    role,
+		pid:     kern.NextPID,
+		conn:    conn,
+		iostats: p2p.NewIOStats(),
+		fds:     make(map[int32]*FD),
 	}
 
 	proc.fds[0] = stdin

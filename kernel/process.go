@@ -34,6 +34,7 @@ type Process struct {
 	role        Role
 	pid         int32
 	conn        *p2p.Conn
+	iostats     p2p.IOStats
 	prog        *eef.Program
 	mpclcParams *utils.Params
 	key         []byte
@@ -287,6 +288,11 @@ run:
 		if numInputs > 4 {
 			inputs = append(inputs, fmt.Sprintf("%d", sys.arg1))
 		}
+
+		// Clear statistics so we get correct info for this code
+		// fragment.
+		proc.iostats = proc.iostats.Add(proc.conn.Stats)
+		proc.conn.Stats.Clear()
 
 		var outputs circuit.IO
 		var result []*big.Int
