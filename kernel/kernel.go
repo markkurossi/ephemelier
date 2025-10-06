@@ -70,7 +70,8 @@ const (
 
 // Kernel implements the Ephemelier kernel.
 type Kernel struct {
-	Params Params
+	Params  Params
+	NextPID int32
 }
 
 // New creates a new kernel.
@@ -86,12 +87,16 @@ func New(params *Params) *Kernel {
 func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
 	stdin, stdout, stderr *FD) *Process {
 
+	kern.NextPID++
+
 	proc := &Process{
 		kern: kern,
 		role: role,
+		pid:  kern.NextPID,
 		conn: conn,
 		fds:  make(map[int32]*FD),
 	}
+
 	proc.fds[0] = stdin
 	proc.fds[1] = stdout
 	proc.fds[2] = stderr

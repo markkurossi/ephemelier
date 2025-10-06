@@ -32,6 +32,7 @@ var (
 type Process struct {
 	kern        *Kernel
 	role        Role
+	pid         int32
 	conn        *p2p.Conn
 	prog        *eef.Program
 	mpclcParams *utils.Params
@@ -235,10 +236,10 @@ func (proc *Process) runEvaluator() error {
 
 func (proc *Process) runGarbler() error {
 	// Send program name
-	if len(proc.prog.Name) == 0 {
+	if len(proc.prog.Filename) == 0 {
 		return errors.New("no program")
 	}
-	err := proc.conn.SendString(proc.prog.Name)
+	err := proc.conn.SendString(proc.prog.Filename)
 	if err != nil {
 		return err
 	}
@@ -447,11 +448,19 @@ func decodeSysall(sys *syscall, values []interface{}) error {
 	return nil
 }
 
+func (proc *Process) ktracePrefix() {
+	if !proc.kern.Params.Trace {
+		return
+	}
+	fmt.Printf("%3d %4d %-8s ", proc.pid, proc.pc, proc.prog.Name)
+}
+
 func (proc *Process) ktraceCall(sys *syscall) {
 	if !proc.kern.Params.Trace {
 		return
 	}
-	fmt.Printf("%04x->%04x CALL %s", proc.pc, sys.pc, sys.call)
+	proc.ktracePrefix()
+	fmt.Printf("CALL %s", sys.call)
 	switch sys.call {
 	case SysExit:
 		fmt.Printf("(%d)", sys.arg0)
@@ -469,7 +478,8 @@ func (proc *Process) ktraceRet(sys *syscall) {
 	if !proc.kern.Params.Trace {
 		return
 	}
-	fmt.Printf("%04x->%04x RET  %s", proc.pc, sys.pc, sys.call)
+	proc.ktracePrefix()
+	fmt.Printf("RET  %s", sys.call)
 	switch sys.call {
 	case SysRead:
 		fmt.Printf("% d, %x", sys.arg0, sys.argBuf)

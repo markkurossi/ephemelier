@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -20,11 +21,12 @@ import (
 
 // Program defines EEF program.
 type Program struct {
-	Name   string
-	Init   *Circuit
-	Symtab map[string]int
-	ByName map[string]*Circuit
-	ByPC   map[int]*Circuit
+	Filename string
+	Name     string
+	Init     *Circuit
+	Symtab   map[string]int
+	ByName   map[string]*Circuit
+	ByPC     map[int]*Circuit
 }
 
 // Circuit implements a program state.
@@ -42,9 +44,10 @@ func NewProgram(file string) (*Program, error) {
 		return nil, err
 	}
 	prog := &Program{
-		Name:   file,
-		ByName: make(map[string]*Circuit),
-		ByPC:   make(map[int]*Circuit),
+		Filename: file,
+		Name:     path.Base(file),
+		ByName:   make(map[string]*Circuit),
+		ByPC:     make(map[int]*Circuit),
 	}
 
 	for _, entry := range entries {
