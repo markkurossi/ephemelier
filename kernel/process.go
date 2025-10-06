@@ -68,6 +68,9 @@ func (proc *Process) SetProgram(prog *eef.Program) error {
 	}
 	proc.mpclcParams.SymbolIDs = prog.Symtab
 
+	proc.mpclcParams.Warn.ReturnDiff = false
+	proc.mpclcParams.Warn.Unreachable = false
+
 	return nil
 }
 
@@ -198,9 +201,7 @@ func (proc *Process) runEvaluator() error {
 			if err != nil {
 				return err
 			}
-			if proc.kern.Params.Trace {
-				ktrace(proc.pc, sys)
-			}
+			proc.ktraceCall(sys)
 
 			switch sys.call {
 			case SysExit:
@@ -221,6 +222,7 @@ func (proc *Process) runEvaluator() error {
 			default:
 				return fmt.Errorf("invalid syscall: %v", sys.call)
 			}
+			proc.ktraceRet(sys)
 
 			proc.pc = sys.pc
 			state, ok = proc.prog.ByPC[int(proc.pc)]
@@ -342,11 +344,7 @@ run:
 			// Store memory only if returned.
 			proc.mem = sys.mem
 		}
-		if proc.kern.Params.Trace {
-			ktrace(proc.pc, sys)
-		}
-
-		proc.pc = sys.pc
+		proc.ktraceCall(sys)
 
 		switch sys.call {
 		case SysExit:
@@ -380,7 +378,9 @@ run:
 		default:
 			return fmt.Errorf("invalid syscall: %v", sys.call)
 		}
+		proc.ktraceRet(sys)
 
+		proc.pc = sys.pc
 		state, ok = proc.prog.ByPC[int(proc.pc)]
 		if !ok {
 			return fmt.Errorf("invalid PC: %v", proc.pc)
@@ -447,8 +447,11 @@ func decodeSysall(sys *syscall, values []interface{}) error {
 	return nil
 }
 
-func ktrace(pc uint16, sys *syscall) {
-	fmt.Printf("%04x->%04x: %s", pc, sys.pc, sys.call)
+func (proc *Process) ktraceCall(sys *syscall) {
+	if !proc.kern.Params.Trace {
+		return
+	}
+	fmt.Printf("%04x->%04x CALL %s", proc.pc, sys.pc, sys.call)
 	switch sys.call {
 	case SysExit:
 		fmt.Printf("(%d)", sys.arg0)
@@ -458,6 +461,20 @@ func ktrace(pc uint16, sys *syscall) {
 
 	case SysWrite:
 		fmt.Printf("(%d, %x, %d)", sys.arg0, sys.argBuf[:sys.arg1], sys.arg1)
+	}
+	fmt.Println()
+}
+
+func (proc *Process) ktraceRet(sys *syscall) {
+	if !proc.kern.Params.Trace {
+		return
+	}
+	fmt.Printf("%04x->%04x RET  %s", proc.pc, sys.pc, sys.call)
+	switch sys.call {
+	case SysRead:
+		fmt.Printf("% d, %x", sys.arg0, sys.argBuf)
+	default:
+		fmt.Printf(" %d", sys.arg0)
 	}
 	fmt.Println()
 }
