@@ -7,6 +7,11 @@
 
 package kernel
 
+import (
+	"crypto/cipher/gcm"
+	"encoding/binary"
+)
+
 type PC = uint16
 
 // Syscall defines the system calls.
@@ -25,3 +30,45 @@ const (
 	SysGetrandom = 9
 	SysYield     = 10
 )
+
+const (
+	NonceSize = 12
+	TagSize   = 16
+	KeySize   = 16
+)
+
+type Garbler struct {
+	privShare [KeySize]byte
+	mem       []byte
+	arg0      int32
+	argBuf    []byte
+	arg1      int32
+}
+
+type Evaluator struct {
+	privShare [KeySize]byte
+	arg0      int32
+	argBuf    []byte
+}
+
+func EncodeMemory(nonce, mem, key []byte) []byte {
+	ctr := binary.GetUint(nonce)
+	ctr += 1
+	nonce = binary.PutUint(nonce, 0, ctr)
+
+	var memory [len(nonce) + len(mem) + 16]byte
+	copy(memory, nonce)
+	var empty []byte
+
+	cipher := gcm.EncryptAES128(key, nonce, mem, empty) // XXX nil as additional
+	copy(memory[len(nonce):], cipher)
+
+	return memory
+}
+
+func DecodeMemory(cipher, key []byte) ([]byte, []byte, bool) {
+	var empty []byte
+	nonce := cipher[:NonceSize]
+	mem, ok := gcm.DecryptAES128(key, nonce, cipher[NonceSize:], empty)
+	return nonce, mem, ok
+}

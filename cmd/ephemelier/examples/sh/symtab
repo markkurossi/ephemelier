@@ -8,6 +8,7 @@ package main
 // Interned symbols.
 const (
 	Init           = 0
+	StEnd          = 6
 	StHelloResult  = 1
 	StPrompt       = 4
 	StPromptResult = 5

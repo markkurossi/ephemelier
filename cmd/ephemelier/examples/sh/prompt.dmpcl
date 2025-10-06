@@ -9,31 +9,32 @@ package main
 
 import (
 	"crypto/cipher/gcm"
+	"encoding/binary"
 	"ephemelier/kernel"
 )
 
-type Garbler struct {
-	privShare [16]byte
-	mem       []byte
-	arg0      int32
-	argBuf    []byte
-	arg1      int32
-}
-
-type Evaluator struct {
-	privShare [16]byte
-	arg0      int32
-	argBuf    []byte
-}
-
-func main(g Garbler, e Evaluator) (
+func main(g kernel.Garbler, e kernel.Evaluator) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
 	if g.arg0 < 0 {
 		return nil, 0, kernel.SysExit, 1, nil, 0
 	}
 
+	var key [kernel.KeySize]byte
+	for i := 0; i < kernel.KeySize; i++ {
+		key[i] = g.privShare[i] ^ e.privShare[i]
+	}
+	nonce, mem, ok := kernel.DecodeMemory(g.mem, key)
+	if !ok {
+		return nil, 0, kernel.SysExit, 1, nil, 0
+	}
+
+	count := binary.GetUint(mem)
+	count++
+	mem = binary.PutUint(mem, 0, count)
+
 	prompt := []byte("esh $ ")
 
-	return nil, intern(StPromptResult), kernel.SysWrite, 1, prompt, len(prompt)
+	return kernel.EncodeMemory(nonce, mem, key), intern(StPromptResult),
+		kernel.SysWrite, 1, prompt, len(prompt)
 }

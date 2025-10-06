@@ -8,6 +8,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/cipher/gcm"
 	"ephemelier/kernel"
 )
@@ -15,10 +16,15 @@ import (
 func main(g kernel.Garbler, e kernel.Evaluator) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
-	var retval int32
-	if g.arg0 < 0 {
+	var key [kernel.KeySize]byte
+	for i := 0; i < kernel.KeySize; i++ {
+		key[i] = g.privShare[i] ^ e.privShare[i]
+	}
+	nonce, mem, ok := kernel.DecodeMemory(g.mem, key)
+	if !ok {
 		return nil, 0, kernel.SysExit, 1, nil, 0
 	}
+	count := binary.GetUint(mem)
 
-	return nil, intern(StPrompt), kernel.SysYield, 0, nil, 0
+	return nil, 0, kernel.SysExit, int32(count), nil, 0
 }
