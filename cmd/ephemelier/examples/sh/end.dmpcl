@@ -22,7 +22,7 @@ func main(g kernel.Garbler, e kernel.Evaluator) (
 	}
 	nonce, mem, ok := kernel.DecodeMemory(g.mem, key)
 	if !ok {
-		return nil, 0, kernel.SysExit, 1, nil, 0
+		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
 	}
 	count := binary.GetUint(mem)
 

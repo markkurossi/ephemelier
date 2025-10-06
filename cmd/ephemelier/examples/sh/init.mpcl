@@ -19,7 +19,7 @@ func main(g, e [kernel.KeySize]byte) (
 	motd := []byte("Ephemelier v0.0 - Copyright (c) 2025 Markku Rossi\r\n")
 
 	var nonce [12]byte
-	var mem [4]byte
+	var mem [16]byte
 
 	var key [kernel.KeySize]byte
 	for i := 0; i < kernel.KeySize; i++ {
