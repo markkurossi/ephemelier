@@ -24,9 +24,7 @@ import (
 	"github.com/markkurossi/mpc/p2p"
 )
 
-var (
-	oti = ot.NewCO()
-)
+var ()
 
 // Process defines a kernel process.
 type Process struct {
@@ -34,6 +32,7 @@ type Process struct {
 	role        Role
 	pid         int32
 	conn        *p2p.Conn
+	oti         ot.OT
 	iostats     p2p.IOStats
 	prog        *eef.Program
 	mpclcParams *utils.Params
@@ -164,7 +163,7 @@ func (proc *Process) runEvaluator() error {
 				if err != nil {
 					return err
 				}
-				result, err = circuit.Evaluator(proc.conn, oti, state.Circ,
+				result, err = circuit.Evaluator(proc.conn, proc.oti, state.Circ,
 					input, proc.verbose())
 				if err != nil {
 					return err
@@ -188,8 +187,8 @@ func (proc *Process) runEvaluator() error {
 				if err != nil {
 					return err
 				}
-				outputs, result, err = circuit.StreamEvaluator(proc.conn, oti,
-					inputs, proc.verbose())
+				outputs, result, err = circuit.StreamEvaluator(proc.conn,
+					proc.oti, inputs, proc.verbose())
 				if err != nil {
 					return err
 				}
@@ -253,6 +252,7 @@ func (proc *Process) runGarbler() error {
 	state := proc.prog.Init
 	sys := new(syscall)
 	inputSizes := make([][]int, 2)
+
 run:
 	for {
 		var ok bool
@@ -307,8 +307,8 @@ run:
 			if err != nil {
 				return err
 			}
-			result, err = circuit.Garbler(proc.conn, oti, state.Circ, input,
-				proc.verbose())
+			result, err = circuit.Garbler(proc.conn, proc.oti, state.Circ,
+				input, proc.verbose())
 			if err != nil {
 				return err
 			}
@@ -332,7 +332,7 @@ run:
 			inputSizes[1] = sizes
 
 			outputs, result, err = compiler.New(proc.mpclcParams).Stream(
-				proc.conn, oti, state.Name, bytes.NewReader(state.DMPCL),
+				proc.conn, proc.oti, state.Name, bytes.NewReader(state.DMPCL),
 				inputs, inputSizes)
 			if err != nil {
 				return err

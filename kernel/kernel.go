@@ -9,6 +9,7 @@ package kernel
 import (
 	"fmt"
 
+	"github.com/markkurossi/mpc/ot"
 	"github.com/markkurossi/mpc/p2p"
 )
 
@@ -94,6 +95,7 @@ func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
 		role:    role,
 		pid:     kern.NextPID,
 		conn:    conn,
+		oti:     ot.NewCO(),
 		iostats: p2p.NewIOStats(),
 		fds:     make(map[int32]*FD),
 	}
