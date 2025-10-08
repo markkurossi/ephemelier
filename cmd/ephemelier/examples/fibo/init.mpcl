@@ -1,0 +1,36 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"encoding/binary"
+	"ephemelier/kernel"
+)
+
+func main(g, e [kernel.KeySize]byte) (
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+
+	_ = intern(Init)
+
+	motd := []byte("Ephemelier v0.0 - Copyright (c) 2025 Markku Rossi\r\n")
+
+	var nonce [12]byte
+	var mem [16]byte
+
+	mem = binary.PutUint32(mem, 0, 0)
+	mem = binary.PutUint32(mem, 4, 1)
+	mem = binary.PutUint32(mem, 8, 20)
+
+	var key [kernel.KeySize]byte
+	for i := 0; i < kernel.KeySize; i++ {
+		key[i] = g[i] ^ e[i]
+	}
+
+	return kernel.EncodeMemory(nonce, mem, key), intern(StFibo),
+		kernel.SysYield, 0, nil, 0
+}

@@ -1,0 +1,38 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"encoding/binary"
+	"ephemelier/kernel"
+	"strconv"
+)
+
+func main(g kernel.Garbler1B, e kernel.Evaluator1B) (
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+
+	var key [kernel.KeySize]byte
+	for i := 0; i < kernel.KeySize; i++ {
+		key[i] = g.privShare[i] ^ e.privShare[i]
+	}
+	nonce, mem, ok := kernel.DecodeMemory(g.mem, key)
+	if !ok {
+		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
+	}
+
+	fibo := binary.GetUint32(mem[4:])
+
+	str := strconv.Uitoa(fibo)
+
+	var data [40]byte
+	n := copy(data, []byte(str))
+	data[n] = '\r'
+	data[n+1] = '\n'
+
+	return nil, intern(StEnd), kernel.SysWrite, 1, data, n + 2
+}

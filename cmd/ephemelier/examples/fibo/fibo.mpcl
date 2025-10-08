@@ -1,0 +1,48 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"encoding/binary"
+	"ephemelier/kernel"
+)
+
+func main(g kernel.Garbler1B, e kernel.Evaluator1B) (
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+
+	var key [kernel.KeySize]byte
+	for i := 0; i < kernel.KeySize; i++ {
+		key[i] = g.privShare[i] ^ e.privShare[i]
+	}
+	nonce, mem, ok := kernel.DecodeMemory(g.mem, key)
+	if !ok {
+		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
+	}
+
+	f0 := binary.GetUint32(mem[0:])
+	f1 := binary.GetUint32(mem[4:])
+	l := binary.GetUint32(mem[8:])
+
+	f2 := f0 + f1
+	l--
+
+	mem = binary.PutUint32(mem, 0, f1)
+	mem = binary.PutUint32(mem, 4, f2)
+	mem = binary.PutUint32(mem, 8, l)
+
+	var next kernel.PC
+
+	if l == 0 {
+		next = intern(StResult)
+	} else {
+		next = intern(StFibo)
+	}
+
+	return kernel.EncodeMemory(nonce, mem, key), next,
+		kernel.SysYield, 0, nil, 0
+}
