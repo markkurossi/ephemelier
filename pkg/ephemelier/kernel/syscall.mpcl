@@ -45,10 +45,22 @@ type Garbler struct {
 	arg1      int32
 }
 
+type Garbler1B struct {
+	privShare [KeySize]byte
+	mem       [NonceSize + 16 + TagSize]byte
+	arg0      int32
+	argBuf    [0]byte
+	arg1      int32
+}
+
 type Evaluator struct {
 	privShare [KeySize]byte
 	arg0      int32
 	argBuf    []byte
+}
+
+type Evaluator1B struct {
+	privShare [KeySize]byte
 }
 
 func EncodeMemory(nonce, mem, key []byte) []byte {
