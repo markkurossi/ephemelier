@@ -14,6 +14,7 @@ import (
 	"io"
 	"log"
 	"math/big"
+	"time"
 
 	"github.com/markkurossi/ephemelier/eef"
 	"github.com/markkurossi/mpc"
@@ -123,6 +124,7 @@ func (proc *Process) runEvaluator() error {
 		// Run program.
 		state := prog.Init
 		sys := new(syscall)
+		last := time.Now()
 
 	run:
 		for {
@@ -196,6 +198,11 @@ func (proc *Process) runEvaluator() error {
 					mpc.PrintResults(result, outputs)
 				}
 			}
+
+			// Program fragment statistics.
+			now := time.Now()
+			proc.ktraceStats(now.Sub(last))
+			last = now
 
 			// Decode syscall.
 			err = decodeSysall(sys, mpc.Results(result, outputs))
@@ -461,6 +468,15 @@ func (proc *Process) ktracePrefix() {
 	fmt.Printf("%3d %4d %-8s ", proc.pid, proc.pc, proc.prog.Name)
 }
 
+func (proc *Process) ktraceStats(d time.Duration) {
+	if !proc.kern.Params.Trace {
+		return
+	}
+	proc.ktracePrefix()
+	fmt.Printf("INFO %v", d)
+	fmt.Println()
+}
+
 func (proc *Process) ktraceCall(sys *syscall) {
 	if !proc.kern.Params.Trace {
 		return
@@ -476,6 +492,9 @@ func (proc *Process) ktraceCall(sys *syscall) {
 
 	case SysWrite:
 		fmt.Printf("(%d, %x, %d)", sys.arg0, sys.argBuf[:sys.arg1], sys.arg1)
+
+	case SysYield:
+		fmt.Printf("(%d)", sys.pc)
 	}
 	fmt.Println()
 }
