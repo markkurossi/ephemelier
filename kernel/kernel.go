@@ -36,7 +36,7 @@ func (call Syscall) String() string {
 // System calls.
 const (
 	SysExit Syscall = iota + 1
-	SysFork
+	SysSpawn
 	SysPeek
 	SysRead
 	SysSkip
@@ -49,7 +49,7 @@ const (
 
 var syscallNames = map[Syscall]string{
 	SysExit:      "exit",
-	SysFork:      "fork",
+	SysSpawn:     "spawn",
 	SysPeek:      "peek",
 	SysRead:      "read",
 	SysSkip:      "skip",

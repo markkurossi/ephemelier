@@ -20,7 +20,7 @@ type Syscall = uint8
 const (
 	// SysExit exits the process.
 	SysExit      = 1
-	SysFork      = 2
+	SysSpawn     = 2
 	SysPeek      = 3
 	SysRead      = 4
 	SysSkip      = 5
