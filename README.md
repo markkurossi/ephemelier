@@ -38,3 +38,9 @@ Hello, Ephemelier!
 esh $ exit
 Connection closed by foreign host.
 ```
+
+## TODO
+
+ - [ ] Shell with command launch & wait
+ - [ ] Circuit stats in streaming mode (INFO)
+ - [ ] Optimize input setting (direct vs. via strings)
