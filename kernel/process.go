@@ -43,6 +43,20 @@ type Process struct {
 	fds         map[int32]*FD
 }
 
+// Stats provides process statistics.
+type Stats struct {
+	MPCD      time.Duration
+	NumGates  uint64
+	NumWires  uint64
+	NumXOR    uint64
+	NumNonXOR uint64
+}
+
+func (stats Stats) String() string {
+	return fmt.Sprintf("g=%v,xor=%v,nxor=%v,d=%v",
+		stats.NumGates, stats.NumXOR, stats.NumNonXOR, stats.MPCD)
+}
+
 func (proc *Process) diagnostics() bool {
 	return proc.kern.Params.Diagnostics
 }
@@ -99,146 +113,148 @@ func (proc *Process) Run() (err error) {
 }
 
 func (proc *Process) runEvaluator() error {
+	// Receive program.
+	programName, err := proc.conn.ReceiveString()
+	if err != nil {
+		if err == io.EOF {
+			return nil
+		}
+		return err
+	}
+	prog, err := eef.NewProgram(programName)
+	if err != nil {
+		return err
+	}
+	err = proc.SetProgram(prog)
+	if err != nil {
+		return err
+	}
+	// if circ.NumParties() != 2 {
+	// 	return fmt.Errorf("invalid circuit for 2-party MPC: %d parties",
+	// 		circ.NumParties())
+	// }
+
+	// Run program.
+	state := prog.Init
+	sys := new(syscall)
+	last := time.Now()
+
+run:
 	for {
-		// Receive program.
-		programName, err := proc.conn.ReceiveString()
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-		prog, err := eef.NewProgram(programName)
-		if err != nil {
-			return err
-		}
-		err = proc.SetProgram(prog)
-		if err != nil {
-			return err
-		}
-		// if circ.NumParties() != 2 {
-		// 	return fmt.Errorf("invalid circuit for 2-party MPC: %d parties",
-		// 		circ.NumParties())
-		// }
+		var ok bool
+		var numInputs int
+		var inputs []string
 
-		// Run program.
-		state := prog.Init
-		sys := new(syscall)
-		last := time.Now()
+		if state.Circ != nil {
+			numInputs = state.Circ.Inputs[1].Len()
+		} else {
+			// Dynamic MPCL has always full signature.
+			numInputs = 3
+		}
 
-	run:
-		for {
-			var ok bool
-			var numInputs int
-			var inputs []string
-
-			if state.Circ != nil {
-				numInputs = state.Circ.Inputs[1].Len()
+		// The first input is always the key share.
+		inputs = append(inputs, fmt.Sprintf("0x%x", proc.key))
+		if numInputs > 1 {
+			inputs = append(inputs, fmt.Sprintf("%d", sys.arg0))
+		}
+		if numInputs > 2 {
+			if len(sys.argBuf) == 0 {
+				inputs = append(inputs, "0")
 			} else {
-				// Dynamic MPCL has always full signature.
-				numInputs = 3
+				inputs = append(inputs, fmt.Sprintf("0x%x", sys.argBuf))
+			}
+		}
+
+		var outputs circuit.IO
+		var result []*big.Int
+		var stats Stats
+
+		if state.Circ != nil {
+			// Pre-compiled circuit.
+			proc.circuitStats(&stats, state.Circ)
+			if proc.diagnostics() {
+				state.Circ.PrintInputs(circuit.IDEvaluator, inputs)
 			}
 
-			// The first input is always the key share.
-			inputs = append(inputs, fmt.Sprintf("0x%x", proc.key))
-			if numInputs > 1 {
-				inputs = append(inputs, fmt.Sprintf("%d", sys.arg0))
-			}
-			if numInputs > 2 {
-				if len(sys.argBuf) == 0 {
-					inputs = append(inputs, "0")
-				} else {
-					inputs = append(inputs, fmt.Sprintf("0x%x", sys.argBuf))
-				}
-			}
-
-			var outputs circuit.IO
-			var result []*big.Int
-
-			if state.Circ != nil {
-				// Pre-compiled circuit.
-				if proc.diagnostics() {
-					state.Circ.PrintInputs(circuit.IDEvaluator, inputs)
-				}
-
-				input, err := state.Circ.Inputs[1].Parse(inputs)
-				if err != nil {
-					return err
-				}
-				result, err = circuit.Evaluator(proc.conn, proc.oti, state.Circ,
-					input, proc.verbose())
-				if err != nil {
-					return err
-				}
-				outputs = state.Circ.Outputs
-
-				if proc.diagnostics() {
-					mpc.PrintResults(result, state.Circ.Outputs)
-				}
-			} else {
-				// Streaming MPCL.
-				sizes, err := circuit.InputSizes(inputs)
-				if err != nil {
-					return err
-				}
-				err = proc.conn.SendInputSizes(sizes)
-				if err != nil {
-					return err
-				}
-				err = proc.conn.Flush()
-				if err != nil {
-					return err
-				}
-				outputs, result, err = circuit.StreamEvaluator(proc.conn,
-					proc.oti, inputs, proc.verbose())
-				if err != nil {
-					return err
-				}
-				if proc.diagnostics() {
-					mpc.PrintResults(result, outputs)
-				}
-			}
-
-			// Program fragment statistics.
-			now := time.Now()
-			proc.ktraceStats(now.Sub(last))
-			last = now
-
-			// Decode syscall.
-			err = decodeSysall(sys, mpc.Results(result, outputs))
+			input, err := state.Circ.Inputs[1].Parse(inputs)
 			if err != nil {
 				return err
 			}
-			proc.ktraceCall(sys)
-
-			switch sys.call {
-			case SysExit:
-				break run
-
-			case SysRead:
-				sys.arg0 = 0
-				sys.argBuf = nil
-
-			case SysWrite:
-				sys.arg0 = 0
-				sys.argBuf = nil
-
-			case SysYield:
-				sys.arg0 = 0
-				sys.argBuf = nil
-
-			default:
-				return fmt.Errorf("invalid syscall: %v", sys.call)
+			result, err = circuit.Evaluator(proc.conn, proc.oti, state.Circ,
+				input, proc.verbose())
+			if err != nil {
+				return err
 			}
-			proc.ktraceRet(sys)
+			outputs = state.Circ.Outputs
 
-			proc.pc = sys.pc
-			state, ok = proc.prog.ByPC[int(proc.pc)]
-			if !ok {
-				return fmt.Errorf("invalid PC: %v", proc.pc)
+			if proc.diagnostics() {
+				mpc.PrintResults(result, state.Circ.Outputs)
+			}
+		} else {
+			// Streaming MPCL.
+			sizes, err := circuit.InputSizes(inputs)
+			if err != nil {
+				return err
+			}
+			err = proc.conn.SendInputSizes(sizes)
+			if err != nil {
+				return err
+			}
+			err = proc.conn.Flush()
+			if err != nil {
+				return err
+			}
+			outputs, result, err = circuit.StreamEvaluator(proc.conn,
+				proc.oti, inputs, proc.verbose())
+			if err != nil {
+				return err
+			}
+			if proc.diagnostics() {
+				mpc.PrintResults(result, outputs)
 			}
 		}
+
+		// Program fragment statistics.
+		now := time.Now()
+		stats.MPCD = now.Sub(last)
+		last = now
+		proc.ktraceStats(stats)
+
+		// Decode syscall.
+		err = decodeSysall(sys, mpc.Results(result, outputs))
+		if err != nil {
+			return err
+		}
+		proc.ktraceCall(sys)
+
+		switch sys.call {
+		case SysExit:
+			break run
+
+		case SysRead:
+			sys.arg0 = 0
+			sys.argBuf = nil
+
+		case SysWrite:
+			sys.arg0 = 0
+			sys.argBuf = nil
+
+		case SysYield:
+			sys.arg0 = 0
+			sys.argBuf = nil
+
+		default:
+			return fmt.Errorf("invalid syscall: %v", sys.call)
+		}
+		proc.ktraceRet(sys)
+
+		proc.pc = sys.pc
+		state, ok = proc.prog.ByPC[int(proc.pc)]
+		if !ok {
+			return fmt.Errorf("invalid PC: %v", proc.pc)
+		}
 	}
+	return nil
 }
 
 func (proc *Process) runGarbler() error {
@@ -259,6 +275,7 @@ func (proc *Process) runGarbler() error {
 	state := proc.prog.Init
 	sys := new(syscall)
 	inputSizes := make([][]int, 2)
+	last := time.Now()
 
 run:
 	for {
@@ -303,9 +320,11 @@ run:
 
 		var outputs circuit.IO
 		var result []*big.Int
+		var stats Stats
 
 		if state.Circ != nil {
 			// Pre-compiled circuit.
+			proc.circuitStats(&stats, state.Circ)
 			if proc.diagnostics() {
 				state.Circ.PrintInputs(circuit.IDGarbler, inputs)
 			}
@@ -348,6 +367,12 @@ run:
 				mpc.PrintResults(result, outputs)
 			}
 		}
+
+		// Program fragment statistics.
+		now := time.Now()
+		stats.MPCD = now.Sub(last)
+		last = now
+		proc.ktraceStats(stats)
 
 		// Decode syscall.
 		err = decodeSysall(sys, mpc.Results(result, outputs))
@@ -402,6 +427,14 @@ run:
 	}
 
 	return nil
+}
+
+func (proc Process) circuitStats(stats *Stats, circ *circuit.Circuit) {
+	stats.NumGates = uint64(circ.NumGates)
+	stats.NumWires = uint64(circ.NumWires)
+	stats.NumXOR = circ.Stats[circuit.XOR] + circ.Stats[circuit.XNOR]
+	stats.NumNonXOR = circ.Stats[circuit.AND] + circ.Stats[circuit.OR] +
+		circ.Stats[circuit.INV]
 }
 
 type syscall struct {
@@ -468,12 +501,12 @@ func (proc *Process) ktracePrefix() {
 	fmt.Printf("%3d %4d %-8s ", proc.pid, proc.pc, proc.prog.Name)
 }
 
-func (proc *Process) ktraceStats(d time.Duration) {
+func (proc *Process) ktraceStats(stats Stats) {
 	if !proc.kern.Params.Trace {
 		return
 	}
 	proc.ktracePrefix()
-	fmt.Printf("INFO %v", d)
+	fmt.Printf("INFO %v", stats)
 	fmt.Println()
 }
 
