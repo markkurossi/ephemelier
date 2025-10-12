@@ -15,14 +15,10 @@ import (
 	"os"
 	"sync"
 
-	"github.com/markkurossi/ephemelier/eef"
 	"github.com/markkurossi/ephemelier/kernel"
-	"github.com/markkurossi/mpc/ot"
-	"github.com/markkurossi/mpc/p2p"
 )
 
 var (
-	oti         ot.OT
 	mpcPort     = ":9000"
 	consolePort = ":2323"
 	bo          = binary.BigEndian
@@ -46,9 +42,11 @@ func main() {
 		Trace:       *ktrace,
 		Verbose:     *fVerbose,
 		Diagnostics: *fDiagnostics,
+		Port:        mpcPort,
+		Stdin:       stdin,
+		Stdout:      stdout,
+		Stderr:      stderr,
 	})
-
-	oti = ot.NewCO()
 
 	mode := "Garbler"
 	if *evaluator {
@@ -59,76 +57,40 @@ func main() {
 
 	var err error
 	if *evaluator {
-		err = evaluatorMode()
+		err = kern.Evaluator(stdin, stdout, stderr)
 		if err != nil {
 			log.Fatal(err)
 		}
-	} else {
-		// Run all programs.
+		return
+	}
 
-		var wg sync.WaitGroup
-		for _, arg := range flag.Args() {
-			wg.Go(func() {
-				err = garblerMode(arg, stdin.Copy(), stdout.Copy(),
-					stderr.Copy())
-				if err != nil {
-					log.Print(err)
-				}
-			})
+	// Run all programs as Garbler.
+
+	var wg sync.WaitGroup
+	for _, arg := range flag.Args() {
+		proc, err := kern.Spawn(arg, stdin.Copy(), stdout.Copy(), stderr.Copy())
+		if err != nil {
+			log.Print(err)
+			continue
 		}
-
-		// Start console.
-		if *fConsole {
-			err = console()
+		wg.Go(func() {
+			err := proc.Run()
 			if err != nil {
 				log.Print(err)
 			}
-		}
-
-		// Wait for all programs to terminate.
-		wg.Wait()
+		})
 	}
-}
 
-func evaluatorMode() error {
-	listener, err := net.Listen("tcp", mpcPort)
-	if err != nil {
-		return err
-	}
-	log.Printf("Listening for MPC connections at %s", mpcPort)
-	for {
-		conn, err := listener.Accept()
+	// Start console.
+	if *fConsole {
+		err = console()
 		if err != nil {
-			return err
+			log.Print(err)
 		}
-		log.Printf("New MPC connection from %s", conn.RemoteAddr())
-
-		proc := kern.CreateProcess(p2p.NewConn(conn), kernel.RoleEvaluator,
-			stdin.Copy(), stdout.Copy(), stderr.Copy())
-		go proc.Run()
-	}
-}
-
-func garblerMode(file string, stdin, stdout, stderr *kernel.FD) error {
-	// Connect to evaluator.
-	mpc, err := net.Dial("tcp", mpcPort)
-	if err != nil {
-		return err
-	}
-	defer mpc.Close()
-	proc := kern.CreateProcess(p2p.NewConn(mpc), kernel.RoleGarbler,
-		stdin, stdout, stderr)
-
-	prog, err := eef.NewProgram(file)
-	if err != nil {
-		return err
-	}
-	err = proc.SetProgram(prog)
-	if err != nil {
-		return err
 	}
 
-	return proc.Run()
+	// Wait for all programs to terminate.
+	wg.Wait()
 }
 
 func console() error {
@@ -145,7 +107,12 @@ func console() error {
 		}
 		log.Printf("New console connection from %s", conn.RemoteAddr())
 		fd := kernel.NewSocketFD(conn)
-		err = garblerMode("examples/sh", fd, fd.Copy(), fd.Copy())
+		proc, err := kern.Spawn("bin/sh", fd, fd.Copy(), fd.Copy())
+		if err != nil {
+			return err
+		}
+		err = proc.Run()
+		conn.Close()
 		if err != nil {
 			return err
 		}

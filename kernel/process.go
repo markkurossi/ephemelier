@@ -11,7 +11,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"math/big"
 	"time"
@@ -25,13 +24,12 @@ import (
 	"github.com/markkurossi/mpc/p2p"
 )
 
-var ()
-
 // Process defines a kernel process.
 type Process struct {
 	kern        *Kernel
 	role        Role
-	pid         int32
+	pid         uint32
+	peerPid     uint32
 	conn        *p2p.Conn
 	oti         ot.OT
 	iostats     p2p.IOStats
@@ -113,12 +111,14 @@ func (proc *Process) Run() (err error) {
 }
 
 func (proc *Process) runEvaluator() error {
-	// Receive program.
+	// Receive peer pid and program.
+	pid, err := proc.conn.ReceiveUint32()
+	if err != nil {
+		return err
+	}
+	proc.peerPid = uint32(pid)
 	programName, err := proc.conn.ReceiveString()
 	if err != nil {
-		if err == io.EOF {
-			return nil
-		}
 		return err
 	}
 	prog, err := eef.NewProgram(programName)
@@ -129,6 +129,17 @@ func (proc *Process) runEvaluator() error {
 	if err != nil {
 		return err
 	}
+
+	// Send our pid.
+	err = proc.conn.SendUint32(int(proc.pid))
+	if err != nil {
+		return err
+	}
+	err = proc.conn.Flush()
+	if err != nil {
+		return err
+	}
+
 	// if circ.NumParties() != 2 {
 	// 	return fmt.Errorf("invalid circuit for 2-party MPC: %d parties",
 	// 		circ.NumParties())
@@ -258,11 +269,15 @@ run:
 }
 
 func (proc *Process) runGarbler() error {
-	// Send program name
 	if len(proc.prog.Filename) == 0 {
 		return errors.New("no program")
 	}
-	err := proc.conn.SendString(proc.prog.Filename)
+	// Send our pid and program name.
+	err := proc.conn.SendUint32(int(proc.pid))
+	if err != nil {
+		return err
+	}
+	err = proc.conn.SendString(proc.prog.Filename)
 	if err != nil {
 		return err
 	}
@@ -270,6 +285,13 @@ func (proc *Process) runGarbler() error {
 	if err != nil {
 		return err
 	}
+
+	// Receive peer pid.
+	pid, err := proc.conn.ReceiveUint32()
+	if err != nil {
+		return err
+	}
+	proc.peerPid = uint32(pid)
 
 	// Run program.
 	state := proc.prog.Init
@@ -498,7 +520,13 @@ func (proc *Process) ktracePrefix() {
 	if !proc.kern.Params.Trace {
 		return
 	}
-	fmt.Printf("%3d %4d %-8s ", proc.pid, proc.pc, proc.prog.Name)
+	var pid string
+	if proc.role == RoleGarbler {
+		pid = fmt.Sprintf("%d:%d", proc.pid, proc.peerPid)
+	} else {
+		pid = fmt.Sprintf("%d:%d", proc.peerPid, proc.pid)
+	}
+	fmt.Printf("%6s %3d %-8s ", pid, proc.pc, proc.prog.Name)
 }
 
 func (proc *Process) ktraceStats(stats Stats) {
@@ -519,6 +547,9 @@ func (proc *Process) ktraceCall(sys *syscall) {
 	switch sys.call {
 	case SysExit:
 		fmt.Printf("(%d)", sys.arg0)
+
+	case SysSpawn:
+		fmt.Printf("(%s)", sys.argBuf[:sys.arg1])
 
 	case SysRead:
 		fmt.Printf("(%d, %d)", sys.arg0, sys.arg1)

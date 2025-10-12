@@ -8,7 +8,10 @@ package kernel
 
 import (
 	"fmt"
+	"log"
+	"net"
 
+	"github.com/markkurossi/ephemelier/eef"
 	"github.com/markkurossi/mpc/ot"
 	"github.com/markkurossi/mpc/p2p"
 )
@@ -69,19 +72,79 @@ const (
 	RoleEvaluator
 )
 
+// Params define kernel parameters.
+type Params struct {
+	Trace       bool
+	Verbose     bool
+	Diagnostics bool
+	Port        string
+	Stdin       *FD
+	Stdout      *FD
+	Stderr      *FD
+}
+
 // Kernel implements the Ephemelier kernel.
 type Kernel struct {
-	Params  Params
-	NextPID int32
+	Params      Params
+	NextPID     uint32
+	ProcessByID map[[16]byte]*Process
 }
 
 // New creates a new kernel.
 func New(params *Params) *Kernel {
-	kern := &Kernel{}
+	kern := &Kernel{
+		ProcessByID: make(map[[16]byte]*Process),
+	}
 	if params != nil {
 		kern.Params = *params
 	}
 	return kern
+}
+
+// Evaluator runs the evaluator with the stdio FDs.
+func (kern *Kernel) Evaluator(stdin, stdout, stderr *FD) error {
+	listener, err := net.Listen("tcp", kern.Params.Port)
+	if err != nil {
+		return err
+	}
+	log.Printf("Listening for MPC connections at %s", kern.Params.Port)
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			return err
+		}
+		log.Printf("New MPC connection from %s", conn.RemoteAddr())
+
+		proc := kern.CreateProcess(p2p.NewConn(conn), RoleEvaluator,
+			stdin.Copy(), stdout.Copy(), stderr.Copy())
+		go proc.Run()
+	}
+}
+
+// Spawn creates a new process for the file and stdio FDs.
+func (kern *Kernel) Spawn(file string, stdin, stdout, stderr *FD) (
+	*Process, error) {
+
+	prog, err := eef.NewProgram(file)
+	if err != nil {
+		return nil, err
+	}
+
+	// Connect to evaluator.
+	mpc, err := net.Dial("tcp", kern.Params.Port)
+	if err != nil {
+		return nil, err
+	}
+	proc := kern.CreateProcess(p2p.NewConn(mpc), RoleGarbler,
+		stdin, stdout, stderr)
+
+	err = proc.SetProgram(prog)
+	if err != nil {
+		mpc.Close()
+		return nil, err
+	}
+
+	return proc, nil
 }
 
 // CreateProcess creates a new process.
