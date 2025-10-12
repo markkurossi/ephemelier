@@ -9,8 +9,8 @@ package main
 
 import (
 	"bytes"
-	"crypto/cipher/gcm"
 	"ephemelier/kernel"
+	"unicode"
 )
 
 func main(g kernel.Garbler, e kernel.Evaluator) (
@@ -24,6 +24,12 @@ func main(g kernel.Garbler, e kernel.Evaluator) (
 	}
 	if bytes.HasPrefix(g.argBuf, []byte("exit")) {
 		return nil, intern(StEnd), kernel.SysYield, 0, nil, 0
+	}
+
+	for i := 0; i < len(g.argBuf); i++ {
+		if unicode.IsSpace(rune(g.argBuf[i])) {
+			return nil, intern(StSpawnResult), kernel.SysSpawn, 0, g.argBuf, i
+		}
 	}
 
 	var msg [300]byte

@@ -229,6 +229,8 @@ func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
 	kern.NextPID++
 	if kern.NextPID == 0 {
 		kern.NextPID++
+	} else if kern.NextPID >= 0b1000000000000000 {
+		kern.NextPID = 1
 	}
 
 	var pid PID

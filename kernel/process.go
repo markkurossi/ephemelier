@@ -255,6 +255,11 @@ run:
 		case SysExit:
 			break run
 
+		case SysSpawn:
+			sys.arg0 = 0
+			sys.argBuf = nil
+			sys.arg1 = 0
+
 		case SysRead:
 			sys.arg0 = 0
 			sys.argBuf = nil
@@ -403,6 +408,21 @@ run:
 		switch sys.call {
 		case SysExit:
 			break run
+
+		case SysSpawn:
+			cmd := "bin/" + string(sys.argBuf[:sys.arg1])
+
+			sys.argBuf = nil
+			sys.arg1 = 0
+
+			child, err := proc.kern.Spawn(cmd, proc.fds[0].Copy(),
+				proc.fds[1].Copy(), proc.fds[2].Copy())
+			if err != nil {
+				sys.arg0 = int32(-EINVAL) // XXX
+			} else {
+				sys.arg0 = int32(child.pid)
+			}
+			go child.Run()
 
 		case SysRead:
 			fd, ok := proc.fds[sys.arg0]
