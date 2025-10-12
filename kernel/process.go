@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/markkurossi/ephemelier/eef"
+	"github.com/markkurossi/go-libs/uuid"
 	"github.com/markkurossi/mpc"
 	"github.com/markkurossi/mpc/circuit"
 	"github.com/markkurossi/mpc/compiler"
@@ -28,8 +29,8 @@ import (
 type Process struct {
 	kern        *Kernel
 	role        Role
-	pid         uint32
-	peerPid     uint32
+	uuid        uuid.UUID
+	pid         PID
 	conn        *p2p.Conn
 	oti         ot.OT
 	iostats     p2p.IOStats
@@ -111,12 +112,20 @@ func (proc *Process) Run() (err error) {
 }
 
 func (proc *Process) runEvaluator() error {
-	// Receive peer pid and program.
-	pid, err := proc.conn.ReceiveUint32()
+	// Receive peer uuid, pid, and program.
+	peerUUID, err := proc.conn.ReceiveData()
 	if err != nil {
 		return err
 	}
-	proc.peerPid = uint32(pid)
+	var uid uuid.UUID
+	uid.Set(peerUUID)
+	fmt.Printf("Peer UUID %v\n", uid)
+
+	gid, err := proc.conn.ReceiveUint16()
+	if err != nil {
+		return err
+	}
+	proc.pid.SetG(PartyID(gid))
 	programName, err := proc.conn.ReceiveString()
 	if err != nil {
 		return err
@@ -130,8 +139,12 @@ func (proc *Process) runEvaluator() error {
 		return err
 	}
 
-	// Send our pid.
-	err = proc.conn.SendUint32(int(proc.pid))
+	// Send our uuid and pid.
+	err = proc.conn.SendData(proc.uuid[:])
+	if err != nil {
+		return err
+	}
+	err = proc.conn.SendUint16(int(proc.pid.E()))
 	if err != nil {
 		return err
 	}
@@ -272,26 +285,6 @@ func (proc *Process) runGarbler() error {
 	if len(proc.prog.Filename) == 0 {
 		return errors.New("no program")
 	}
-	// Send our pid and program name.
-	err := proc.conn.SendUint32(int(proc.pid))
-	if err != nil {
-		return err
-	}
-	err = proc.conn.SendString(proc.prog.Filename)
-	if err != nil {
-		return err
-	}
-	err = proc.conn.Flush()
-	if err != nil {
-		return err
-	}
-
-	// Receive peer pid.
-	pid, err := proc.conn.ReceiveUint32()
-	if err != nil {
-		return err
-	}
-	proc.peerPid = uint32(pid)
 
 	// Run program.
 	state := proc.prog.Init
@@ -397,7 +390,7 @@ run:
 		proc.ktraceStats(stats)
 
 		// Decode syscall.
-		err = decodeSysall(sys, mpc.Results(result, outputs))
+		err := decodeSysall(sys, mpc.Results(result, outputs))
 		if err != nil {
 			return err
 		}
@@ -520,13 +513,7 @@ func (proc *Process) ktracePrefix() {
 	if !proc.kern.Params.Trace {
 		return
 	}
-	var pid string
-	if proc.role == RoleGarbler {
-		pid = fmt.Sprintf("%d:%d", proc.pid, proc.peerPid)
-	} else {
-		pid = fmt.Sprintf("%d:%d", proc.peerPid, proc.pid)
-	}
-	fmt.Printf("%6s %3d %-8s ", pid, proc.pc, proc.prog.Name)
+	fmt.Printf("%7s %3d %-8s ", proc.pid, proc.pc, proc.prog.Name)
 }
 
 func (proc *Process) ktraceStats(stats Stats) {
