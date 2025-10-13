@@ -8,10 +8,8 @@
 package main
 
 import (
-	"bytes"
 	"ephemelier/kernel"
 	"strconv"
-	"unicode"
 )
 
 func main(g kernel.Garbler, e kernel.Evaluator) (
@@ -19,17 +17,13 @@ func main(g kernel.Garbler, e kernel.Evaluator) (
 
 	if g.arg0 < 0 {
 		var msg [200]byte
-		size := copy(msg, []byte("spawn failed: "))
+		size := copy(msg, []byte("wait failed: "))
 
 		error := strconv.Uitoa(uint16(-g.arg0))
-		size += copy(msg[size:], []byte(error))
-		msg[size] = '\r'
-		msg[size+1] = '\n'
-		size += 2
+		size = copy(msg[size:], []byte(error))
 
 		return nil, intern(StWriteResult), kernel.SysWrite, 1, msg, size
 	}
 
-	// Wait for the process to complete.
-	return nil, intern(StWaitResult), kernel.SysWait, g.arg0, nil, 0
+	return nil, intern(StPrompt), kernel.SysYield, 0, nil, 0
 }

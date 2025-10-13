@@ -27,8 +27,9 @@ const (
 	SysWrite     = 6
 	SysOpen      = 7
 	SysClose     = 8
-	SysGetrandom = 9
-	SysYield     = 10
+	SysWait      = 9
+	SysGetrandom = 10
+	SysYield     = 11
 )
 
 const (

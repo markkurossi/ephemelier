@@ -14,5 +14,6 @@ const (
 	StPromptResult = 5
 	StReadResult   = 2
 	StSpawnResult  = 7
+	StWaitResult   = 8
 	StWriteResult  = 3
 )
