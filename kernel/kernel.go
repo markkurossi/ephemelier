@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 
 	"github.com/markkurossi/ephemelier/eef"
 	"github.com/markkurossi/go-libs/uuid"
@@ -22,7 +23,9 @@ type Errno int32
 
 // Error numbers.
 const (
+	ENOENT Errno = 2
 	EBADF  Errno = 9
+	ECHILD Errno = 10
 	EINVAL Errno = 22
 )
 
@@ -77,6 +80,7 @@ const (
 	SysWrite
 	SysOpen
 	SysClose
+	SysWait
 	SysGetrandom
 	SysYield
 )
@@ -90,6 +94,7 @@ var syscallNames = map[Syscall]string{
 	SysWrite:     "write",
 	SysOpen:      "open",
 	SysClose:     "close",
+	SysWait:      "wait",
 	SysGetrandom: "getrandom",
 	SysYield:     "yield",
 }
@@ -116,15 +121,16 @@ type Params struct {
 
 // Kernel implements the Ephemelier kernel.
 type Kernel struct {
-	Params      Params
-	NextPID     PartyID
-	ProcessByID map[[16]byte]*Process
+	m         sync.Mutex
+	Params    Params
+	NextPID   PartyID
+	Processes map[PartyID]*Process
 }
 
 // New creates a new kernel.
 func New(params *Params) *Kernel {
 	kern := &Kernel{
-		ProcessByID: make(map[[16]byte]*Process),
+		Processes: make(map[PartyID]*Process),
 	}
 	if params != nil {
 		kern.Params = *params
@@ -225,21 +231,6 @@ func (kern *Kernel) Spawn(file string, stdin, stdout, stderr *FD) (
 func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
 	stdin, stdout, stderr *FD) (*Process, error) {
 
-	// XXX check wrapping
-	kern.NextPID++
-	if kern.NextPID == 0 {
-		kern.NextPID++
-	} else if kern.NextPID >= 0b1000000000000000 {
-		kern.NextPID = 1
-	}
-
-	var pid PID
-	if role == RoleGarbler {
-		pid.SetG(kern.NextPID)
-	} else {
-		pid.SetE(kern.NextPID)
-	}
-
 	uid, err := uuid.New()
 	if err != nil {
 		return nil, err
@@ -249,16 +240,61 @@ func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
 		kern:    kern,
 		role:    role,
 		uuid:    uid,
-		pid:     pid,
 		conn:    conn,
 		oti:     ot.NewCO(),
 		iostats: p2p.NewIOStats(),
 		fds:     make(map[int32]*FD),
 	}
+	proc.c = sync.NewCond(&proc.m)
+
+	kern.m.Lock()
+	for {
+		kern.NextPID++
+		if kern.NextPID >= 0b1000000000000000 {
+			kern.NextPID = 1
+		}
+		_, ok := kern.Processes[kern.NextPID]
+		if ok {
+			continue
+		}
+		kern.Processes[kern.NextPID] = proc
+
+		if role == RoleGarbler {
+			proc.pid.SetG(kern.NextPID)
+		} else {
+			proc.pid.SetE(kern.NextPID)
+		}
+		break
+	}
+	kern.m.Unlock()
+
+	proc.SetState(SIDL)
 
 	proc.fds[0] = stdin
 	proc.fds[1] = stdout
 	proc.fds[2] = stderr
 
 	return proc, nil
+}
+
+// GetProcess gets a process by its PartyID.
+func (kern *Kernel) GetProcess(pid PartyID) (*Process, bool) {
+	kern.m.Lock()
+	defer kern.m.Unlock()
+
+	proc, ok := kern.Processes[pid]
+	return proc, ok
+}
+
+// RemoveProcess removes a process from the kernel.
+func (kern *Kernel) RemoveProcess(pid PartyID) {
+	kern.m.Lock()
+	defer kern.m.Unlock()
+
+	proc, ok := kern.Processes[pid]
+	if !ok {
+		return
+	}
+	proc.SetState(SDEAD)
+	delete(kern.Processes, pid)
 }

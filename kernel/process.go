@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/markkurossi/ephemelier/eef"
@@ -27,12 +28,15 @@ import (
 
 // Process defines a kernel process.
 type Process struct {
+	m           sync.Mutex
+	c           *sync.Cond
 	kern        *Kernel
 	role        Role
 	uuid        uuid.UUID
 	pid         PID
 	conn        *p2p.Conn
 	oti         ot.OT
+	state       ProcState
 	iostats     p2p.IOStats
 	prog        *eef.Program
 	mpclcParams *utils.Params
@@ -40,6 +44,37 @@ type Process struct {
 	mem         []byte
 	pc          uint16
 	fds         map[int32]*FD
+	exitVal     int32
+}
+
+// ProcState defines process states.
+type ProcState int
+
+// Process states.
+const (
+	SIDL ProcState = iota
+	SRUN
+	SSLEEP
+	SSTOP
+	SZOMB
+	SDEAD
+)
+
+var stateNames = map[ProcState]string{
+	SIDL:   "idl",
+	SRUN:   "run",
+	SSLEEP: "sleep",
+	SSTOP:  "stop",
+	SZOMB:  "zomb",
+	SDEAD:  "dead",
+}
+
+func (st ProcState) String() string {
+	name, ok := stateNames[st]
+	if ok {
+		return name
+	}
+	return fmt.Sprintf("{ProcState %d}", st)
 }
 
 // Stats provides process statistics.
@@ -62,6 +97,23 @@ func (proc *Process) diagnostics() bool {
 
 func (proc *Process) verbose() bool {
 	return proc.kern.Params.Verbose
+}
+
+// SetState sets the process state.
+func (proc *Process) SetState(st ProcState) {
+	proc.m.Lock()
+	proc.state = st
+	proc.m.Unlock()
+	proc.c.Broadcast()
+}
+
+// WaitState waits until the process reaches the specified state.
+func (proc *Process) WaitState(st ProcState) {
+	proc.m.Lock()
+	for proc.state < st {
+		proc.c.Wait()
+	}
+	proc.m.Unlock()
 }
 
 // SetProgram sets the program for the process.
@@ -93,6 +145,8 @@ func (proc *Process) SetProgram(prog *eef.Program) error {
 func (proc *Process) Run() (err error) {
 	defer proc.conn.Close()
 
+	proc.SetState(SRUN)
+
 	fmt.Printf("Process.Run\n")
 	switch proc.role {
 	case RoleGarbler:
@@ -107,6 +161,8 @@ func (proc *Process) Run() (err error) {
 	for _, fd := range proc.fds {
 		fd.Close()
 	}
+
+	proc.SetState(SZOMB)
 
 	return err
 }
@@ -253,6 +309,7 @@ run:
 
 		switch sys.call {
 		case SysExit:
+			proc.exitVal = sys.arg0
 			break run
 
 		case SysSpawn:
@@ -267,6 +324,17 @@ run:
 		case SysWrite:
 			sys.arg0 = 0
 			sys.argBuf = nil
+
+		case SysWait:
+			pid := PID(sys.arg0).E()
+			child, ok := proc.kern.GetProcess(pid)
+			if !ok {
+				sys.arg0 = int32(-ECHILD)
+			} else {
+				child.WaitState(SZOMB)
+				sys.arg0 = child.exitVal
+				proc.kern.RemoveProcess(pid)
+			}
 
 		case SysYield:
 			sys.arg0 = 0
@@ -407,6 +475,7 @@ run:
 
 		switch sys.call {
 		case SysExit:
+			proc.exitVal = sys.arg0
 			break run
 
 		case SysSpawn:
@@ -418,11 +487,11 @@ run:
 			child, err := proc.kern.Spawn(cmd, proc.fds[0].Copy(),
 				proc.fds[1].Copy(), proc.fds[2].Copy())
 			if err != nil {
-				sys.arg0 = int32(-EINVAL) // XXX
+				sys.arg0 = int32(-ENOENT)
 			} else {
 				sys.arg0 = int32(child.pid)
+				go child.Run()
 			}
-			go child.Run()
 
 		case SysRead:
 			fd, ok := proc.fds[sys.arg0]
@@ -445,6 +514,17 @@ run:
 			sys.argBuf = nil
 			sys.arg1 = 0
 
+		case SysWait:
+			pid := PID(sys.arg0).E()
+			child, ok := proc.kern.GetProcess(pid)
+			if !ok {
+				sys.arg0 = int32(-ECHILD)
+			} else {
+				child.WaitState(SZOMB)
+				sys.arg0 = child.exitVal
+				proc.kern.RemoveProcess(pid)
+			}
+
 		case SysYield:
 			sys.arg0 = 0
 			sys.argBuf = nil
@@ -464,7 +544,7 @@ run:
 	return nil
 }
 
-func (proc Process) circuitStats(stats *Stats, circ *circuit.Circuit) {
+func (proc *Process) circuitStats(stats *Stats, circ *circuit.Circuit) {
 	stats.NumGates = uint64(circ.NumGates)
 	stats.NumWires = uint64(circ.NumWires)
 	stats.NumXOR = circ.Stats[circuit.XOR] + circ.Stats[circuit.XNOR]
@@ -552,7 +632,7 @@ func (proc *Process) ktraceCall(sys *syscall) {
 	proc.ktracePrefix()
 	fmt.Printf("CALL %s", sys.call)
 	switch sys.call {
-	case SysExit:
+	case SysExit, SysWait:
 		fmt.Printf("(%d)", sys.arg0)
 
 	case SysSpawn:
