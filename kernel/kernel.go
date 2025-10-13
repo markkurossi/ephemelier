@@ -13,7 +13,6 @@ import (
 	"sync"
 
 	"github.com/markkurossi/ephemelier/eef"
-	"github.com/markkurossi/go-libs/uuid"
 	"github.com/markkurossi/mpc/ot"
 	"github.com/markkurossi/mpc/p2p"
 )
@@ -188,12 +187,7 @@ func (kern *Kernel) Spawn(file string, stdin, stdout, stderr *FD) (
 		return nil, err
 	}
 
-	// Send our uuid, pid, and program name.
-	err = proc.conn.SendData(proc.uuid[:])
-	if err != nil {
-		mpc.Close()
-		return nil, err
-	}
+	// Send our pid and program name.
 	err = proc.conn.SendUint16(int(proc.pid.G()))
 	if err != nil {
 		mpc.Close()
@@ -210,13 +204,7 @@ func (kern *Kernel) Spawn(file string, stdin, stdout, stderr *FD) (
 		return nil, err
 	}
 
-	// Receive peer uuid and pid.
-	peerUUID, err := proc.conn.ReceiveData()
-	if err != nil {
-		mpc.Close()
-		return nil, err
-	}
-	_ = peerUUID
+	// Receive peer pid.
 	eid, err := proc.conn.ReceiveUint16()
 	if err != nil {
 		mpc.Close()
@@ -231,15 +219,9 @@ func (kern *Kernel) Spawn(file string, stdin, stdout, stderr *FD) (
 func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
 	stdin, stdout, stderr *FD) (*Process, error) {
 
-	uid, err := uuid.New()
-	if err != nil {
-		return nil, err
-	}
-
 	proc := &Process{
 		kern:    kern,
 		role:    role,
-		uuid:    uid,
 		conn:    conn,
 		oti:     ot.NewCO(),
 		iostats: p2p.NewIOStats(),

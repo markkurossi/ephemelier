@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/markkurossi/ephemelier/eef"
-	"github.com/markkurossi/go-libs/uuid"
 	"github.com/markkurossi/mpc"
 	"github.com/markkurossi/mpc/circuit"
 	"github.com/markkurossi/mpc/compiler"
@@ -32,7 +31,6 @@ type Process struct {
 	c           *sync.Cond
 	kern        *Kernel
 	role        Role
-	uuid        uuid.UUID
 	pid         PID
 	conn        *p2p.Conn
 	oti         ot.OT
@@ -168,15 +166,7 @@ func (proc *Process) Run() (err error) {
 }
 
 func (proc *Process) runEvaluator() error {
-	// Receive peer uuid, pid, and program.
-	peerUUID, err := proc.conn.ReceiveData()
-	if err != nil {
-		return err
-	}
-	var uid uuid.UUID
-	uid.Set(peerUUID)
-	fmt.Printf("Peer UUID %v\n", uid)
-
+	// Receive peer pid and program.
 	gid, err := proc.conn.ReceiveUint16()
 	if err != nil {
 		return err
@@ -195,11 +185,7 @@ func (proc *Process) runEvaluator() error {
 		return err
 	}
 
-	// Send our uuid and pid.
-	err = proc.conn.SendData(proc.uuid[:])
-	if err != nil {
-		return err
-	}
+	// Send our pid.
 	err = proc.conn.SendUint16(int(proc.pid.E()))
 	if err != nil {
 		return err

@@ -1,7 +1,5 @@
 github.com/markkurossi/crypto v0.0.0-20240520115340-daed3f9a1082 h1:9lj+7BEGrRT+7iylAqu0hY50nHQk3+LUL2g0eWDqAuw=
 github.com/markkurossi/crypto v0.0.0-20240520115340-daed3f9a1082/go.mod h1:+mhV8wp86RN6GgVyETgAd6oY+D3xLNESWKty2fGNg5U=
-github.com/markkurossi/go-libs v0.0.0-20250424135257-fb6cf92e57e9 h1:71Rd/JHPQ1YFKgE3ehZsxkz4aAPUPLGOWmCC402TaUA=
-github.com/markkurossi/go-libs v0.0.0-20250424135257-fb6cf92e57e9/go.mod h1:7KLbF1cWIpgNVQxPF93GT5uc4QVQIrG/7q8ImiHfCAk=
 github.com/markkurossi/tabulate v0.0.0-20251004141156-4c8b7c8b825a h1:WlPm/v32/s7+ER1Fp7APqEEd0SfnsUG5b9z9tgTY+LM=
 github.com/markkurossi/tabulate v0.0.0-20251004141156-4c8b7c8b825a/go.mod h1:qPNWLW3h4173ZWYHjOgJ1wbvNyLuE1fboZilv97Aq7k=
 golang.org/x/text v0.30.0 h1:yznKA/E9zq54KzlzBEAWn1NXSQ8DIp/NYMy88xJjl4k=
