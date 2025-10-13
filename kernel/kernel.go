@@ -121,29 +121,29 @@ type Params struct {
 // Kernel implements the Ephemelier kernel.
 type Kernel struct {
 	m         sync.Mutex
-	Params    Params
-	NextPID   PartyID
-	Processes map[PartyID]*Process
+	params    Params
+	nextPID   PartyID
+	processes map[PartyID]*Process
 }
 
 // New creates a new kernel.
 func New(params *Params) *Kernel {
 	kern := &Kernel{
-		Processes: make(map[PartyID]*Process),
+		processes: make(map[PartyID]*Process),
 	}
 	if params != nil {
-		kern.Params = *params
+		kern.params = *params
 	}
 	return kern
 }
 
 // Evaluator runs the evaluator with the stdio FDs.
 func (kern *Kernel) Evaluator(stdin, stdout, stderr *FD) error {
-	listener, err := net.Listen("tcp", kern.Params.Port)
+	listener, err := net.Listen("tcp", kern.params.Port)
 	if err != nil {
 		return err
 	}
-	log.Printf("Listening for MPC connections at %s", kern.Params.Port)
+	log.Printf("Listening for MPC connections at %s", kern.params.Port)
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -170,7 +170,7 @@ func (kern *Kernel) Spawn(file string, stdin, stdout, stderr *FD) (
 	}
 
 	// Connect to evaluator.
-	mpc, err := net.Dial("tcp", kern.Params.Port)
+	mpc, err := net.Dial("tcp", kern.params.Port)
 	if err != nil {
 		return nil, err
 	}
@@ -231,20 +231,20 @@ func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
 
 	kern.m.Lock()
 	for {
-		kern.NextPID++
-		if kern.NextPID >= 0b1000000000000000 {
-			kern.NextPID = 1
+		kern.nextPID++
+		if kern.nextPID >= 0b1000000000000000 {
+			kern.nextPID = 1
 		}
-		_, ok := kern.Processes[kern.NextPID]
+		_, ok := kern.processes[kern.nextPID]
 		if ok {
 			continue
 		}
-		kern.Processes[kern.NextPID] = proc
+		kern.processes[kern.nextPID] = proc
 
 		if role == RoleGarbler {
-			proc.pid.SetG(kern.NextPID)
+			proc.pid.SetG(kern.nextPID)
 		} else {
-			proc.pid.SetE(kern.NextPID)
+			proc.pid.SetE(kern.nextPID)
 		}
 		break
 	}
@@ -264,7 +264,7 @@ func (kern *Kernel) GetProcess(pid PartyID) (*Process, bool) {
 	kern.m.Lock()
 	defer kern.m.Unlock()
 
-	proc, ok := kern.Processes[pid]
+	proc, ok := kern.processes[pid]
 	return proc, ok
 }
 
@@ -273,10 +273,10 @@ func (kern *Kernel) RemoveProcess(pid PartyID) {
 	kern.m.Lock()
 	defer kern.m.Unlock()
 
-	proc, ok := kern.Processes[pid]
+	proc, ok := kern.processes[pid]
 	if !ok {
 		return
 	}
 	proc.SetState(SDEAD)
-	delete(kern.Processes, pid)
+	delete(kern.processes, pid)
 }

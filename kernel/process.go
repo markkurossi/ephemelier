@@ -90,11 +90,11 @@ func (stats Stats) String() string {
 }
 
 func (proc *Process) diagnostics() bool {
-	return proc.kern.Params.Diagnostics
+	return proc.kern.params.Diagnostics
 }
 
 func (proc *Process) verbose() bool {
-	return proc.kern.Params.Verbose
+	return proc.kern.params.Verbose
 }
 
 // SetState sets the process state.
@@ -596,14 +596,14 @@ func decodeSysall(sys *syscall, values []interface{}) error {
 }
 
 func (proc *Process) ktracePrefix() {
-	if !proc.kern.Params.Trace {
+	if !proc.kern.params.Trace {
 		return
 	}
 	fmt.Printf("%7s %3d %-8s ", proc.pid, proc.pc, proc.prog.Name)
 }
 
 func (proc *Process) ktraceStats(stats Stats) {
-	if !proc.kern.Params.Trace {
+	if !proc.kern.params.Trace {
 		return
 	}
 	proc.ktracePrefix()
@@ -612,7 +612,7 @@ func (proc *Process) ktraceStats(stats Stats) {
 }
 
 func (proc *Process) ktraceCall(sys *syscall) {
-	if !proc.kern.Params.Trace {
+	if !proc.kern.params.Trace {
 		return
 	}
 	proc.ktracePrefix()
@@ -637,7 +637,7 @@ func (proc *Process) ktraceCall(sys *syscall) {
 }
 
 func (proc *Process) ktraceRet(sys *syscall) {
-	if !proc.kern.Params.Trace {
+	if !proc.kern.params.Trace {
 		return
 	}
 	proc.ktracePrefix()
