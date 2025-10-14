@@ -15,14 +15,14 @@ import (
 // FD defines a file descriptor.
 type FD struct {
 	refcount int
-	impl     FDImpl
+	Impl     FDImpl
 }
 
 // NewFD creates a new FD for the implementation.
 func NewFD(impl FDImpl) *FD {
 	return &FD{
 		refcount: 1,
-		impl:     impl,
+		Impl:     impl,
 	}
 }
 
@@ -46,21 +46,21 @@ func (fd *FD) Close() int {
 	if fd.refcount > 0 {
 		return 0
 	}
-	return fd.impl.Close()
+	return fd.Impl.Close()
 }
 
 // Read reads data to the buffer b from the underlying FD
 // implementation. It returns the number of bytes read or -Errno on
 // error.
 func (fd *FD) Read(b []byte) int {
-	return fd.impl.Read(b)
+	return fd.Impl.Read(b)
 }
 
 // Write writes data from the buffer b to the underlying FD
 // implementation. It returns the number of bytes written or -Errno on
 // error.
 func (fd *FD) Write(b []byte) int {
-	return fd.impl.Write(b)
+	return fd.Impl.Write(b)
 }
 
 // FDImpl is the implementation of a file descriptor.
@@ -73,6 +73,7 @@ type FDImpl interface {
 var (
 	_ FDImpl = &FDFile{}
 	_ FDImpl = &FDSocket{}
+	_ FDImpl = &FDPort{}
 )
 
 func mapError(err error) int {

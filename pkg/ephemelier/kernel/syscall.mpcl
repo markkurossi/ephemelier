@@ -33,9 +33,9 @@ const (
 )
 
 const (
+	KeySize   = 16
 	NonceSize = 12
 	TagSize   = 16
-	KeySize   = 16
 )
 
 type Garbler struct {

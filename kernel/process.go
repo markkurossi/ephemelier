@@ -8,7 +8,6 @@ package kernel
 
 import (
 	"bytes"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"log"
@@ -116,13 +115,7 @@ func (proc *Process) WaitState(st ProcState) {
 
 // SetProgram sets the program for the process.
 func (proc *Process) SetProgram(prog *eef.Program) error {
-	var key [16]byte
-	_, err := rand.Read(key[:])
-	if err != nil {
-		return err
-	}
 	proc.prog = prog
-	proc.key = key[:]
 
 	proc.mpclcParams = utils.NewParams()
 	proc.mpclcParams.Verbose = proc.verbose()

@@ -7,6 +7,8 @@
 package kernel
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
@@ -17,19 +19,20 @@ import (
 	"github.com/markkurossi/mpc/p2p"
 )
 
-// Errno defines error numbers.
-type Errno int32
-
-// Error numbers.
 const (
-	ENOENT Errno = 2
-	EBADF  Errno = 9
-	ECHILD Errno = 10
-	EINVAL Errno = 22
+	// KeySize specifies the system encryption key size.
+	KeySize = 16
+
+	// NonceSize specifies the encryption nonce sizes.
+	NonceSize = 12
+
+	// TagSize specifies the encryption authentication tag size.
+	TagSize = 16
 )
 
-// Syscall defines system calls.
-type Syscall uint8
+var (
+	bo = binary.BigEndian
+)
 
 // PID defines process ID.
 type PID uint32
@@ -61,43 +64,6 @@ func (pid PID) String() string {
 // PartyID is party's part of the PID.
 type PartyID uint16
 
-func (call Syscall) String() string {
-	name, ok := syscallNames[call]
-	if ok {
-		return name
-	}
-	return fmt.Sprintf("{Syscall %d}", call)
-}
-
-// System calls.
-const (
-	SysExit Syscall = iota + 1
-	SysSpawn
-	SysPeek
-	SysRead
-	SysSkip
-	SysWrite
-	SysOpen
-	SysClose
-	SysWait
-	SysGetrandom
-	SysYield
-)
-
-var syscallNames = map[Syscall]string{
-	SysExit:      "exit",
-	SysSpawn:     "spawn",
-	SysPeek:      "peek",
-	SysRead:      "read",
-	SysSkip:      "skip",
-	SysWrite:     "write",
-	SysOpen:      "open",
-	SysClose:     "close",
-	SysWait:      "wait",
-	SysGetrandom: "getrandom",
-	SysYield:     "yield",
-}
-
 // Role defines the process roles.
 type Role int
 
@@ -124,12 +90,14 @@ type Kernel struct {
 	params    Params
 	nextPID   PartyID
 	processes map[PartyID]*Process
+	pidPorts  map[PartyID]*Port
 }
 
 // New creates a new kernel.
 func New(params *Params) *Kernel {
 	kern := &Kernel{
 		processes: make(map[PartyID]*Process),
+		pidPorts:  make(map[PartyID]*Port),
 	}
 	if params != nil {
 		kern.params = *params
@@ -219,15 +187,24 @@ func (kern *Kernel) Spawn(file string, stdin, stdout, stderr *FD) (
 func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
 	stdin, stdout, stderr *FD) (*Process, error) {
 
+	var key [KeySize]byte
+	_, err := rand.Read(key[:])
+	if err != nil {
+		return nil, err
+	}
+
 	proc := &Process{
 		kern:    kern,
 		role:    role,
 		conn:    conn,
 		oti:     ot.NewCO(),
 		iostats: p2p.NewIOStats(),
+		key:     key[:],
 		fds:     make(map[int32]*FD),
 	}
 	proc.c = sync.NewCond(&proc.m)
+
+	var pid PartyID
 
 	kern.m.Lock()
 	for {
@@ -239,16 +216,23 @@ func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
 		if ok {
 			continue
 		}
-		kern.processes[kern.nextPID] = proc
+		pid = kern.nextPID
+		kern.processes[pid] = proc
 
 		if role == RoleGarbler {
-			proc.pid.SetG(kern.nextPID)
+			proc.pid.SetG(pid)
 		} else {
-			proc.pid.SetE(kern.nextPID)
+			proc.pid.SetE(pid)
 		}
 		break
 	}
 	kern.m.Unlock()
+
+	err = kern.CreatePIDPort(pid, role)
+	if err != nil {
+		kern.RemoveProcess(pid)
+		return nil, err
+	}
 
 	proc.SetState(SIDL)
 
@@ -279,4 +263,22 @@ func (kern *Kernel) RemoveProcess(pid PartyID) {
 	}
 	proc.SetState(SDEAD)
 	delete(kern.processes, pid)
+}
+
+// CreatePIDPort creates a port for the PartyID.
+func (kern *Kernel) CreatePIDPort(pid PartyID, role Role) error {
+	port, err := NewPort(role)
+	if err != nil {
+		return err
+	}
+	kern.m.Lock()
+	defer kern.m.Unlock()
+
+	_, ok := kern.pidPorts[pid]
+	if ok {
+		return fmt.Errorf("PID port already created")
+	}
+	kern.pidPorts[pid] = port
+
+	return nil
 }

@@ -30,7 +30,7 @@ func (fd *FDFile) Close() int {
 	return mapError(err)
 }
 
-// Close implements FD.Read.
+// Read implements FD.Read.
 func (fd *FDFile) Read(b []byte) int {
 	n, err := fd.f.Read(b)
 	if err != nil {
@@ -42,7 +42,7 @@ func (fd *FDFile) Read(b []byte) int {
 	return n
 }
 
-// Close implements FD.Write.
+// Write implements FD.Write.
 func (fd *FDFile) Write(b []byte) int {
 	n, err := fd.f.Write(b)
 	if err != nil {
