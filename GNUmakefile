@@ -6,7 +6,7 @@ all:
 
 apidoc:
 	$(BLOG)/blog -site -lib $(BLOG) -draft -t templates/mpcl -o $(OUTPUT) docs/apidoc/
-	mpcldoc -pkgpath pkg -dir $(OUTPUT) pkg cmd/ephemelier/examples
+	mpcldoc -pkgpath pkg -dir $(OUTPUT) pkg
 
 public:
 	make apidoc OUTPUT=$(HOME)/work/www/mpcl

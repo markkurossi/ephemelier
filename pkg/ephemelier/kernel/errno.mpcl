@@ -7,8 +7,14 @@
 
 package kernel
 
+// Errno defines error numbers.
 type Errno = int32
 
+// Error numbers.
 const (
+	ENOENT = 2
+	EBADF  = 9
+	ECHILD = 10
 	EINVAL = 22
+	ERANGE = 34
 )

@@ -30,6 +30,12 @@ const (
 	SysWait      = 9
 	SysGetrandom = 10
 	SysYield     = 11
+
+	SysGetport    = 100
+	SysCreateport = 101
+	SysSendport   = 102
+	SysRecvport   = 103
+	SysCreateMsg  = 104
 )
 
 const (
