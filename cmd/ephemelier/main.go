@@ -83,7 +83,7 @@ func main() {
 
 	// Start console.
 	if *fConsole {
-		err = console()
+		err = console(&wg)
 		if err != nil {
 			log.Print(err)
 		}
@@ -93,7 +93,7 @@ func main() {
 	wg.Wait()
 }
 
-func console() error {
+func console(wg *sync.WaitGroup) error {
 	// Create command listener.
 	listener, err := net.Listen("tcp", consolePort)
 	if err != nil {
@@ -111,10 +111,12 @@ func console() error {
 		if err != nil {
 			return err
 		}
-		err = proc.Run()
-		conn.Close()
-		if err != nil {
-			return err
-		}
+		wg.Go(func() {
+			err := proc.Run()
+			conn.Close()
+			if err != nil {
+				log.Print(err)
+			}
+		})
 	}
 }
