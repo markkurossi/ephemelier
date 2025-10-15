@@ -10,8 +10,8 @@ const (
 	Init           = 0
 	StEnd          = 4
 	StPrompt       = 1
-	StPromptResult = 3
-	StReadResult   = 2
+	StPromptResult = 2
+	StReadResult   = 3
 	StSpawnResult  = 5
 	StWaitResult   = 7
 	StWriteResult  = 6
