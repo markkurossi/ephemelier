@@ -34,6 +34,7 @@ const (
 	SysWait
 	SysGetrandom
 	SysYield
+	SysGetpid
 )
 
 // Port system calls.
@@ -57,6 +58,7 @@ var syscallNames = map[Syscall]string{
 	SysWait:      "wait",
 	SysGetrandom: "getrandom",
 	SysYield:     "yield",
+	SysGetpid:    "getpid",
 
 	SysGetport:    "getport",
 	SysCreateport: "createport",

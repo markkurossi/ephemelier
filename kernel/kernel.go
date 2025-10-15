@@ -86,18 +86,18 @@ type Params struct {
 
 // Kernel implements the Ephemelier kernel.
 type Kernel struct {
-	m         sync.Mutex
-	params    Params
-	nextPID   PartyID
-	processes map[PartyID]*Process
-	pidPorts  map[PartyID]*Port
+	m            sync.Mutex
+	params       Params
+	nextPID      PartyID
+	processes    map[PartyID]*Process
+	processPorts map[PartyID]*Port
 }
 
 // New creates a new kernel.
 func New(params *Params) *Kernel {
 	kern := &Kernel{
-		processes: make(map[PartyID]*Process),
-		pidPorts:  make(map[PartyID]*Port),
+		processes:    make(map[PartyID]*Process),
+		processPorts: make(map[PartyID]*Port),
 	}
 	if params != nil {
 		kern.params = *params
@@ -228,7 +228,7 @@ func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
 	}
 	kern.m.Unlock()
 
-	err = kern.CreatePIDPort(pid, role)
+	err = kern.CreateProcessPort(pid, role)
 	if err != nil {
 		kern.RemoveProcess(pid)
 		return nil, err
@@ -265,8 +265,8 @@ func (kern *Kernel) RemoveProcess(pid PartyID) {
 	delete(kern.processes, pid)
 }
 
-// CreatePIDPort creates a port for the PartyID.
-func (kern *Kernel) CreatePIDPort(pid PartyID, role Role) error {
+// CreateProcessPort creates the process port for the PartyID.
+func (kern *Kernel) CreateProcessPort(pid PartyID, role Role) error {
 	port, err := NewPort(role)
 	if err != nil {
 		return err
@@ -274,11 +274,23 @@ func (kern *Kernel) CreatePIDPort(pid PartyID, role Role) error {
 	kern.m.Lock()
 	defer kern.m.Unlock()
 
-	_, ok := kern.pidPorts[pid]
+	_, ok := kern.processPorts[pid]
 	if ok {
-		return fmt.Errorf("PID port already created")
+		return fmt.Errorf("process port already created: %v", pid)
 	}
-	kern.pidPorts[pid] = port
+	kern.processPorts[pid] = port
 
 	return nil
+}
+
+// GetProcessPort gets the process port for the PartyID.
+func (kern *Kernel) GetProcessPort(pid PartyID) (*Port, error) {
+	kern.m.Lock()
+	defer kern.m.Unlock()
+
+	port, ok := kern.processPorts[pid]
+	if !ok {
+		return nil, fmt.Errorf("invalid pid: %v", pid)
+	}
+	return port, nil
 }

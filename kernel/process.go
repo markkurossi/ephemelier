@@ -132,6 +132,43 @@ func (proc *Process) SetProgram(prog *eef.Program) error {
 	return nil
 }
 
+// AllocFD allocates a file descriptor for the FD implementation.
+func (proc *Process) AllocFD(fd *FD) int32 {
+	proc.m.Lock()
+	defer proc.m.Unlock()
+
+	var ret int32
+	for ret = 0; ; ret++ {
+		_, ok := proc.fds[ret]
+		if !ok {
+			proc.fds[ret] = fd
+			return ret
+		}
+	}
+}
+
+// SetFD sets the FD implementation for the file descriptor.
+func (proc *Process) SetFD(fd int32, impl *FD) error {
+	proc.m.Lock()
+	defer proc.m.Unlock()
+
+	_, ok := proc.fds[fd]
+	if ok {
+		return fmt.Errorf("fd %v already set", fd)
+	}
+	proc.fds[fd] = impl
+
+	return nil
+}
+
+// FreeFD frees the file descriptor.
+func (proc *Process) FreeFD(fd int32) {
+	proc.m.Lock()
+	defer proc.m.Unlock()
+
+	delete(proc.fds, fd)
+}
+
 // Run runs the process.
 func (proc *Process) Run() (err error) {
 	defer proc.conn.Close()
@@ -319,6 +356,42 @@ run:
 			sys.arg0 = 0
 			sys.argBuf = nil
 
+		case SysGetpid:
+			sys.arg0 = int32(proc.pid)
+			sys.argBuf = nil
+
+		case SysGetport:
+			if sys.arg0 <= 0 {
+				sys.arg0 = int32(-EINVAL)
+			} else {
+				pid := PID(sys.arg0)
+				epid := pid.E()
+				port, err := proc.kern.GetProcessPort(epid)
+				if err != nil {
+					sys.arg0 = int32(-EINVAL)
+				} else {
+					var fd *FD
+					if pid == proc.pid {
+						fd = port.NewServerFD()
+					} else {
+						fd = port.NewClientFD()
+					}
+
+					// Get FD from garbler.
+					gfd, err := proc.conn.ReceiveUint32()
+					if err == nil {
+						sys.arg0 = int32(gfd)
+						err = proc.SetFD(sys.arg0, fd)
+					}
+					if err != nil {
+						fd.Close()
+						sys.arg0 = int32(-EFAULT)
+					}
+				}
+			}
+			sys.argBuf = nil
+			sys.arg1 = 0
+
 		default:
 			return fmt.Errorf("invalid syscall: %v", sys.call)
 		}
@@ -494,7 +567,7 @@ run:
 			sys.arg1 = 0
 
 		case SysWait:
-			pid := PID(sys.arg0).E()
+			pid := PID(sys.arg0).G()
 			child, ok := proc.kern.GetProcess(pid)
 			if !ok {
 				sys.arg0 = int32(-ECHILD)
@@ -507,6 +580,44 @@ run:
 		case SysYield:
 			sys.arg0 = 0
 			sys.argBuf = nil
+			sys.arg1 = 0
+
+		case SysGetpid:
+			sys.arg0 = int32(proc.pid)
+			sys.argBuf = nil
+
+		case SysGetport:
+			if sys.arg0 <= 0 {
+				sys.arg0 = int32(-EINVAL)
+			} else {
+				pid := PID(sys.arg0)
+				gpid := pid.G()
+				port, err := proc.kern.GetProcessPort(gpid)
+				if err != nil {
+					sys.arg0 = int32(-EINVAL)
+				} else {
+					var fd *FD
+					if pid == proc.pid {
+						fd = port.NewServerFD()
+					} else {
+						fd = port.NewClientFD()
+					}
+					sys.arg0 = proc.AllocFD(fd)
+
+					// Sync FD with evaluator.
+					err = proc.conn.SendUint32(int(sys.arg0))
+					if err == nil {
+						err = proc.conn.Flush()
+					}
+					if err != nil {
+						fd.Close()
+						proc.FreeFD(sys.arg0)
+						sys.arg0 = int32(-EFAULT)
+					}
+				}
+			}
+			sys.argBuf = nil
+			sys.arg1 = 0
 
 		default:
 			return fmt.Errorf("invalid syscall: %v", sys.call)
@@ -625,6 +736,13 @@ func (proc *Process) ktraceCall(sys *syscall) {
 
 	case SysYield:
 		fmt.Printf("(%d)", sys.pc)
+
+	case SysGetport:
+		if sys.arg1 > 0 {
+			fmt.Printf("(%s)", sys.argBuf[:sys.arg0])
+		} else {
+			fmt.Printf("(%s)", PID(sys.arg0))
+		}
 	}
 	fmt.Println()
 }

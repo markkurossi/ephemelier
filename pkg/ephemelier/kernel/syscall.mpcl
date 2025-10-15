@@ -30,6 +30,7 @@ const (
 	SysWait      = 9
 	SysGetrandom = 10
 	SysYield     = 11
+	SysGetpid    = 12
 
 	SysGetport    = 100
 	SysCreateport = 101

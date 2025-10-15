@@ -14,6 +14,7 @@ const (
 	ENOENT Errno = 2
 	EBADF  Errno = 9
 	ECHILD Errno = 10
+	EFAULT Errno = 14
 	EINVAL Errno = 22
 	ERANGE Errno = 34
 )
