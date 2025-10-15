@@ -7,8 +7,8 @@ package main
 
 // Interned symbols.
 const (
-	Init     = 0
+	Init     = 2
 	StEnd    = 3
 	StFibo   = 1
-	StResult = 2
+	StResult = 0
 )
