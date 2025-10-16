@@ -13,7 +13,7 @@ import (
 )
 
 func main(g kernel.G1B, e kernel.E1B) (
-	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+	[]byte, kernel.PC, kernel.Syscall, int32) {
 
 	var key [kernel.KeySize]byte
 	for i := 0; i < kernel.KeySize; i++ {
@@ -21,7 +21,7 @@ func main(g kernel.G1B, e kernel.E1B) (
 	}
 	nonce, mem, ok := kernel.DecodeMemory(g.mem, key)
 	if !ok {
-		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
+		return nil, 0, kernel.SysExit, -kernel.EINVAL
 	}
 
 	f0 := binary.GetUint32(mem[0:])
@@ -43,6 +43,5 @@ func main(g kernel.G1B, e kernel.E1B) (
 		next = intern(StFibo)
 	}
 
-	return kernel.EncodeMemory(nonce, mem, key), next,
-		kernel.SysYield, 0, nil, 0
+	return kernel.EncodeMemory(nonce, mem, key), next, kernel.SysYield, 0
 }

@@ -677,6 +677,11 @@ func (sys *syscall) Print() {
 func decodeSysall(sys *syscall, values []interface{}) error {
 	var ok bool
 
+	if len(values) < 4 {
+		return fmt.Errorf("too few return values, got %v, expected 4",
+			len(values))
+	}
+
 	// Memory.
 	sys.mem, ok = values[0].([]byte)
 	if !ok {
@@ -702,18 +707,24 @@ func decodeSysall(sys *syscall, values []interface{}) error {
 		return fmt.Errorf("invalid arg0: %T", values[3])
 	}
 
-	// XXX make rest optional.
-
 	// argBuf.
-	sys.argBuf, ok = values[4].([]byte)
-	if !ok {
-		return fmt.Errorf("invalid argBuf: %T", values[4])
+	if len(values) > 4 {
+		sys.argBuf, ok = values[4].([]byte)
+		if !ok {
+			return fmt.Errorf("invalid argBuf: %T", values[4])
+		}
+	} else {
+		sys.argBuf = nil
 	}
 
 	// arg1.
-	sys.arg1, ok = values[5].(int32)
-	if !ok {
-		return fmt.Errorf("invalid arg1: %T", values[5])
+	if len(values) > 5 {
+		sys.arg1, ok = values[5].(int32)
+		if !ok {
+			return fmt.Errorf("invalid arg1: %T", values[5])
+		}
+	} else {
+		sys.arg1 = 0
 	}
 
 	return nil
