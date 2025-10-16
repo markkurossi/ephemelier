@@ -407,7 +407,7 @@ run:
 		proc.pc = sys.pc
 		state, ok = proc.prog.ByPC[int(proc.pc)]
 		if !ok {
-			return fmt.Errorf("invalid PC: %v", proc.pc)
+			return fmt.Errorf("program fragment %v not found", proc.pc)
 		}
 	}
 	return nil
@@ -645,7 +645,7 @@ run:
 		proc.pc = sys.pc
 		state, ok = proc.prog.ByPC[int(proc.pc)]
 		if !ok {
-			return fmt.Errorf("invalid PC: %v", proc.pc)
+			return fmt.Errorf("program fragment %v not found", proc.pc)
 		}
 	}
 
