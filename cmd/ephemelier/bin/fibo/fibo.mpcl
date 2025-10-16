@@ -15,11 +15,7 @@ import (
 func main(g kernel.G1B, e kernel.E1B) (
 	[]byte, kernel.PC, kernel.Syscall, int32) {
 
-	var key [kernel.KeySize]byte
-	for i := 0; i < kernel.KeySize; i++ {
-		key[i] = g.privShare[i] ^ e.privShare[i]
-	}
-	nonce, mem, ok := kernel.DecodeMemory(g.mem, key)
+	nonce, mem, ok := kernel.DecodeMem(g.mem, g.key, e.key)
 	if !ok {
 		return nil, 0, kernel.SysExit, -kernel.EINVAL
 	}
@@ -43,5 +39,5 @@ func main(g kernel.G1B, e kernel.E1B) (
 		next = intern(StFibo)
 	}
 
-	return kernel.EncodeMemory(nonce, mem, key), next, kernel.SysYield, 0
+	return kernel.EncodeMem(nonce, mem, g.key, e.key), next, kernel.SysYield, 0
 }

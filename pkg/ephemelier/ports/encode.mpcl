@@ -12,6 +12,22 @@ import (
 	"ephemelier/kernel"
 )
 
+func EncodeMsg(g, e, data []byte) []byte {
+	var key [kernel.KeySize]byte
+	for i := 0; i < kernel.KeySize; i++ {
+		key[i] = g[i] ^ e[i]
+	}
+	nonce := g[kernel.KeySize : kernel.KeySize+kernel.NonceSize]
+
+	var msg [kernel.NonceSize + len(data) + kernel.TagSize]byte
+	copy(msg, nonce)
+
+	cipher := gcm.EncryptAES128(key, nonce, data, nil)
+	copy(msg[kernel.NonceSize:], cipher)
+
+	return msg
+}
+
 func DecodeMsg(g, e []byte) ([]byte, bool) {
 	var key [kernel.KeySize]byte
 	for i := 0; i < kernel.KeySize; i++ {

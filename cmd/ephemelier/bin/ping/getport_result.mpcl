@@ -17,5 +17,5 @@ func main(g, e kernel.PeerResult) ([]byte, kernel.PC, kernel.Syscall, int32) {
 		return nil, 0, kernel.SysExit, 1
 	}
 
-	return nil, intern(StCreateMsgResult), kernel.SysCreatemsg, g.arg0
+	return nil, intern(StCreatemsgResult), kernel.SysCreatemsg, g.arg0
 }

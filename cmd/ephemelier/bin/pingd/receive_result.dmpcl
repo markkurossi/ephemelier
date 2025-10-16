@@ -16,17 +16,16 @@ func main(g kernel.G, e kernel.E) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
 	if g.arg0 < 0 || e.arg0 < 0 {
-		return nil, 0, kernel.SysExit, 1, nil, 0
+		return nil, 0, kernel.SysExit, 41, nil, 0
 	}
-
-	// XXX g.argBuf is now empty and the code below fails.
 
 	msg, ok := ports.DecodeMsg(g.argBuf, e.argBuf)
 	if !ok {
-		return nil, 0, kernel.SysExit, 1, nil, 0
+		return nil, 0, kernel.SysExit, 42, nil, 0
 	}
 
 	overhead := kernel.KeySize + kernel.NonceSize + kernel.TagSize
+	// XXX below is -1 on EOF
 	var reply [len(g.argBuf) - overhead + 2]byte
 
 	size := copy(reply, msg)
@@ -35,5 +34,5 @@ func main(g kernel.G, e kernel.E) (
 
 	size += 2
 
-	return nil, intern(StGetportResult), kernel.SysWrite, 1, reply, size
+	return nil, intern(StReceive), kernel.SysWrite, 1, reply, size
 }

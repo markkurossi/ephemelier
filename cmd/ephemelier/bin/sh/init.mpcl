@@ -21,11 +21,6 @@ func main(g, e kernel.PeerInit) (
 	var nonce [12]byte
 	var mem [16]byte
 
-	var key [kernel.KeySize]byte
-	for i := 0; i < kernel.KeySize; i++ {
-		key[i] = g.privShare[i] ^ e.privShare[i]
-	}
-
-	return kernel.EncodeMemory(nonce, mem, key), intern(StPrompt),
+	return kernel.EncodeMem(nonce, mem, g.key, e.key), intern(StPrompt),
 		kernel.SysWrite, 1, motd, len(motd)
 }

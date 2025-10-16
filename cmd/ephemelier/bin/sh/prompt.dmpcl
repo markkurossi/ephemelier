@@ -8,7 +8,6 @@
 package main
 
 import (
-	"crypto/cipher/gcm"
 	"encoding/binary"
 	"ephemelier/kernel"
 )
@@ -19,12 +18,7 @@ func main(g kernel.G, e kernel.E) (
 	if g.arg0 < 0 {
 		return nil, 0, kernel.SysExit, 1, nil, 0
 	}
-
-	var key [kernel.KeySize]byte
-	for i := 0; i < kernel.KeySize; i++ {
-		key[i] = g.privShare[i] ^ e.privShare[i]
-	}
-	nonce, mem, ok := kernel.DecodeMemory(g.mem, key)
+	nonce, mem, ok := kernel.DecodeMem(g.mem, g.key, e.key)
 	if !ok {
 		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
 	}
@@ -35,6 +29,6 @@ func main(g kernel.G, e kernel.E) (
 
 	prompt := []byte("esh $ ")
 
-	return kernel.EncodeMemory(nonce, mem, key), intern(StPromptResult),
+	return kernel.EncodeMem(nonce, mem, g.key, e.key), intern(StPromptResult),
 		kernel.SysWrite, 1, prompt, len(prompt)
 }

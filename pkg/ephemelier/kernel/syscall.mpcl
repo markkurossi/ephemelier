@@ -53,38 +53,43 @@ type PeerResult struct {
 
 // PeerInit implements syscall interface for program initialization.
 type PeerInit struct {
-	arg0      int32
-	privShare [KeySize]byte
+	arg0 int32
+	key  [KeySize]byte
 }
 
 type G struct {
-	arg0      int32
-	privShare [KeySize]byte
-	mem       []byte
-	argBuf    []byte
-	arg1      int32
+	arg0   int32
+	key    [KeySize]byte
+	mem    []byte
+	argBuf []byte
+	arg1   int32
 }
 
 type E struct {
-	arg0      int32
-	privShare [KeySize]byte
-	argBuf    []byte
+	arg0   int32
+	key    [KeySize]byte
+	argBuf []byte
 }
 
 type G1B struct {
-	arg0      int32
-	privShare [KeySize]byte
-	mem       [NonceSize + 16 + TagSize]byte
-	argBuf    [0]byte
-	arg1      int32
+	arg0   int32
+	key    [KeySize]byte
+	mem    [NonceSize + 16 + TagSize]byte
+	argBuf [0]byte
+	arg1   int32
 }
 
 type E1B struct {
-	arg0      int32
-	privShare [KeySize]byte
+	arg0 int32
+	key  [KeySize]byte
 }
 
-func EncodeMemory(nonce, mem, key []byte) []byte {
+func EncodeMem(nonce, mem, gkey, ekey []byte) []byte {
+	var key [kernel.KeySize]byte
+	for i := 0; i < kernel.KeySize; i++ {
+		key[i] = gkey[i] ^ ekey[i]
+	}
+
 	ctr := binary.GetUint(nonce)
 	ctr += 1
 	nonce = binary.PutUint(nonce, 0, ctr)
@@ -98,7 +103,12 @@ func EncodeMemory(nonce, mem, key []byte) []byte {
 	return memory
 }
 
-func DecodeMemory(cipher, key []byte) ([]byte, []byte, bool) {
+func DecodeMem(cipher, gkey, ekey []byte) ([]byte, []byte, bool) {
+	var key [kernel.KeySize]byte
+	for i := 0; i < kernel.KeySize; i++ {
+		key[i] = gkey[i] ^ ekey[i]
+	}
+
 	nonce := cipher[:NonceSize]
 	mem, ok := gcm.DecryptAES128(key, nonce, cipher[NonceSize:], nil)
 	return nonce, mem, ok
