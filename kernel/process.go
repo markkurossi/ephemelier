@@ -189,6 +189,8 @@ func (proc *Process) Run() (err error) {
 	for _, fd := range proc.fds {
 		fd.Close()
 	}
+	// XXX Close process port. If parent queried port, FD's refcount
+	// is 2 and it was not closed above.
 
 	proc.SetState(SZOMB)
 
@@ -383,7 +385,8 @@ run:
 		proc.pc = sys.pc
 		state, ok = proc.prog.ByPC[int(proc.pc)]
 		if !ok {
-			return fmt.Errorf("program fragment %v not found", proc.pc)
+			return fmt.Errorf("%s: program fragment %v not found",
+				proc.pid, proc.pc)
 		}
 	}
 	return nil
@@ -583,7 +586,8 @@ run:
 		proc.pc = sys.pc
 		state, ok = proc.prog.ByPC[int(proc.pc)]
 		if !ok {
-			return fmt.Errorf("program fragment %v not found", proc.pc)
+			return fmt.Errorf("%s: program fragment %v not found",
+				proc.pid, proc.pc)
 		}
 	}
 
@@ -640,6 +644,23 @@ func (proc *Process) syscall(sys *syscall) error {
 		sys.arg0 = int32(proc.pid)
 		sys.argBuf = nil
 		sys.arg1 = 0
+
+	case SysCreatemsg:
+		sys.argBuf = nil
+		sys.arg1 = 0
+
+		fd, ok := proc.fds[sys.arg0]
+		if !ok {
+			sys.arg0 = int32(-EBADF)
+		} else {
+			portfd, ok := fd.Impl.(*FDPort)
+			if !ok {
+				sys.arg0 = int32(-EBADF)
+			} else {
+				sys.argBuf = portfd.CreateMsg()
+				sys.arg0 = int32(len(sys.argBuf))
+			}
+		}
 
 	default:
 		return fmt.Errorf("invalid syscall: %v", sys.call)
@@ -749,7 +770,7 @@ func (proc *Process) ktraceCall(sys *syscall) {
 	proc.ktracePrefix()
 	fmt.Printf("CALL %s", sys.call)
 	switch sys.call {
-	case SysExit, SysWait:
+	case SysExit, SysWait, SysCreatemsg:
 		fmt.Printf("(%d)", sys.arg0)
 
 	case SysSpawn:
@@ -779,12 +800,19 @@ func (proc *Process) ktraceRet(sys *syscall) {
 		return
 	}
 	proc.ktracePrefix()
-	fmt.Printf("RET  %s", sys.call)
-	switch sys.call {
-	case SysRead:
-		fmt.Printf("% d, %x", sys.arg0, sys.argBuf)
-	default:
-		fmt.Printf(" %d", sys.arg0)
+	fmt.Printf("RET  %s %d", sys.call, sys.arg0)
+	if sys.arg0 < 0 {
+		fmt.Printf(" %s", Errno(-sys.arg0))
+	} else {
+		switch sys.call {
+		case SysRead:
+			fmt.Printf(", %x", sys.argBuf)
+
+		case SysCreatemsg:
+			fmt.Printf(", %x", sys.argBuf)
+
+		default:
+		}
 	}
 	fmt.Println()
 }

@@ -119,10 +119,12 @@ func (fd *FDPort) Read(b []byte) int {
 			return 0
 		}
 	}
-	if len(fd.peeked) > len(b) {
+	msgSize := KeySize + len(fd.peeked)
+	if msgSize > len(b) {
 		return int(-ERANGE)
 	}
-	n := copy(b, fd.peeked)
+	n := copy(b, fd.port.key)
+	n += copy(b[KeySize:], fd.peeked)
 	fd.peeked = nil
 	return n
 }
