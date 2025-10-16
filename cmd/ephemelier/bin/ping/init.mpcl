@@ -1,0 +1,22 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"ephemelier/kernel"
+)
+
+func main(g, e kernel.PeerInit) (
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+
+	_ = intern(Init)
+
+	cmd := []byte("pingd")
+
+	return nil, intern(StSpawnResult), kernel.SysSpawn, 0, cmd, len(cmd)
+}

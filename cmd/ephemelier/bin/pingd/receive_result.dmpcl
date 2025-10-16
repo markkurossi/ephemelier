@@ -1,0 +1,39 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"ephemelier/kernel"
+	"ephemelier/ports"
+)
+
+func main(g kernel.G, e kernel.E) (
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+
+	if g.arg0 < 0 || e.arg0 < 0 {
+		return nil, 0, kernel.SysExit, 1, nil, 0
+	}
+
+	// XXX g.argBuf is now empty and the code below fails.
+
+	msg, ok := ports.DecodeMsg(g.argBuf, e.argBuf)
+	if !ok {
+		return nil, 0, kernel.SysExit, 1, nil, 0
+	}
+
+	overhead := kernel.KeySize + kernel.NonceSize + kernel.TagSize
+	var reply [len(g.argBuf) - overhead + 2]byte
+
+	size := copy(reply, msg)
+	reply[size] = '\r'
+	reply[size+1] = '\n'
+
+	size += 2
+
+	return nil, intern(StGetportResult), kernel.SysWrite, 1, reply, size
+}
