@@ -1,0 +1,10 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+// Package kernel provides functions and defitions for the Ephemelier
+// kernel interface.
+package kernel

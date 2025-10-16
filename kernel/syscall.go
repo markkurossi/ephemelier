@@ -43,7 +43,7 @@ const (
 	SysCreateport
 	SysSendport
 	SysRecvport
-	SysCreateMsg
+	SysCreatemsg
 )
 
 var syscallNames = map[Syscall]string{
@@ -64,5 +64,5 @@ var syscallNames = map[Syscall]string{
 	SysCreateport: "createport",
 	SysSendport:   "sendport",
 	SysRecvport:   "recvport",
-	SysCreateMsg:  "createmsg",
+	SysCreatemsg:  "createmsg",
 }

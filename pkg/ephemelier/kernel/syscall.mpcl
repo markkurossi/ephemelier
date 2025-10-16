@@ -36,7 +36,7 @@ const (
 	SysCreateport = 101
 	SysSendport   = 102
 	SysRecvport   = 103
-	SysCreateMsg  = 104
+	SysCreatemsg  = 104
 )
 
 const (
