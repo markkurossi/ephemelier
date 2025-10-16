@@ -340,33 +340,6 @@ run:
 			sys.argBuf = nil
 			sys.arg1 = 0
 
-		case SysRead:
-			sys.arg0 = 0
-			sys.argBuf = nil
-
-		case SysWrite:
-			sys.arg0 = 0
-			sys.argBuf = nil
-
-		case SysWait:
-			pid := PID(sys.arg0).E()
-			child, ok := proc.kern.GetProcess(pid)
-			if !ok {
-				sys.arg0 = int32(-ECHILD)
-			} else {
-				child.WaitState(SZOMB)
-				sys.arg0 = child.exitVal
-				proc.kern.RemoveProcess(pid)
-			}
-
-		case SysYield:
-			sys.arg0 = 0
-			sys.argBuf = nil
-
-		case SysGetpid:
-			sys.arg0 = int32(proc.pid)
-			sys.argBuf = nil
-
 		case SysGetport:
 			if sys.arg0 <= 0 {
 				sys.arg0 = int32(-EINVAL)
@@ -400,7 +373,10 @@ run:
 			sys.arg1 = 0
 
 		default:
-			return fmt.Errorf("invalid syscall: %v", sys.call)
+			err = proc.syscall(sys)
+			if err != nil {
+				return err
+			}
 		}
 		proc.ktraceRet(sys)
 
@@ -563,47 +539,6 @@ run:
 				go child.Run()
 			}
 
-		case SysRead:
-			fd, ok := proc.fds[sys.arg0]
-			if !ok {
-				sys.arg0 = int32(-EBADF)
-			} else {
-				sys.argBuf = make([]byte, int(sys.arg1))
-				sys.arg0 = int32(fd.Read(sys.argBuf))
-				sys.argBuf = sys.argBuf[:sys.arg0]
-			}
-			sys.arg1 = 0
-
-		case SysWrite:
-			fd, ok := proc.fds[sys.arg0]
-			if !ok {
-				sys.arg0 = int32(-EBADF)
-			} else {
-				sys.arg0 = int32(fd.Write(sys.argBuf[:sys.arg1]))
-			}
-			sys.argBuf = nil
-			sys.arg1 = 0
-
-		case SysWait:
-			pid := PID(sys.arg0).G()
-			child, ok := proc.kern.GetProcess(pid)
-			if !ok {
-				sys.arg0 = int32(-ECHILD)
-			} else {
-				child.WaitState(SZOMB)
-				sys.arg0 = child.exitVal
-				proc.kern.RemoveProcess(pid)
-			}
-
-		case SysYield:
-			sys.arg0 = 0
-			sys.argBuf = nil
-			sys.arg1 = 0
-
-		case SysGetpid:
-			sys.arg0 = int32(proc.pid)
-			sys.argBuf = nil
-
 		case SysGetport:
 			if sys.arg0 <= 0 {
 				sys.arg0 = int32(-EINVAL)
@@ -638,7 +573,10 @@ run:
 			sys.arg1 = 0
 
 		default:
-			return fmt.Errorf("invalid syscall: %v", sys.call)
+			err = proc.syscall(sys)
+			if err != nil {
+				return err
+			}
 		}
 		proc.ktraceRet(sys)
 
@@ -647,6 +585,64 @@ run:
 		if !ok {
 			return fmt.Errorf("program fragment %v not found", proc.pc)
 		}
+	}
+
+	return nil
+}
+
+func (proc *Process) syscall(sys *syscall) error {
+	switch sys.call {
+	case SysRead:
+		fd, ok := proc.fds[sys.arg0]
+		if !ok {
+			sys.arg0 = int32(-EBADF)
+		} else {
+			sys.argBuf = make([]byte, int(sys.arg1))
+			sys.arg0 = int32(fd.Read(sys.argBuf))
+			sys.argBuf = sys.argBuf[:sys.arg0]
+		}
+		sys.arg1 = 0
+
+	case SysWrite:
+		fd, ok := proc.fds[sys.arg0]
+		if !ok {
+			sys.arg0 = int32(-EBADF)
+		} else {
+			sys.arg0 = int32(fd.Write(sys.argBuf[:sys.arg1]))
+		}
+		sys.argBuf = nil
+		sys.arg1 = 0
+
+	case SysWait:
+		var pid PartyID
+		if proc.role == RoleGarbler {
+			pid = PID(sys.arg0).G()
+		} else {
+			pid = PID(sys.arg0).E()
+		}
+		child, ok := proc.kern.GetProcess(pid)
+		if !ok {
+			sys.arg0 = int32(-ECHILD)
+		} else {
+			child.WaitState(SZOMB)
+			sys.arg0 = child.exitVal
+			proc.kern.RemoveProcess(pid)
+		}
+		sys.argBuf = nil
+		sys.arg1 = 0
+
+	case SysYield:
+		sys.arg0 = 0
+		sys.argBuf = nil
+		sys.arg1 = 0
+
+	case SysGetpid:
+		sys.arg0 = int32(proc.pid)
+		sys.argBuf = nil
+		sys.arg1 = 0
+
+	default:
+		return fmt.Errorf("invalid syscall: %v", sys.call)
 	}
 
 	return nil

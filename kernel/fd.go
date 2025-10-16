@@ -74,6 +74,7 @@ var (
 	_ FDImpl = &FDFile{}
 	_ FDImpl = &FDSocket{}
 	_ FDImpl = &FDPort{}
+	_ FDImpl = &FDDevNull{}
 )
 
 func mapError(err error) int {

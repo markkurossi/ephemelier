@@ -60,11 +60,9 @@ func (p *Port) Nonce(b []byte) error {
 
 // NewServerFD creates a server FD for the port.
 func (p *Port) NewServerFD() *FD {
-	closed := p.client == nil
 	return NewFD(&FDPort{
 		port:   p,
 		server: true,
-		closed: closed,
 		read:   p.server,
 		write:  p.client,
 	})
@@ -72,12 +70,10 @@ func (p *Port) NewServerFD() *FD {
 
 // NewClientFD creates a client FD for the port.
 func (p *Port) NewClientFD() *FD {
-	closed := p.server == nil
 	return NewFD(&FDPort{
-		port:   p,
-		closed: closed,
-		read:   p.client,
-		write:  p.server,
+		port:  p,
+		read:  p.client,
+		write: p.server,
 	})
 }
 
@@ -96,7 +92,9 @@ func (fd *FDPort) Close() int {
 	if fd.closed {
 		return int(-EBADF)
 	}
-	close(fd.write)
+	if fd.write != nil {
+		close(fd.write)
+	}
 	fd.closed = true
 	return 0
 }
@@ -106,6 +104,14 @@ func (fd *FDPort) Read(b []byte) int {
 	if fd.closed {
 		return 0
 	}
+	if fd.read == nil {
+		// Evaluator
+		if len(b) < len(fd.port.key) {
+			return int(-ERANGE)
+		}
+		return copy(b, fd.port.key)
+	}
+
 	var ok bool
 	if fd.peeked == nil {
 		fd.peeked, ok = <-fd.read

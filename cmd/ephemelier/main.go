@@ -26,6 +26,7 @@ var (
 	stdin       = kernel.NewFileFD(os.Stdin)
 	stdout      = kernel.NewFileFD(os.Stdout)
 	stderr      = kernel.NewFileFD(os.Stderr)
+	devNull     = kernel.NewDevNullFD()
 )
 
 func main() {
@@ -57,7 +58,7 @@ func main() {
 
 	var err error
 	if *evaluator {
-		err = kern.Evaluator(stdin, stdout, stderr)
+		err = kern.Evaluator(devNull, devNull, stderr)
 		if err != nil {
 			log.Fatal(err)
 		}
