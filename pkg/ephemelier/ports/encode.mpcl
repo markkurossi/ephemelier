@@ -1,0 +1,24 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package ports
+
+import (
+	"crypto/cipher/gcm"
+	"ephemelier/kernel"
+)
+
+func DecodeMsg(g, e []byte) ([]byte, bool) {
+	var key [kernel.KeySize]byte
+	for i := 0; i < kernel.KeySize; i++ {
+		key[i] = g[i] ^ e[i]
+	}
+	nonce := g[kernel.KeySize : kernel.KeySize+kernel.NonceSize]
+
+	return gcm.DecryptAES128(key, nonce, g[kernel.KeySize+kernel.NonceSize:],
+		nil)
+}
