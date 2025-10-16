@@ -14,7 +14,7 @@ import (
 	"unicode"
 )
 
-func main(g kernel.Garbler, e kernel.Evaluator) (
+func main(g, e kernel.PeerResult) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
 	if g.arg0 < 0 {

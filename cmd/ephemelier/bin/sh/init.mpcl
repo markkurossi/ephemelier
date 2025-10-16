@@ -11,7 +11,7 @@ import (
 	"ephemelier/kernel"
 )
 
-func main(g, e [kernel.KeySize]byte) (
+func main(g, e kernel.PeerInit) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
 	_ = intern(Init)
@@ -23,7 +23,7 @@ func main(g, e [kernel.KeySize]byte) (
 
 	var key [kernel.KeySize]byte
 	for i := 0; i < kernel.KeySize; i++ {
-		key[i] = g[i] ^ e[i]
+		key[i] = g.privShare[i] ^ e.privShare[i]
 	}
 
 	return kernel.EncodeMemory(nonce, mem, key), intern(StPrompt),

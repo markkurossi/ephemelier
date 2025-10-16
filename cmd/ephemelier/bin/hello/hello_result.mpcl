@@ -8,30 +8,10 @@
 package main
 
 import (
-	"crypto/cipher/gcm"
 	"ephemelier/kernel"
 )
 
-const (
-	MemSize = gcm.NonceSize + 256 + gcm.TagSize
-	IOSize  = 256
-)
-
-type Garbler struct {
-	privShare [16]byte
-	mem       [MemSize]byte
-	arg0      int32
-	argBuf    [IOSize]byte
-	arg1      int32
-}
-
-type Evaluator struct {
-	privShare [16]byte
-	arg0      int32
-	argBuf    [IOSize]byte
-}
-
-func main(g Garbler, e Evaluator) (
+func main(g, e kernel.PeerResult) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
 	var retval int32
@@ -39,5 +19,5 @@ func main(g Garbler, e Evaluator) (
 		retval = 1
 	}
 
-	return g.mem, 0, kernel.SysExit, retval, nil, 0
+	return nil, 0, kernel.SysExit, retval, nil, 0
 }

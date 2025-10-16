@@ -13,7 +13,7 @@ import (
 	"strconv"
 )
 
-func main(g kernel.Garbler1B, e kernel.Evaluator1B) (
+func main(g kernel.G1B, e kernel.E1B) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
 	var key [kernel.KeySize]byte

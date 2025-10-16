@@ -13,7 +13,7 @@ import (
 	"unicode"
 )
 
-func main(g kernel.Garbler, e kernel.Evaluator) (
+func main(g kernel.G, e kernel.E) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
 	if g.arg0 < 0 {
@@ -31,6 +31,8 @@ func main(g kernel.Garbler, e kernel.Evaluator) (
 			return nil, intern(StSpawnResult), kernel.SysSpawn, 0, g.argBuf, i
 		}
 	}
+
+	// XXX report command not found
 
 	var msg [300]byte
 	size := copy(msg, []byte("Hello, "))

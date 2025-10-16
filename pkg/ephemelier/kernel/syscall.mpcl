@@ -45,29 +45,42 @@ const (
 	TagSize   = 16
 )
 
-type Garbler struct {
+// PeerResult implements syscall interface with result argument for
+// garbler and evaluator.
+type PeerResult struct {
+	arg0 int32
+}
+
+// PeerInit implements syscall interface for program initialization.
+type PeerInit struct {
+	arg0      int32
+	privShare [KeySize]byte
+}
+
+type G struct {
+	arg0      int32
 	privShare [KeySize]byte
 	mem       []byte
-	arg0      int32
 	argBuf    []byte
 	arg1      int32
 }
 
-type Garbler1B struct {
+type E struct {
+	arg0      int32
+	privShare [KeySize]byte
+	argBuf    []byte
+}
+
+type G1B struct {
+	arg0      int32
 	privShare [KeySize]byte
 	mem       [NonceSize + 16 + TagSize]byte
-	arg0      int32
 	argBuf    [0]byte
 	arg1      int32
 }
 
-type Evaluator struct {
-	privShare [KeySize]byte
+type E1B struct {
 	arg0      int32
-	argBuf    []byte
-}
-
-type Evaluator1B struct {
 	privShare [KeySize]byte
 }
 

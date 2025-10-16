@@ -11,13 +11,12 @@ import (
 	"ephemelier/kernel"
 )
 
-func main(g, e [16]byte) (
+func main(g, e kernel.PeerInit) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
 	_ = intern(Init)
 
-	var mem [4]byte
 	msg := []byte("Hello, world!\n")
 
-	return mem, intern(StHelloResult), kernel.SysWrite, 1, msg, len(msg)
+	return nil, intern(StHelloResult), kernel.SysWrite, 1, msg, len(msg)
 }

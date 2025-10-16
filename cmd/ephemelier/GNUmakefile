@@ -27,4 +27,4 @@ clean:
 	garbled $(MPCLCFLAGS) -sids $(dir $+)symtab $+
 
 %.stamp : %.dmpcl
-	garbled $(MPCLCFLAGS) -sids $(dir $+)symtab -suffix stamp -i 0,0x0000000000000000000000000000000000000000000000000000000000,0,0x00000000,0 -pi 0,0,0 $+
+	garbled $(MPCLCFLAGS) -sids $(dir $+)symtab -suffix stamp -i 0,0,0x0000000000000000000000000000000000000000000000000000000000,0x00000000,0 -pi 0,0,0 $+

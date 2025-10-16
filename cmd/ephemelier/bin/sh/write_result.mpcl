@@ -8,18 +8,16 @@
 package main
 
 import (
-	"encoding/binary"
+	"crypto/cipher/gcm"
 	"ephemelier/kernel"
-	"strconv"
 )
 
 func main(g, e kernel.PeerResult) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
-	var retval int32
 	if g.arg0 < 0 {
-		retval = 1
+		return nil, 0, kernel.SysExit, 1, nil, 0
 	}
 
-	return nil, 0, kernel.SysExit, retval, nil, 0
+	return nil, intern(StPrompt), kernel.SysYield, 0, nil, 0
 }

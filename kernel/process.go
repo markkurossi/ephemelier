@@ -235,6 +235,9 @@ func (proc *Process) runEvaluator() error {
 	sys := new(syscall)
 	last := time.Now()
 
+	// Init gets pid in arg0.
+	sys.arg0 = int32(proc.pid)
+
 run:
 	for {
 		var ok bool
@@ -248,11 +251,15 @@ run:
 			numInputs = 3
 		}
 
-		// The first input is always the key share.
-		inputs = append(inputs, fmt.Sprintf("0x%x", proc.key))
+		// The first input is always sys.arg0
+		inputs = append(inputs, fmt.Sprintf("%d", sys.arg0))
+
+		// Key share.
 		if numInputs > 1 {
-			inputs = append(inputs, fmt.Sprintf("%d", sys.arg0))
+			inputs = append(inputs, fmt.Sprintf("0x%x", proc.key))
 		}
+
+		// Argument buffer.
 		if numInputs > 2 {
 			if len(sys.argBuf) == 0 {
 				inputs = append(inputs, "0")
@@ -417,6 +424,9 @@ func (proc *Process) runGarbler() error {
 	inputSizes := make([][]int, 2)
 	last := time.Now()
 
+	// Init gets pid in arg0.
+	sys.arg0 = int32(proc.pid)
+
 run:
 	for {
 		var ok bool
@@ -430,18 +440,24 @@ run:
 			numInputs = 5
 		}
 
-		// The first input is always the key share.
-		inputs = append(inputs, fmt.Sprintf("0x%x", proc.key))
+		// The first input is always sys.arg0.
+		inputs = append(inputs, fmt.Sprintf("%d", sys.arg0))
+
+		// Key share.
 		if numInputs > 1 {
+			inputs = append(inputs, fmt.Sprintf("0x%x", proc.key))
+		}
+
+		// Program memory.
+		if numInputs > 2 {
 			if len(proc.mem) == 0 {
 				inputs = append(inputs, "0")
 			} else {
 				inputs = append(inputs, fmt.Sprintf("0x%x", proc.mem))
 			}
 		}
-		if numInputs > 2 {
-			inputs = append(inputs, fmt.Sprintf("%d", sys.arg0))
-		}
+
+		// Argument buffer.
 		if numInputs > 3 {
 			if len(sys.argBuf) == 0 {
 				inputs = append(inputs, "0")
@@ -449,6 +465,8 @@ run:
 				inputs = append(inputs, fmt.Sprintf("0x%x", sys.argBuf))
 			}
 		}
+
+		// Optional sys.arg1.
 		if numInputs > 4 {
 			inputs = append(inputs, fmt.Sprintf("%d", sys.arg1))
 		}
@@ -683,6 +701,8 @@ func decodeSysall(sys *syscall, values []interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid arg0: %T", values[3])
 	}
+
+	// XXX make rest optional.
 
 	// argBuf.
 	sys.argBuf, ok = values[4].([]byte)
