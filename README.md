@@ -41,6 +41,9 @@ Connection closed by foreign host.
 
 ## TODO
 
- - [ ] Shell with command launch & wait
+ - [ ] MPC compiler: -timestamp-dynamic option for the -circ mode to
+       create timestamp file only if main's arguments have unspecified
+       types
+ - [x] Shell with command launch & wait
  - [ ] Circuit stats in streaming mode (INFO)
  - [ ] Optimize input setting (direct vs. via strings)
