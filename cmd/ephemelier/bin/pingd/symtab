@@ -7,9 +7,11 @@ package main
 
 // Interned symbols.
 const (
-	Init            = 1
-	StGetpidResult  = 2
-	StGetportResult = 0
-	StReceive       = 3
-	StReceiveResult = 4
+	Init              = 1
+	StCreatemsgResult = 6
+	StGetpidResult    = 2
+	StGetportResult   = 0
+	StReceive         = 3
+	StReceiveResult   = 4
+	StWriteResult     = 5
 )

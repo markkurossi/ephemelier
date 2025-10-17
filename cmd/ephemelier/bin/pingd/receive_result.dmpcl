@@ -24,9 +24,7 @@ func main(g kernel.G, e kernel.E) (
 		return nil, 0, kernel.SysExit, 42, nil, 0
 	}
 
-	overhead := kernel.KeySize + kernel.NonceSize + kernel.TagSize
-	// XXX below is -1 on EOF
-	var reply [len(g.argBuf) - overhead + 2]byte
+	var reply [len(msg) + 2]byte
 
 	size := copy(reply, msg)
 	reply[size] = '\r'
@@ -34,5 +32,5 @@ func main(g kernel.G, e kernel.E) (
 
 	size += 2
 
-	return nil, intern(StReceive), kernel.SysWrite, 1, reply, size
+	return nil, intern(StWriteResult), kernel.SysWrite, 1, reply, size
 }

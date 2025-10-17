@@ -242,7 +242,6 @@ func (proc *Process) runEvaluator() error {
 
 run:
 	for {
-		var ok bool
 		var numInputs int
 		var inputs []string
 
@@ -382,11 +381,9 @@ run:
 		}
 		proc.ktraceRet(sys)
 
-		proc.pc = sys.pc
-		state, ok = proc.prog.ByPC[int(proc.pc)]
-		if !ok {
-			return fmt.Errorf("%s: program fragment %v not found",
-				proc.pid, proc.pc)
+		state, err = proc.setPC(sys)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -408,7 +405,6 @@ func (proc *Process) runGarbler() error {
 
 run:
 	for {
-		var ok bool
 		var numInputs int
 		var inputs []string
 
@@ -583,11 +579,9 @@ run:
 		}
 		proc.ktraceRet(sys)
 
-		proc.pc = sys.pc
-		state, ok = proc.prog.ByPC[int(proc.pc)]
-		if !ok {
-			return fmt.Errorf("%s: program fragment %v not found",
-				proc.pid, proc.pc)
+		state, err = proc.setPC(sys)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -667,6 +661,17 @@ func (proc *Process) syscall(sys *syscall) error {
 	}
 
 	return nil
+}
+
+func (proc *Process) setPC(sys *syscall) (*eef.Circuit, error) {
+	state, ok := proc.prog.ByPC[int(sys.pc)]
+	if !ok {
+		return nil, fmt.Errorf("%s (%s): program fragment %v not found",
+			proc.prog.Name, proc.pid, sys.pc)
+	}
+	proc.pc = sys.pc
+
+	return state, nil
 }
 
 func (proc *Process) circuitStats(stats *Stats, circ *circuit.Circuit) {
