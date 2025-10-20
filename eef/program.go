@@ -27,6 +27,7 @@ type Program struct {
 	Symtab   map[string]int
 	ByName   map[string]*Circuit
 	ByPC     map[int]*Circuit
+	Missing  map[int]string
 }
 
 // Circuit implements a program state.
@@ -48,6 +49,7 @@ func NewProgram(file string) (*Program, error) {
 		Name:     path.Base(file),
 		ByName:   make(map[string]*Circuit),
 		ByPC:     make(map[int]*Circuit),
+		Missing:  make(map[int]string),
 	}
 
 	for _, entry := range entries {
@@ -103,6 +105,15 @@ func NewProgram(file string) (*Program, error) {
 			prog.Init = circ
 		}
 	}
+	// Report missing states.
+	for name, id := range prog.Symtab {
+		_, ok := prog.ByPC[id]
+		if !ok {
+			prog.Missing[id] = name
+			fmt.Printf("warning: state %d (%s) not implemented\n", id, name)
+		}
+	}
+
 	for pc, circ := range prog.ByPC {
 		fmt.Printf("%-4d %-16s", pc, circ.Name)
 		if circ.Circ != nil {
@@ -116,6 +127,19 @@ func NewProgram(file string) (*Program, error) {
 	}
 
 	return prog, nil
+}
+
+// StateName returns the name of the state.
+func (prog *Program) StateName(pc int) string {
+	circ, ok := prog.ByPC[pc]
+	if ok {
+		return fmt.Sprintf("%d (%s)", pc, circ.Name)
+	}
+	name, ok := prog.Missing[pc]
+	if ok {
+		return fmt.Sprintf("%d (%s)", pc, name)
+	}
+	return fmt.Sprintf("state %d", pc)
 }
 
 func makeName(name string) string {

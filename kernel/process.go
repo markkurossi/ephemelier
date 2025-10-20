@@ -666,8 +666,8 @@ func (proc *Process) syscall(sys *syscall) error {
 func (proc *Process) setPC(sys *syscall) (*eef.Circuit, error) {
 	state, ok := proc.prog.ByPC[int(sys.pc)]
 	if !ok {
-		return nil, fmt.Errorf("%s (%s): program fragment %v not found",
-			proc.prog.Name, proc.pid, sys.pc)
+		return nil, fmt.Errorf("%s (%s): program state %v not found",
+			proc.prog.Name, proc.pid, proc.prog.StateName(int(sys.pc)))
 	}
 	proc.pc = sys.pc
 
