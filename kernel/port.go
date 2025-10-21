@@ -135,7 +135,9 @@ func (fd *FDPort) Write(b []byte) int {
 		return int(-EBADF)
 	}
 	n := len(b)
-	fd.write <- b
+	if fd.write != nil {
+		fd.write <- b
+	}
 
 	return n
 }

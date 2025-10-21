@@ -325,7 +325,7 @@ run:
 		proc.ktraceStats(stats)
 
 		// Decode syscall.
-		err = decodeSysall(sys, mpc.Results(result, outputs))
+		err = decodeSyscall(sys, mpc.Results(result, outputs))
 		if err != nil {
 			return err
 		}
@@ -508,7 +508,7 @@ run:
 		proc.ktraceStats(stats)
 
 		// Decode syscall.
-		err := decodeSysall(sys, mpc.Results(result, outputs))
+		err := decodeSyscall(sys, mpc.Results(result, outputs))
 		if err != nil {
 			return err
 		}
@@ -630,9 +630,8 @@ func (proc *Process) syscall(sys *syscall) error {
 		sys.arg1 = 0
 
 	case SysYield:
-		sys.arg0 = 0
-		sys.argBuf = nil
-		sys.arg1 = 0
+		// The decodeSyscall has cleared or preserved the values
+		// according to the arg0 flag.
 
 	case SysGetpid:
 		sys.arg0 = int32(proc.pid)
@@ -696,7 +695,7 @@ func (sys *syscall) Print() {
 		sys.pc, sys.call, sys.arg0, sys.argBuf, sys.arg1)
 }
 
-func decodeSysall(sys *syscall, values []interface{}) error {
+func decodeSyscall(sys *syscall, values []interface{}) error {
 	var ok bool
 
 	if len(values) < 4 {
@@ -724,10 +723,15 @@ func decodeSysall(sys *syscall, values []interface{}) error {
 	sys.call = Syscall(call)
 
 	// arg0.
-	sys.arg0, ok = values[3].(int32)
+	arg0, ok := values[3].(int32)
 	if !ok {
 		return fmt.Errorf("invalid arg0: %T", values[3])
 	}
+	if sys.call == SysYield && arg0 == 1 {
+		// Yield with preserve values. We are done.
+		return nil
+	}
+	sys.arg0 = arg0
 
 	// argBuf.
 	if len(values) > 4 {
@@ -810,11 +814,12 @@ func (proc *Process) ktraceRet(sys *syscall) {
 		fmt.Printf(" %s", Errno(-sys.arg0))
 	} else {
 		switch sys.call {
-		case SysRead:
-			fmt.Printf(", %x", sys.argBuf)
-
-		case SysCreatemsg:
-			fmt.Printf(", %x", sys.argBuf)
+		case SysRead, SysCreatemsg:
+			if len(sys.argBuf) > 0 {
+				fmt.Printf(", %x", sys.argBuf)
+			} else {
+				fmt.Printf(", nil")
+			}
 
 		default:
 		}
