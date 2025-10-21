@@ -13,4 +13,5 @@ const (
 	StReceiveResult   = 3
 	StSendResult      = 5
 	StSpawnResult     = 2
+	StWriteResult     = 6
 )
