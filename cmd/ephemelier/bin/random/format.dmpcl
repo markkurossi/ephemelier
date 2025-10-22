@@ -1,0 +1,32 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"encoding/hex"
+	"ephemelier/kernel"
+)
+
+func main(g kernel.G, e kernel.E) (
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+
+	var data [len(e.argBuf)]byte
+
+	for i := 0; i < len(e.argBuf); i++ {
+		data[i] = g.argBuf[i] ^ e.argBuf[i]
+	}
+
+	str := hex.EncodeToString(data)
+
+	var msg [len(e.argBuf)*2 + 1]byte
+	n := copy(msg, []byte(str))
+	msg[n] = '\n'
+	n++
+
+	return nil, intern(StWriteResult), kernel.SysWrite, 1, msg, n
+}

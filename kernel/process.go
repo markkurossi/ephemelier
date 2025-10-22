@@ -8,6 +8,7 @@ package kernel
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log"
@@ -627,6 +628,17 @@ func (proc *Process) syscall(sys *syscall) error {
 			proc.kern.RemoveProcess(pid)
 		}
 		sys.argBuf = nil
+		sys.arg1 = 0
+
+	case SysGetrandom:
+		buf := make([]byte, sys.arg0)
+		n, err := rand.Read(buf)
+		if err != nil {
+			sys.arg0 = int32(-EFAULT)
+		} else {
+			sys.arg0 = int32(n)
+			sys.argBuf = buf
+		}
 		sys.arg1 = 0
 
 	case SysYield:
