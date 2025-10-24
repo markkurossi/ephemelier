@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"net"
 	"sync"
 	"time"
 
@@ -337,7 +338,7 @@ run:
 			proc.exitVal = sys.arg0
 			break run
 
-		case SysSpawn:
+		case SysSpawn, SysDial, SysListen, SysAccept:
 			sys.arg0 = 0
 			sys.argBuf = nil
 			sys.arg1 = 0
@@ -538,6 +539,59 @@ run:
 				sys.arg0 = int32(child.pid)
 				go child.Run()
 			}
+
+		case SysDial:
+			network, address, errno := ParseNetAddress(sys.argBuf[:sys.arg1])
+			if errno != 0 {
+				sys.arg0 = int32(errno)
+			} else {
+				conn, err := net.Dial(network, address)
+				if err != nil {
+					sys.arg0 = int32(mapError(err))
+				} else {
+					fd := NewSocketFD(conn)
+					sys.arg0 = proc.AllocFD(fd)
+				}
+			}
+			sys.argBuf = nil
+			sys.arg1 = 0
+
+		case SysListen:
+			network, address, errno := ParseNetAddress(sys.argBuf[:sys.arg1])
+			if errno != 0 {
+				sys.arg0 = int32(errno)
+			} else {
+				listener, err := net.Listen(network, address)
+				if err != nil {
+					sys.arg0 = int32(mapError(err))
+				} else {
+					fd := NewListenerFD(listener)
+					sys.arg0 = proc.AllocFD(fd)
+				}
+			}
+			sys.argBuf = nil
+			sys.arg1 = 0
+
+		case SysAccept:
+			fd, ok := proc.fds[sys.arg0]
+			if !ok {
+				sys.arg0 = int32(-EBADF)
+			} else {
+				listenerfd, ok := fd.Impl.(*FDListener)
+				if !ok {
+					sys.arg0 = int32(-ENOTSOCK)
+				} else {
+					conn, err := listenerfd.listener.Accept()
+					if err != nil {
+						sys.arg0 = int32(mapError(err))
+					} else {
+						fd := NewSocketFD(conn)
+						sys.arg0 = proc.AllocFD(fd)
+					}
+				}
+			}
+			sys.argBuf = nil
+			sys.arg1 = 0
 
 		case SysGetport:
 			if sys.arg0 <= 0 {
