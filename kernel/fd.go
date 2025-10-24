@@ -6,12 +6,6 @@
 
 package kernel
 
-import (
-	"errors"
-	"io"
-	"io/fs"
-)
-
 // FD defines a file descriptor.
 type FD struct {
 	refcount int
@@ -73,17 +67,7 @@ type FDImpl interface {
 var (
 	_ FDImpl = &FDFile{}
 	_ FDImpl = &FDSocket{}
+	_ FDImpl = &FDListener{}
 	_ FDImpl = &FDPort{}
 	_ FDImpl = &FDDevNull{}
 )
-
-func mapError(err error) int {
-	if err == nil {
-		return 0
-	}
-	var perr *fs.PathError
-	if errors.As(err, &perr) || errors.Is(err, io.EOF) {
-		return int(-EBADF)
-	}
-	return int(-EINVAL)
-}

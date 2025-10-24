@@ -27,10 +27,13 @@ const (
 	SysWrite     = 6
 	SysOpen      = 7
 	SysClose     = 8
-	SysWait      = 9
-	SysGetrandom = 10
-	SysYield     = 11
-	SysGetpid    = 12
+	SysDial      = 9
+	SysListen    = 10
+	SysAccept    = 11
+	SysWait      = 12
+	SysGetrandom = 13
+	SysYield     = 14
+	SysGetpid    = 15
 
 	SysGetport    = 100
 	SysCreateport = 101

@@ -12,9 +12,13 @@ type Errno = int32
 
 // Error numbers.
 const (
-	ENOENT = 2
-	EBADF  = 9
-	ECHILD = 10
-	EINVAL = 22
-	ERANGE = 34
+	ENOENT          = 2
+	EBADF           = 9
+	ECHILD          = 10
+	EFAULT          = 14
+	EINVAL          = 22
+	ERANGE          = 34
+	ENOTSOCK        = 38
+	EPROTONOSUPPORT = 43
+	EAFNOSUPPORT    = 47
 )

@@ -8,8 +8,7 @@ package main
 // Interned symbols.
 const (
 	Init              = 0
-	StFormat          = 4
-	StGetrandomResult = 2
-	StHelloResult     = 1
-	StWriteResult     = 3
+	StFormat          = 3
+	StGetrandomResult = 1
+	StWriteResult     = 2
 )

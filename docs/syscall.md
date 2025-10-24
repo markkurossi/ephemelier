@@ -16,6 +16,9 @@
  - write(arg0:fd, argBuf:data, arg1:size) => size
  - open()
  - close()
+ - dial(argbuf:address, arg1:size) => fd
+ - listen(argbuf:address, arg1:size) => fd
+ - accept(arg0:fd) => fd
 
 ## Cryptography Functions
 

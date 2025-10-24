@@ -31,6 +31,9 @@ const (
 	SysWrite
 	SysOpen
 	SysClose
+	SysDial
+	SysListen
+	SysAccept
 	SysWait
 	SysGetrandom
 	SysYield
@@ -55,6 +58,9 @@ var syscallNames = map[Syscall]string{
 	SysWrite:     "write",
 	SysOpen:      "open",
 	SysClose:     "close",
+	SysDial:      "dial",
+	SysListen:    "listen",
+	SysAccept:    "accept",
 	SysWait:      "wait",
 	SysGetrandom: "getrandom",
 	SysYield:     "yield",
