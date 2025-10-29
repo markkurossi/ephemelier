@@ -691,6 +691,16 @@ func (proc *Process) syscall(sys *syscall) error {
 		sys.argBuf = nil
 		sys.arg1 = 0
 
+	case SysClose:
+		fd, ok := proc.fds[sys.arg0]
+		if !ok {
+			sys.arg0 = int32(-EBADF)
+		} else {
+			sys.arg0 = int32(fd.Close())
+		}
+		sys.argBuf = nil
+		sys.arg1 = 0
+
 	case SysWait:
 		var pid PartyID
 		if proc.role == RoleGarbler {
