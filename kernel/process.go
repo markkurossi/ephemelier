@@ -677,7 +677,11 @@ func (proc *Process) syscall(sys *syscall) error {
 		} else {
 			sys.argBuf = make([]byte, int(sys.arg1))
 			sys.arg0 = int32(fd.Read(sys.argBuf))
-			sys.argBuf = sys.argBuf[:sys.arg0]
+			if sys.arg0 > 0 {
+				sys.argBuf = sys.argBuf[:sys.arg0]
+			} else {
+				sys.argBuf = nil
+			}
 		}
 		sys.arg1 = 0
 
@@ -685,6 +689,8 @@ func (proc *Process) syscall(sys *syscall) error {
 		fd, ok := proc.fds[sys.arg0]
 		if !ok {
 			sys.arg0 = int32(-EBADF)
+		} else if sys.arg1 < 0 || int(sys.arg1) > len(sys.argBuf) {
+			sys.arg0 = int32(-EINVAL)
 		} else {
 			sys.arg0 = int32(fd.Write(sys.argBuf[:sys.arg1]))
 		}
