@@ -13,6 +13,7 @@ import (
 // ContentType specifies record layer record types.
 type ContentType uint8
 
+// Record layer record types.
 const (
 	CTInvalid          ContentType = 0
 	CTChangeCipherSpec ContentType = 20
@@ -37,6 +38,7 @@ var contentTypes = map[ContentType]string{
 	CTApplicationData:  "application_data",
 }
 
+// ProtocolVersion defines TLS protocol version.
 type ProtocolVersion uint16
 
 func (v ProtocolVersion) String() string {
@@ -55,8 +57,10 @@ var protocolVersions = map[ProtocolVersion]string{
 	0x0304: "TLS 1.3",
 }
 
+// HandshakeType defines handshake message types.
 type HandshakeType uint8
 
+// Handshake message types.
 const (
 	HTClientHello HandshakeType = iota + 1
 	HTServerHello
@@ -105,6 +109,7 @@ var handshakeTypes = map[HandshakeType]string{
 	HTKeyUpdate:           "key_update",
 }
 
+// ClientHello implements the client_hello message.
 type ClientHello struct {
 	LegacyVersion            ProtocolVersion
 	Random                   [32]byte
@@ -114,6 +119,7 @@ type ClientHello struct {
 	Extensions               []Extension   `tls:"u16"`
 }
 
+// CipherSuite defines cipher suites.
 type CipherSuite uint16
 
 func (cs CipherSuite) String() string {
@@ -130,17 +136,16 @@ var tls13CipherSuites = map[CipherSuite]string{
 	0x1303: "TLS_CHACHA20_POLY1305_SHA256",
 }
 
+// NamedGroup defines named key exchange groups.
 type NamedGroup uint16
 
+// Named groups.
 const (
-	// Elliptic Curve Groups (ECDHE)
 	GroupSecp256r1 NamedGroup = 0x0017
 	GroupSecp384r1 NamedGroup = 0x0018
 	GroupSecp521r1 NamedGroup = 0x0019
 	Groupx25519    NamedGroup = 0x001D
 	Groupx448      NamedGroup = 0x001E
-
-	// Finite Field Groups (DHE)
 	GroupFfdhe2048 NamedGroup = 0x0100
 	GroupFfdhe3072 NamedGroup = 0x0101
 	GroupFfdhe4096 NamedGroup = 0x0102
@@ -165,34 +170,24 @@ var tls13NamedGroups = map[NamedGroup]string{
 // signature_algorithms and signature_algorithms_cert extensions.
 type SignatureScheme uint16
 
+// Signature algorithms.
 const (
-	/* RSASSA-PKCS1-v1_5 algorithms */
-	SigSchemeRsaPkcs1Sha256 SignatureScheme = 0x0401
-	SigSchemeRsaPkcs1Sha384 SignatureScheme = 0x0501
-	SigSchemeRsaPkcs1Sha512 SignatureScheme = 0x0601
-
-	/* ECDSA algorithms */
+	SigSchemeRsaPkcs1Sha256       SignatureScheme = 0x0401
+	SigSchemeRsaPkcs1Sha384       SignatureScheme = 0x0501
+	SigSchemeRsaPkcs1Sha512       SignatureScheme = 0x0601
 	SigSchemeEcdsaSecp256r1Sha256 SignatureScheme = 0x0403
 	SigSchemeEcdsaSecp384r1Sha384 SignatureScheme = 0x0503
 	SigSchemeEcdsaSecp521r1Sha512 SignatureScheme = 0x0603
-
-	/* RSASSA-PSS algorithms with public key OID rsaEncryption */
-	SigSchemeRsaPssRsaeSha256 SignatureScheme = 0x0804
-	SigSchemeRsaPssRsaeSha384 SignatureScheme = 0x0805
-	SigSchemeRsaPssRsaeSha512 SignatureScheme = 0x0806
-
-	/* EdDSA algorithms */
-	SigSchemeEd25519 SignatureScheme = 0x0807
-	SigSchemeEd448   SignatureScheme = 0x0808
-
-	/* RSASSA-PSS algorithms with public key OID RSASSA-PSS */
-	SigSchemeRsaPssPssSha256 SignatureScheme = 0x0809
-	SigSchemeRsaPssPssSha384 SignatureScheme = 0x080a
-	SigSchemeRsaPssPssSha512 SignatureScheme = 0x080b
-
-	/* Legacy algorithms */
-	SigSchemeRsaPkcs1Sha1 SignatureScheme = 0x0201
-	SigSchemeEcdsaSha1    SignatureScheme = 0x0203
+	SigSchemeRsaPssRsaeSha256     SignatureScheme = 0x0804
+	SigSchemeRsaPssRsaeSha384     SignatureScheme = 0x0805
+	SigSchemeRsaPssRsaeSha512     SignatureScheme = 0x0806
+	SigSchemeEd25519              SignatureScheme = 0x0807
+	SigSchemeEd448                SignatureScheme = 0x0808
+	SigSchemeRsaPssPssSha256      SignatureScheme = 0x0809
+	SigSchemeRsaPssPssSha384      SignatureScheme = 0x080a
+	SigSchemeRsaPssPssSha512      SignatureScheme = 0x080b
+	SigSchemeRsaPkcs1Sha1         SignatureScheme = 0x0201
+	SigSchemeEcdsaSha1            SignatureScheme = 0x0203
 )
 
 func (scheme SignatureScheme) String() string {
@@ -210,11 +205,13 @@ var tls13SignatureSchemes = map[SignatureScheme]string{
 	SigSchemeEcdsaSecp256r1Sha256: "ecdsa_secp256r1_sha256",
 }
 
+// KeyShareEntry defines a key_share extension entry.
 type KeyShareEntry struct {
 	Group       NamedGroup
 	KeyExchange []byte `tls:"u16"`
 }
 
+// Extension defines handshake extensions.
 type Extension struct {
 	Type ExtensionType
 	Data []byte `tls:"u16"`
@@ -306,6 +303,7 @@ func (ext Extension) String() string {
 // ExtensionType defines the handshake protocol extensions.
 type ExtensionType uint16
 
+// ExtensionTypes.
 const (
 	ETServerName                          ExtensionType = 0     // RFC 6066
 	ETMaxFragmentLength                   ExtensionType = 1     // RFC 6066

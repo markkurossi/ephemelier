@@ -15,11 +15,13 @@ import (
 
 var bo = binary.BigEndian
 
+// Connection implements a TLS connection.
 type Connection struct {
 	conn net.Conn
 	rbuf []byte
 }
 
+// NewConnection creates a new TLS connection for the argument conn.
 func NewConnection(conn net.Conn) *Connection {
 	return &Connection{
 		conn: conn,
@@ -27,6 +29,7 @@ func NewConnection(conn net.Conn) *Connection {
 	}
 }
 
+// ServerHandshake runs the server handshake protocol.
 func (conn *Connection) ServerHandshake() error {
 	var handshake []byte
 	for {
@@ -117,10 +120,11 @@ func (conn *Connection) ServerHandshake() error {
 	return nil
 }
 
+// ReadRecord reads a record layer record.
 func (conn *Connection) ReadRecord() (ContentType, []byte, error) {
 	// Read record header.
 	for i := 0; i < 5; {
-		n, err := conn.conn.Read(conn.rbuf[i : 5-i])
+		n, err := conn.conn.Read(conn.rbuf[i:5])
 		if err != nil {
 			return CTInvalid, nil, err
 		}
@@ -137,7 +141,7 @@ func (conn *Connection) ReadRecord() (ContentType, []byte, error) {
 	fmt.Printf(" - length         : %v\n", length)
 
 	for i := 0; i < length; {
-		n, err := conn.conn.Read(conn.rbuf[i : length-i])
+		n, err := conn.conn.Read(conn.rbuf[i:length])
 		if err != nil {
 			return CTInvalid, nil, err
 		}
