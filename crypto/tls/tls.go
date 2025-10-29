@@ -126,7 +126,7 @@ func (conn *Connection) ReadRecord() (ContentType, []byte, error) {
 		}
 		i += n
 	}
-	fmt.Printf("Header:\n%s", hex.Dump(conn.rbuf[:5]))
+	fmt.Printf("Record:\n")
 
 	ct := ContentType(conn.rbuf[0])
 	legacyVersion := ProtocolVersion(bo.Uint16(conn.rbuf[1:3]))
@@ -143,8 +143,10 @@ func (conn *Connection) ReadRecord() (ContentType, []byte, error) {
 		}
 		i += n
 	}
-	fmt.Printf("Data:\n%s", hex.Dump(conn.rbuf[:length]))
-	fmt.Printf("%x\n", conn.rbuf[:length])
+	if false {
+		fmt.Printf("Data:\n%s", hex.Dump(conn.rbuf[:length]))
+		fmt.Printf("%x\n", conn.rbuf[:length])
+	}
 
 	return ct, conn.rbuf[:length], nil
 }
