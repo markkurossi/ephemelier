@@ -32,8 +32,10 @@ const (
 	SysAccept    = 11
 	SysWait      = 12
 	SysGetrandom = 13
-	SysYield     = 14
-	SysGetpid    = 15
+	SysTlsserver = 14
+	SysTlsclient = 15
+	SysYield     = 16
+	SysGetpid    = 17
 
 	SysGetport    = 100
 	SysCreateport = 101

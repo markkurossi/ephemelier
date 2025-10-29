@@ -338,10 +338,24 @@ run:
 			proc.exitVal = sys.arg0
 			break run
 
-		case SysSpawn, SysDial, SysListen, SysAccept:
+		case SysSpawn, SysDial, SysListen:
 			sys.arg0 = 0
 			sys.argBuf = nil
 			sys.arg1 = 0
+
+		case SysAccept:
+			fd := NewSocketFD(NewConnDevNull())
+
+			// Get FD from garbler.
+			gfd, err := proc.conn.ReceiveUint32()
+			if err == nil {
+				sys.SetArg0(int32(gfd))
+				err = proc.SetFD(sys.arg0, fd)
+			}
+			if err != nil {
+				fd.Close()
+				sys.SetArg0(int32(mapError(err)))
+			}
 
 		case SysGetport:
 			if sys.arg0 <= 0 {
@@ -587,6 +601,17 @@ run:
 					} else {
 						fd := NewSocketFD(conn)
 						sys.arg0 = proc.AllocFD(fd)
+
+						// Sync FD with evaluator.
+						err = proc.conn.SendUint32(int(sys.arg0))
+						if err == nil {
+							err = proc.conn.Flush()
+						}
+						if err != nil {
+							fd.Close()
+							proc.FreeFD(sys.arg0)
+							sys.arg0 = int32(mapError(err))
+						}
 					}
 				}
 			}
@@ -684,6 +709,9 @@ func (proc *Process) syscall(sys *syscall) error {
 		sys.argBuf = nil
 		sys.arg1 = 0
 
+	case SysTlsserver:
+		proc.tlsServer(sys)
+
 	case SysGetrandom:
 		buf := make([]byte, sys.arg0)
 		n, err := rand.Read(buf)
@@ -759,6 +787,12 @@ type syscall struct {
 func (sys *syscall) Print() {
 	fmt.Printf("pc=%v, call=%v, arg0=%v, arg1=%v, arg2=%v\n",
 		sys.pc, sys.call, sys.arg0, sys.argBuf, sys.arg1)
+}
+
+func (sys *syscall) SetArg0(arg0 int32) {
+	sys.arg0 = arg0
+	sys.argBuf = nil
+	sys.arg1 = 0
 }
 
 func decodeSyscall(sys *syscall, values []interface{}) error {
@@ -845,13 +879,13 @@ func (proc *Process) ktraceCall(sys *syscall) {
 	proc.ktracePrefix()
 	fmt.Printf("CALL %s", sys.call)
 	switch sys.call {
-	case SysExit, SysWait, SysCreatemsg:
+	case SysExit, SysClose, SysWait, SysCreatemsg, SysAccept:
 		fmt.Printf("(%d)", sys.arg0)
 
-	case SysSpawn:
+	case SysSpawn, SysDial, SysListen:
 		fmt.Printf("(%s)", sys.argBuf[:sys.arg1])
 
-	case SysRead:
+	case SysRead, SysTlsserver, SysTlsclient:
 		fmt.Printf("(%d, %d)", sys.arg0, sys.arg1)
 
 	case SysWrite:

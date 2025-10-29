@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"time"
 )
 
 // ParseNetAddress parses the network address buffer and returns its
@@ -111,4 +112,73 @@ func (fd *FDListener) Read(b []byte) int {
 // Write implements FD.Write.
 func (fd *FDListener) Write(b []byte) int {
 	return int(-EINVAL)
+}
+
+// NewConnDevNull creates a null net.Conn.
+func NewConnDevNull() net.Conn {
+	return &ConnDevNull{}
+}
+
+var (
+	_ net.Conn = &ConnDevNull{}
+)
+
+// ConnDevNull implements a null net.Conn.
+type ConnDevNull struct {
+	local  addr
+	remote addr
+}
+
+type addr struct {
+	network string
+	addr    string
+}
+
+// Network implmements Addr.Network.
+func (a addr) Network() string {
+	return a.network
+}
+
+func (a addr) String() string {
+	return a.addr
+}
+
+// Read implements Conn.Read.
+func (conn *ConnDevNull) Read(b []byte) (int, error) {
+	return 0, nil
+}
+
+// Write implements Conn.Write.
+func (conn *ConnDevNull) Write(b []byte) (int, error) {
+	return len(b), nil
+}
+
+// Close implements Conn.Close.
+func (conn *ConnDevNull) Close() error {
+	return nil
+}
+
+// LocalAddr implements Conn.LocalAddr.
+func (conn *ConnDevNull) LocalAddr() net.Addr {
+	return conn.local
+}
+
+// RemoteAddr implements Conn.RemoteAddr.
+func (conn *ConnDevNull) RemoteAddr() net.Addr {
+	return conn.remote
+}
+
+// SetDeadline implements Conn.SetDeadline.
+func (conn *ConnDevNull) SetDeadline(t time.Time) error {
+	return nil
+}
+
+// SetReadDeadline implements Conn.SetReadDeadline.
+func (conn *ConnDevNull) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+// SetWriteDeadline implements Conn.SetWriteDeadline.
+func (conn *ConnDevNull) SetWriteDeadline(t time.Time) error {
+	return nil
 }

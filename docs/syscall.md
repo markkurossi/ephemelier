@@ -23,7 +23,10 @@
 ## Cryptography Functions
 
  - getrandom(arg0:size) => size, data
- - createkey(arg0:typeSize, argBuf:name, arg1:size) => fd
+ - tlsserver(arg0:fd, arg1:serverKey) => fd
+ - tlsclient(arg0:fd, [arg1:clientKey]) => fd
+ - createkey(arg0:typeSize, argBuf:name, arg1:nameSize) => fd
+ - sign(arg0:fd, argBuf:data, arg1:size) => size, signature
 
 ## Ports
 

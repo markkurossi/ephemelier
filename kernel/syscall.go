@@ -36,6 +36,8 @@ const (
 	SysAccept
 	SysWait
 	SysGetrandom
+	SysTlsserver
+	SysTlsclient
 	SysYield
 	SysGetpid
 )
@@ -63,6 +65,8 @@ var syscallNames = map[Syscall]string{
 	SysAccept:    "accept",
 	SysWait:      "wait",
 	SysGetrandom: "getrandom",
+	SysTlsserver: "tlsserver",
+	SysTlsclient: "tlsclient",
 	SysYield:     "yield",
 	SysGetpid:    "getpid",
 
