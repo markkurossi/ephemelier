@@ -9,10 +9,10 @@ package main
 const (
 	Init              = 1
 	StCreatemsgResult = 7
-	StDecodeMsg       = 6
+	StDecodeMsg       = 5
 	StGetpidResult    = 2
 	StGetportResult   = 0
 	StReceive         = 3
-	StReceiveResult   = 5
+	StReceiveResult   = 6
 	StWriteResult     = 4
 )
