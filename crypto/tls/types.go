@@ -141,16 +141,17 @@ type NamedGroup uint16
 
 // Named groups.
 const (
-	GroupSecp256r1 NamedGroup = 0x0017
-	GroupSecp384r1 NamedGroup = 0x0018
-	GroupSecp521r1 NamedGroup = 0x0019
-	Groupx25519    NamedGroup = 0x001D
-	Groupx448      NamedGroup = 0x001E
-	GroupFfdhe2048 NamedGroup = 0x0100
-	GroupFfdhe3072 NamedGroup = 0x0101
-	GroupFfdhe4096 NamedGroup = 0x0102
-	GroupFfdhe6144 NamedGroup = 0x0103
-	GroupFfdhe8192 NamedGroup = 0x0104
+	GroupSecp256r1      NamedGroup = 0x0017
+	GroupSecp384r1      NamedGroup = 0x0018
+	GroupSecp521r1      NamedGroup = 0x0019
+	GroupX25519         NamedGroup = 0x001D
+	GroupX448           NamedGroup = 0x001E
+	GroupFfdhe2048      NamedGroup = 0x0100
+	GroupFfdhe3072      NamedGroup = 0x0101
+	GroupFfdhe4096      NamedGroup = 0x0102
+	GroupFfdhe6144      NamedGroup = 0x0103
+	GroupFfdhe8192      NamedGroup = 0x0104
+	GroupX25519MLKEM768 NamedGroup = 0x11EC
 )
 
 func (group NamedGroup) String() string {
@@ -162,8 +163,11 @@ func (group NamedGroup) String() string {
 }
 
 var tls13NamedGroups = map[NamedGroup]string{
-	GroupSecp256r1: "secp256r1",
-	Groupx25519:    "x25519",
+	GroupSecp256r1:      "secp256r1",
+	GroupSecp384r1:      "secp384r1",
+	GroupSecp521r1:      "secp521r1",
+	GroupX25519:         "x25519",
+	GroupX25519MLKEM768: "X25519MLKEM768",
 }
 
 // SignatureScheme defines the signature algorithms for the
