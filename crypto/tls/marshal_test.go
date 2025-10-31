@@ -39,7 +39,9 @@ func TestMarshalHandshake(t *testing.T) {
 
 	var clientHello ClientHello
 
-	in := bytes.NewReader(data[4:])
+	data = data[4:]
+
+	in := bytes.NewReader(data)
 	err = Unmarshal(in, &clientHello)
 	if err != nil {
 		fmt.Printf("clientHello: %v\n", clientHello)
@@ -47,4 +49,21 @@ func TestMarshalHandshake(t *testing.T) {
 	}
 
 	fmt.Printf("clientHello: %v\n", clientHello)
+
+	encoded, err := Marshal(clientHello)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Compare(data, encoded) != 0 {
+		limit := len(data)
+		if len(encoded) < limit {
+			limit = len(encoded)
+		}
+		for i := 0; i < limit; i++ {
+			if data[i] != encoded[i] {
+				t.Fatalf("encoded differs at %v:\n%x\n%x",
+					i, data[i:], encoded[i:])
+			}
+		}
+	}
 }

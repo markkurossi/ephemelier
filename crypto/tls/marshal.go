@@ -12,45 +12,24 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"runtime/debug"
 	"strings"
 )
 
 // MarshalTo encodes the value v to the buffer buf.
 func MarshalTo(buf []byte, v interface{}) (int, error) {
-	out := &bufWriter{
-		buf: buf,
-	}
-	err := marshalValue(out, reflect.ValueOf(v))
+	out := bytes.NewBuffer(buf)
+	err := marshalValue(out, reflect.ValueOf(v), 0)
 	if err != nil {
 		return 0, err
 	}
-	return out.ofs, nil
-}
-
-var (
-	_ io.Writer = &bufWriter{}
-)
-
-type bufWriter struct {
-	buf []byte
-	ofs int
-}
-
-func (bw *bufWriter) Write(p []byte) (n int, err error) {
-	n = copy(bw.buf[bw.ofs:], p)
-	bw.ofs += n
-	if n < len(p) {
-		err = io.EOF
-	}
-	return
+	return out.Len(), nil
 }
 
 // Marshal encodes the value v.
 func Marshal(v interface{}) ([]byte, error) {
 	out := new(bytes.Buffer)
 
-	err := marshalValue(out, reflect.ValueOf(v))
+	err := marshalValue(out, reflect.ValueOf(v), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +37,7 @@ func Marshal(v interface{}) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-func marshalValue(out io.Writer, value reflect.Value) error {
+func marshalValue(out *bytes.Buffer, value reflect.Value, length int) error {
 	var buf [8]byte
 
 	if !value.IsValid() {
@@ -97,13 +76,51 @@ func marshalValue(out io.Writer, value reflect.Value) error {
 		_, err := out.Write(buf[:8])
 		return err
 
-	case reflect.Slice, reflect.Array:
+	case reflect.Slice:
+		if length < 1 || length > 4 {
+			return fmt.Errorf("invalid length %v", length)
+		}
+		lofs := out.Len()
+		for i := 0; i < length; i++ {
+			if err := out.WriteByte(0); err != nil {
+				return err
+			}
+		}
+		if value.CanAddr() && value.Type().Elem().Kind() == reflect.Uint8 {
+			_, err := out.Write(value.Bytes())
+			if err != nil {
+				return err
+			}
+		} else {
+			for i := 0; i < value.Len(); i++ {
+				if err := marshalValue(out, value.Index(i), 0); err != nil {
+					return err
+				}
+			}
+		}
+		count := uint(out.Len() - lofs - length)
+		data := out.Bytes()
+		switch length {
+		case 1:
+			data[lofs] = byte(count)
+		case 2:
+			binary.BigEndian.PutUint16(data[lofs:], uint16(count))
+		case 3:
+			data[lofs+0] = byte(count >> 16)
+			data[lofs+1] = byte(count >> 8)
+			data[lofs+2] = byte(count)
+		case 4:
+			binary.BigEndian.PutUint32(data[lofs:], uint32(count))
+		}
+		return nil
+
+	case reflect.Array:
 		if value.CanAddr() && value.Type().Elem().Kind() == reflect.Uint8 {
 			_, err := out.Write(value.Bytes())
 			return err
 		}
 		for i := 0; i < value.Len(); i++ {
-			if err := marshalValue(out, value.Index(i)); err != nil {
+			if err := marshalValue(out, value.Index(i), 0); err != nil {
 				return err
 			}
 		}
@@ -120,7 +137,7 @@ func marshalValue(out io.Writer, value reflect.Value) error {
 		return err
 
 	case reflect.Ptr:
-		return marshalValue(out, reflect.Indirect(value))
+		return marshalValue(out, reflect.Indirect(value), 0)
 
 	case reflect.Struct:
 		for i := 0; i < value.NumField(); i++ {
@@ -128,7 +145,7 @@ func marshalValue(out io.Writer, value reflect.Value) error {
 			if tags.ignore {
 				continue
 			}
-			err := marshalValue(out, value.Field(i))
+			err := marshalValue(out, value.Field(i), tags.length)
 			if err != nil {
 				return err
 			}
@@ -149,24 +166,6 @@ func UnmarshalFrom(buf []byte, v interface{}) (int, error) {
 		return 0, err
 	}
 	return len(buf) - in.Len(), nil
-}
-
-var (
-	_ io.Reader = &bufReader{}
-)
-
-type bufReader struct {
-	buf []byte
-	ofs int
-}
-
-func (br *bufReader) Read(p []byte) (n int, err error) {
-	n = copy(p, br.buf[br.ofs:])
-	br.ofs += n
-	if n < len(p) {
-		err = io.EOF
-	}
-	return
 }
 
 // Unmarshal decodes the value v from the reader in.
@@ -228,7 +227,6 @@ func unmarshalValue(in *bytes.Reader, value reflect.Value, length int) (
 
 	case reflect.Slice:
 		if length < 1 || length > 4 {
-			debug.PrintStack()
 			return fmt.Errorf("invalid length %v", length)
 		}
 		_, err = io.ReadFull(in, buf[:length])

@@ -41,6 +41,15 @@ var contentTypes = map[ContentType]string{
 // ProtocolVersion defines TLS protocol version.
 type ProtocolVersion uint16
 
+// Version numbers.
+const (
+	VersionSSL30 ProtocolVersion = 0x0300
+	VersionTLS10 ProtocolVersion = 0x0301
+	VersionTLS11 ProtocolVersion = 0x0302
+	VersionTLS12 ProtocolVersion = 0x0303
+	VersionTLS13 ProtocolVersion = 0x0304
+)
+
 func (v ProtocolVersion) String() string {
 	name, ok := protocolVersions[v]
 	if ok {
@@ -119,8 +128,25 @@ type ClientHello struct {
 	Extensions               []Extension   `tls:"u16"`
 }
 
+// ServerHello implements the server_hello message.
+type ServerHello struct {
+	LegacyVersion            ProtocolVersion
+	Random                   [32]byte
+	LegacySessionID          []byte `tls:"u8"`
+	CipherSuite              CipherSuite
+	LegacyCompressionMethods byte
+	Extensions               []Extension `tls:"u16"`
+}
+
 // CipherSuite defines cipher suites.
 type CipherSuite uint16
+
+// TLS 1.3 mandatory cipher suites.
+const (
+	CipherTLSAes128GcmSha256        CipherSuite = 0x1301
+	CipherTLSAes256GcmSha384        CipherSuite = 0x1302
+	CipherTLSChacha20Poly1305Sha256 CipherSuite = 0x1303
+)
 
 func (cs CipherSuite) String() string {
 	name, ok := tls13CipherSuites[cs]
@@ -215,41 +241,67 @@ type KeyShareEntry struct {
 	KeyExchange []byte `tls:"u16"`
 }
 
+func (key KeyShareEntry) String() string {
+	return fmt.Sprintf("%v=%x", key.Group, key.KeyExchange)
+}
+
 // Extension defines handshake extensions.
 type Extension struct {
 	Type ExtensionType
 	Data []byte `tls:"u16"`
 }
 
+// Uint16List returns the extension value as a list of uint16
+// values. The argument lsize specifies the list value length in
+// bytes.
+func (ext Extension) Uint16List(lsize int) ([]uint16, error) {
+	if len(ext.Data) < lsize {
+		return nil, fmt.Errorf("%s: truncated data", ext.Type)
+	}
+	var ll int
+	var data []byte
+
+	switch lsize {
+	case 1:
+		ll = int(ext.Data[0])
+		data = ext.Data[1:]
+	case 2:
+		ll = int(bo.Uint16(ext.Data))
+		data = ext.Data[2:]
+	default:
+		panic("invalid lsize")
+	}
+	if ll != len(data) {
+		return nil, fmt.Errorf("%s: invalid data", ext.Type)
+	}
+	var result []uint16
+	for i := 0; i < ll; i += 2 {
+		result = append(result, bo.Uint16(data[i:]))
+	}
+	return result, nil
+}
+
 func (ext Extension) String() string {
 	switch ext.Type {
 	case ETSupportedGroups:
-		if len(ext.Data) < 2 {
-			return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
-		}
-		ll := int(bo.Uint16(ext.Data))
-		if 2+ll != len(ext.Data) || ll%2 != 0 {
+		arr, err := ext.Uint16List(2)
+		if err != nil {
 			return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
 		}
 		result := fmt.Sprintf("%v:", ext.Type)
-		for i := 2; i < 2+ll; i += 2 {
-			val := NamedGroup(bo.Uint16(ext.Data[i:]))
-			result += fmt.Sprintf(" %v", val)
+		for _, v := range arr {
+			result += fmt.Sprintf(" %v", NamedGroup(v))
 		}
 		return result
 
 	case ETSignatureAlgorithms:
-		if len(ext.Data) < 2 {
-			return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
-		}
-		ll := int(bo.Uint16(ext.Data))
-		if 2+ll != len(ext.Data) || ll%2 != 0 {
+		arr, err := ext.Uint16List(2)
+		if err != nil {
 			return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
 		}
 		result := fmt.Sprintf("%v:", ext.Type)
-		for i := 2; i < 2+ll; i += 2 {
-			val := SignatureScheme(bo.Uint16(ext.Data[i:]))
-			result += fmt.Sprintf(" %v", val)
+		for _, v := range arr {
+			result += fmt.Sprintf(" %v", SignatureScheme(v))
 		}
 		return result
 
@@ -261,14 +313,13 @@ func (ext Extension) String() string {
 			// ServerHello.
 			return ProtocolVersion(bo.Uint16(ext.Data)).String()
 		}
-		ll := int(ext.Data[0])
-		if 1+ll != len(ext.Data) || ll%2 != 0 {
+		arr, err := ext.Uint16List(1)
+		if err != nil {
 			return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
 		}
 		result := fmt.Sprintf("%v:", ext.Type)
-		for i := 1; i < 1+ll; i += 2 {
-			val := ProtocolVersion(bo.Uint16(ext.Data[i:]))
-			result += fmt.Sprintf(" %v", val)
+		for _, v := range arr {
+			result += fmt.Sprintf(" %v", ProtocolVersion(v))
 		}
 		return result
 
@@ -280,22 +331,20 @@ func (ext Extension) String() string {
 		result := fmt.Sprintf("%v:", ext.Type)
 
 		ll := int(bo.Uint16(ext.Data))
-		if 2+ll == len(ext.Data) {
-			// ClientHello.
-			ofs := 2
-			for ofs < len(ext.Data) {
-				var entry KeyShareEntry
-				n, err := UnmarshalFrom(ext.Data[ofs:], &entry)
-				if err != nil {
-					return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
-				}
-				result += fmt.Sprintf(" %v[%d]",
-					entry.Group, len(entry.KeyExchange))
-				ofs += n
+		if 2+ll != len(ext.Data) {
+			return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
+		}
+
+		ofs := 2
+		for ofs < len(ext.Data) {
+			var entry KeyShareEntry
+			n, err := UnmarshalFrom(ext.Data[ofs:], &entry)
+			if err != nil {
+				return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
 			}
-		} else {
-			// ServerHello.
-			return ProtocolVersion(bo.Uint16(ext.Data)).String()
+			result += fmt.Sprintf(" %v[%d]",
+				entry.Group, len(entry.KeyExchange))
+			ofs += n
 		}
 		return result
 
