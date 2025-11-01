@@ -39,8 +39,6 @@ func TestMarshalHandshake(t *testing.T) {
 
 	var clientHello ClientHello
 
-	data = data[4:]
-
 	in := bytes.NewReader(data)
 	err = Unmarshal(in, &clientHello)
 	if err != nil {

@@ -163,7 +163,7 @@ func UnmarshalFrom(buf []byte, v interface{}) (int, error) {
 	in := bytes.NewReader(buf)
 	err := Unmarshal(in, v)
 	if err != nil {
-		return 0, err
+		return len(buf) - in.Len(), err
 	}
 	return len(buf) - in.Len(), nil
 }

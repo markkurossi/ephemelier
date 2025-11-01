@@ -7,6 +7,7 @@
 package tls
 
 import (
+	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
@@ -34,8 +35,10 @@ var (
 
 // Connection implements a TLS connection.
 type Connection struct {
-	conn net.Conn
-	rbuf []byte
+	conn       net.Conn
+	rbuf       []byte
+	curve      ecdh.Curve
+	privateKey *ecdh.PrivateKey
 }
 
 // NewConnection creates a new TLS connection for the argument conn.
@@ -82,13 +85,13 @@ func (conn *Connection) ServerHandshake() error {
 	}
 
 	var ch ClientHello
-	consumed, err := UnmarshalFrom(handshake[4:], &ch)
+	consumed, err := UnmarshalFrom(handshake, &ch)
 	if err != nil {
 		return err
 	}
-	if consumed != len(handshake)-4 {
+	if consumed != len(handshake) {
 		return fmt.Errorf("trailing data after client_hello: len=%v",
-			len(handshake)-4-consumed)
+			len(handshake)-consumed)
 	}
 
 	var versions []ProtocolVersion
@@ -226,18 +229,79 @@ func (conn *Connection) ServerHandshake() error {
 		return fmt.Errorf("no matching algorithms")
 	}
 
+	conn.curve = ecdh.P256()
+	conn.privateKey, err = conn.curve.GenerateKey(rand.Reader)
+	if err != nil {
+		return err
+	}
 	if clientKEX == nil {
 		// No matching group, send HelloRetryRequest.
+
+		keyShare := &KeyShareEntry{
+			Group:       GroupSecp256r1,
+			KeyExchange: conn.privateKey.PublicKey().Bytes(),
+		}
+		_ = keyShare
+
 		req := &ServerHello{
 			LegacyVersion:   VersionTLS12,
+			Random:          HelloRetryRequestRandom,
 			LegacySessionID: ch.LegacySessionID,
 			CipherSuite:     cipherSuites[0],
-			Extensions:      []Extension{},
+			Extensions: []Extension{
+				// XXX Other extensions (see Section 4.2) are sent
+				// separately in the EncryptedExtensions message.
+				//NewExtension(ETSignatureAlgorithms,
+				//SigSchemeEcdsaSecp256r1Sha256),
+				Extension{
+					Type: ETSupportedVersions,
+					Data: VersionTLS13.Bytes(),
+				},
+				Extension{
+					Type: ETKeyShare,
+					Data: GroupSecp256r1.Bytes(),
+				},
+			},
 		}
-		_, err := rand.Read(req.Random[:])
+		fmt.Printf("HelloRetryRequest: %v\n", req)
+		data, err := Marshal(req)
 		if err != nil {
 			return err
 		}
+
+		// Set TypeLen
+		typeLen := uint32(HTServerHello)<<24 | uint32(len(data)-4)
+		bo.PutUint32(data[0:4], typeLen)
+
+		fmt.Printf("typeLen=%08x\n", typeLen)
+
+		// Try to decode the data.
+		var sh ServerHello
+		consumed, err = UnmarshalFrom(data, &sh)
+		if err != nil {
+			fmt.Printf("UnmarshalFrom failed: %v: consumed=%v\n", err, consumed)
+			fmt.Printf("ch: %v\n", sh)
+			return err
+		}
+		fmt.Printf("sh: %v\n", sh)
+		fmt.Printf(" - consumed: %v\n", consumed)
+
+		err = conn.WriteRecord(CTHandshake, data)
+		if err != nil {
+			return err
+		}
+
+		ct, data, err := conn.ReadRecord()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("ct=%v\n", ct)
+
+		ct, data, err = conn.ReadRecord()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("ct=%v\n", ct)
 	}
 	return nil
 }
@@ -275,4 +339,24 @@ func (conn *Connection) ReadRecord() (ContentType, []byte, error) {
 	}
 
 	return ct, conn.rbuf[:length], nil
+}
+
+// WriteRecord writes a record layer record.
+func (conn *Connection) WriteRecord(ct ContentType, data []byte) error {
+	var hdr [5]byte
+
+	fmt.Printf("len(data)=%v\n", len(data))
+
+	hdr[0] = byte(ct)
+	bo.PutUint16(hdr[1:3], uint16(VersionTLS12))
+	bo.PutUint16(hdr[3:5], uint16(len(data)))
+
+	fmt.Printf("WriteRecord: hdr:\n%s", hex.Dump(hdr[:]))
+
+	_, err := conn.conn.Write(hdr[:])
+	if err != nil {
+		return err
+	}
+	_, err = conn.conn.Write(data)
+	return err
 }

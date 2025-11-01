@@ -7,6 +7,7 @@
 package tls
 
 import (
+	"bytes"
 	"fmt"
 )
 
@@ -56,6 +57,13 @@ func (v ProtocolVersion) String() string {
 		return name
 	}
 	return fmt.Sprintf("%04x", uint(v))
+}
+
+// Bytes returns the protocol encoding of the group.
+func (v ProtocolVersion) Bytes() []byte {
+	buf := make([]byte, 2)
+	bo.PutUint16(buf, uint16(v))
+	return buf
 }
 
 var protocolVersions = map[ProtocolVersion]string{
@@ -120,6 +128,7 @@ var handshakeTypes = map[HandshakeType]string{
 
 // ClientHello implements the client_hello message.
 type ClientHello struct {
+	HandshakeTypeLen         uint32
 	LegacyVersion            ProtocolVersion
 	Random                   [32]byte
 	LegacySessionID          []byte        `tls:"u8"`
@@ -130,12 +139,22 @@ type ClientHello struct {
 
 // ServerHello implements the server_hello message.
 type ServerHello struct {
+	HandshakeTypeLen         uint32
 	LegacyVersion            ProtocolVersion
 	Random                   [32]byte
 	LegacySessionID          []byte `tls:"u8"`
 	CipherSuite              CipherSuite
 	LegacyCompressionMethods byte
 	Extensions               []Extension `tls:"u16"`
+}
+
+// HelloRetryRequestRandom defines the well-known value of the
+// HelloRetryRequest's Random field.
+var HelloRetryRequestRandom = [32]byte{
+	0xCF, 0x21, 0xAD, 0x74, 0xE5, 0x9A, 0x61, 0x11,
+	0xBE, 0x1D, 0x8C, 0x02, 0x1E, 0x65, 0xB8, 0x91,
+	0xC2, 0xA2, 0x11, 0x16, 0x7A, 0xBB, 0x8C, 0x5E,
+	0x07, 0x9E, 0x09, 0xE2, 0xC8, 0xA8, 0x33, 0x9C,
 }
 
 // CipherSuite defines cipher suites.
@@ -186,6 +205,13 @@ func (group NamedGroup) String() string {
 		return name
 	}
 	return fmt.Sprintf("%04x", int(group))
+}
+
+// Bytes returns the protocol encoding of the group.
+func (group NamedGroup) Bytes() []byte {
+	buf := make([]byte, 2)
+	bo.PutUint16(buf, uint16(group))
+	return buf
 }
 
 var tls13NamedGroups = map[NamedGroup]string{
@@ -245,10 +271,72 @@ func (key KeyShareEntry) String() string {
 	return fmt.Sprintf("%v=%x", key.Group, key.KeyExchange)
 }
 
-// Extension defines handshake extensions.
+// Extension defines protocol extensions.
 type Extension struct {
 	Type ExtensionType
 	Data []byte `tls:"u16"`
+}
+
+// NewExtension creates a new protocol extension.
+func NewExtension(t ExtensionType, values ...interface{}) Extension {
+	var buf [4]byte
+	var result bytes.Buffer
+
+	var ll int
+	switch t {
+	case ETSupportedGroups, ETSignatureAlgorithms, ETKeyShare:
+		ll = 2
+	case ETSupportedVersions:
+		ll = 1
+	default:
+		panic(fmt.Sprintf("NewExtension: unknown ExtensionType: %v", t))
+	}
+
+	for i := 0; i < ll; i++ {
+		result.WriteByte(0)
+	}
+	for _, val := range values {
+		switch v := val.(type) {
+		case NamedGroup:
+			bo.PutUint16(buf[0:2], uint16(v))
+			result.Write(buf[0:2])
+
+		case SignatureScheme:
+			bo.PutUint16(buf[0:2], uint16(v))
+			result.Write(buf[0:2])
+
+		case ProtocolVersion:
+			bo.PutUint16(buf[0:2], uint16(v))
+			result.Write(buf[0:2])
+
+		case *KeyShareEntry:
+			data, err := Marshal(v)
+			if err != nil {
+				panic(fmt.Sprintf("failed to marshal KeyShareEntry: %v", err))
+			}
+			result.Write(data)
+
+		default:
+			panic(fmt.Sprintf("unsupported extension value %T", v))
+		}
+	}
+
+	// Set extension length field.
+	l := result.Len() - ll
+	data := result.Bytes()
+	switch ll {
+	case 1:
+		data[0] = byte(l)
+	case 2:
+		bo.PutUint16(data[0:2], uint16(l))
+	default:
+		panic("invalid length")
+	}
+
+	return Extension{
+		Type: t,
+		Data: data,
+	}
 }
 
 // Uint16List returns the extension value as a list of uint16
@@ -327,6 +415,10 @@ func (ext Extension) String() string {
 		if len(ext.Data) < 2 {
 			return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
 		}
+		if len(ext.Data) == 2 {
+			// HelloRetryRequest.
+			return NamedGroup(bo.Uint16(ext.Data)).String()
+		}
 
 		result := fmt.Sprintf("%v:", ext.Type)
 
@@ -353,7 +445,7 @@ func (ext Extension) String() string {
 	}
 }
 
-// ExtensionType defines the handshake protocol extensions.
+// ExtensionType defines the protocol extensions.
 type ExtensionType uint16
 
 // ExtensionTypes.
