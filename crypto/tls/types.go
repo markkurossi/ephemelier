@@ -523,3 +523,109 @@ var extensionTypeNames = map[ExtensionType]string{
 	ETSignatureAlgorithmsCert:             "signature_algorithms_cert",
 	ETRenegotiationInfo:                   "renegotiation_info",
 }
+
+// Alert defines alert messages.
+type Alert struct {
+	Level       AlertLevel
+	Description AlertDescription
+}
+
+// AlertLevel defines alert severity
+type AlertLevel uint8
+
+func (level AlertLevel) String() string {
+	switch level {
+	case AlertLevelWarning:
+		return "warning"
+	case AlertLevelFatal:
+		return "fatal"
+	default:
+		return fmt.Sprintf("{AlertLevel %d}", int(level))
+	}
+}
+
+// Alert Levels.
+const (
+	AlertLevelWarning AlertLevel = 1
+	AlertLevelFatal   AlertLevel = 2
+)
+
+// AlertDescription describes the alert.
+type AlertDescription uint8
+
+// Level returns the alert description's severity.
+func (desc AlertDescription) Level() AlertLevel {
+	if desc == 0 || desc == 90 {
+		return AlertLevelWarning
+	}
+	return AlertLevelFatal
+}
+
+func (desc AlertDescription) String() string {
+	name, ok := alertDescriptions[desc]
+	if ok {
+		return name
+	}
+	return fmt.Sprintf("{AlertDescription %d}", int(desc))
+}
+
+// Alert Descriptions.
+const (
+	AlertCloseNotify                  AlertDescription = 0
+	AlertUnexpectedMessage            AlertDescription = 10
+	AlertBadRecordMAC                 AlertDescription = 20
+	AlertRecordOverflow               AlertDescription = 22
+	AlertHandshakeFailure             AlertDescription = 40
+	AlertBadCertificate               AlertDescription = 42
+	AlertUnsupportedCertificate       AlertDescription = 43
+	AlertCertificateRevoked           AlertDescription = 44
+	AlertCertificateExpired           AlertDescription = 45
+	AlertCertificateUnknown           AlertDescription = 46
+	AlertIllegalParameter             AlertDescription = 47
+	AlertUnknownCA                    AlertDescription = 48
+	AlertAccessDenied                 AlertDescription = 49
+	AlertDecodeError                  AlertDescription = 50
+	AlertDecryptError                 AlertDescription = 51
+	AlertProtocolVersion              AlertDescription = 70
+	AlertInsufficientSecurity         AlertDescription = 71
+	AlertInternalError                AlertDescription = 80
+	AlertInappropriateFallback        AlertDescription = 86
+	AlertUserCanceled                 AlertDescription = 90
+	AlertMissingExtension             AlertDescription = 109
+	AlertUnsupportedExtension         AlertDescription = 110
+	AlertUnrecognizedName             AlertDescription = 112
+	AlertBadCertificateStatusResponse AlertDescription = 113
+	AlertUnknownPSKIdentity           AlertDescription = 115
+	AlertCertificateRequired          AlertDescription = 116
+	AlertNoApplicationProtocol        AlertDescription = 120
+)
+
+var alertDescriptions = map[AlertDescription]string{
+	AlertCloseNotify:                  "close_notify",
+	AlertUnexpectedMessage:            "unexpected_message",
+	AlertBadRecordMAC:                 "bad_record_mac",
+	AlertRecordOverflow:               "record_overflow",
+	AlertHandshakeFailure:             "handshake_failure",
+	AlertBadCertificate:               "bad_certificate",
+	AlertUnsupportedCertificate:       "unsupported_certificate",
+	AlertCertificateRevoked:           "certificate_revoked",
+	AlertCertificateExpired:           "certificate_expired",
+	AlertCertificateUnknown:           "certificate_unknown",
+	AlertIllegalParameter:             "illegal_parameter",
+	AlertUnknownCA:                    "unknown_ca",
+	AlertAccessDenied:                 "access_denied",
+	AlertDecodeError:                  "decode_error",
+	AlertDecryptError:                 "decrypt_error",
+	AlertProtocolVersion:              "protocol_version",
+	AlertInsufficientSecurity:         "insufficient_security",
+	AlertInternalError:                "internal_error",
+	AlertInappropriateFallback:        "inappropriate_fallback",
+	AlertUserCanceled:                 "user_canceled",
+	AlertMissingExtension:             "missing_extension",
+	AlertUnsupportedExtension:         "unsupported_extension",
+	AlertUnrecognizedName:             "unrecognized_name",
+	AlertBadCertificateStatusResponse: "bad_certificate_status_response",
+	AlertUnknownPSKIdentity:           "unknown_psk_identity",
+	AlertCertificateRequired:          "certificate_required",
+	AlertNoApplicationProtocol:        "no_application_protocol",
+}

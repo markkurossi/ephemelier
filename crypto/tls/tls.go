@@ -56,28 +56,44 @@ func (conn *Connection) Debugf(format string, a ...interface{}) {
 
 // ServerHandshake runs the server handshake protocol.
 func (conn *Connection) ServerHandshake() error {
-	var handshake []byte
 	for {
 		ct, data, err := conn.ReadRecord()
 		if err != nil {
 			return err
 		}
-		if ct != CTHandshake {
+		switch ct {
+		case CTHandshake:
+			err := conn.recvClientHandshake(data)
+			if err != nil {
+				return err
+			}
+		case CTChangeCipherSpec:
+			err := conn.recvChangeCipherSpec(data)
+			if err != nil {
+				return err
+			}
+		case CTAlert:
+			err := conn.recvAlert(data)
+			if err != nil {
+				return err
+			}
+		default:
 			return fmt.Errorf("unexpected record %v, expected %v",
 				ct, CTHandshake)
 		}
-		handshake = data
-		break
 	}
-	if len(handshake) < 4 {
+}
+
+func (conn *Connection) recvClientHandshake(data []byte) error {
+	if len(data) < 4 {
 		return fmt.Errorf("truncated handshake")
 	}
-	typeLen := bo.Uint32(handshake)
+	typeLen := bo.Uint32(data)
 	ht := HandshakeType(typeLen >> 24)
 	length := typeLen & 0xffffff
-	if int(length+4) != len(handshake) {
+	if int(length+4) != len(data) {
 		return fmt.Errorf("handshake length mismatch: got %v, expected %v",
-			length+4, len(handshake))
+			length+4, len(data))
 	}
 	if ht != HTClientHello {
 		return fmt.Errorf("invalid handshake: got %v, expected %v",
@@ -85,13 +101,13 @@ func (conn *Connection) ServerHandshake() error {
 	}
 
 	var ch ClientHello
-	consumed, err := UnmarshalFrom(handshake, &ch)
+	consumed, err := UnmarshalFrom(data, &ch)
 	if err != nil {
 		return err
 	}
-	if consumed != len(handshake) {
+	if consumed != len(data) {
 		return fmt.Errorf("trailing data after client_hello: len=%v",
-			len(handshake)-consumed)
+			len(data)-consumed)
 	}
 
 	var versions []ProtocolVersion
@@ -273,36 +289,42 @@ func (conn *Connection) ServerHandshake() error {
 		typeLen := uint32(HTServerHello)<<24 | uint32(len(data)-4)
 		bo.PutUint32(data[0:4], typeLen)
 
-		fmt.Printf("typeLen=%08x\n", typeLen)
-
-		// Try to decode the data.
-		var sh ServerHello
-		consumed, err = UnmarshalFrom(data, &sh)
-		if err != nil {
-			fmt.Printf("UnmarshalFrom failed: %v: consumed=%v\n", err, consumed)
-			fmt.Printf("ch: %v\n", sh)
-			return err
-		}
-		fmt.Printf("sh: %v\n", sh)
-		fmt.Printf(" - consumed: %v\n", consumed)
-
 		err = conn.WriteRecord(CTHandshake, data)
 		if err != nil {
 			return err
 		}
 
-		ct, data, err := conn.ReadRecord()
-		if err != nil {
-			return err
-		}
-		fmt.Printf("ct=%v\n", ct)
+		if false {
+			ct, _, err := conn.ReadRecord()
+			if err != nil {
+				return err
+			}
+			fmt.Printf("ct=%v\n", ct)
 
-		ct, data, err = conn.ReadRecord()
-		if err != nil {
-			return err
+			ct, _, err = conn.ReadRecord()
+			if err != nil {
+				return err
+			}
+			fmt.Printf("ct=%v\n", ct)
 		}
-		fmt.Printf("ct=%v\n", ct)
 	}
+	return nil
+}
+
+func (conn *Connection) recvChangeCipherSpec(data []byte) error {
+	if len(data) != 1 || data[0] != 1 {
+		// XXX alert
+		return fmt.Errorf("invalid change_cipher_spec")
+	}
+	return nil
+}
+
+func (conn *Connection) recvAlert(data []byte) error {
+	if len(data) != 2 {
+		return fmt.Errorf("invalid alert")
+	}
+	desc := AlertDescription(data[1])
+	fmt.Printf("alert: %v: %v\n", desc.Level(), desc)
 	return nil
 }
 

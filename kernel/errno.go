@@ -82,6 +82,9 @@ func mapError(err error) int {
 	if errors.As(err, &perr) || errors.Is(err, io.EOF) {
 		return int(-EBADF)
 	}
-	fmt.Printf("error %v[%T] not handled, defaulting to %v\n", err, err, EINVAL)
+	fmt.Printf("kernel : unknown error, defaulting to: %v\n", EINVAL)
+	fmt.Printf(" - err : %v\n", err)
+	fmt.Printf(" - type: %T\n", err)
+
 	return int(-EINVAL)
 }
