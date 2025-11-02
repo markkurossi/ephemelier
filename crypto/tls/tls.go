@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 )
@@ -78,25 +79,25 @@ func (conn *Connection) ServerHandshake() error {
 				return err
 			}
 		default:
-			return fmt.Errorf("unexpected record %v, expected %v",
-				ct, CTHandshake)
+			return conn.illegalParameterf("unexpected record %v", ct)
 		}
 	}
 }
 
 func (conn *Connection) recvClientHandshake(data []byte) error {
 	if len(data) < 4 {
-		return fmt.Errorf("truncated handshake")
+		return conn.decodeErrorf("truncated handshake")
 	}
 	typeLen := bo.Uint32(data)
 	ht := HandshakeType(typeLen >> 24)
 	length := typeLen & 0xffffff
 	if int(length+4) != len(data) {
-		return fmt.Errorf("handshake length mismatch: got %v, expected %v",
+		return conn.decodeErrorf(
+			"handshake length mismatch: got %v, expected %v",
 			length+4, len(data))
 	}
 	if ht != HTClientHello {
-		return fmt.Errorf("invalid handshake: got %v, expected %v",
+		return conn.illegalParameterf("invalid handshake: got %v, expected %v",
 			ht, HTClientHello)
 	}
 
@@ -106,7 +107,7 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 		return err
 	}
 	if consumed != len(data) {
-		return fmt.Errorf("trailing data after client_hello: len=%v",
+		return conn.decodeErrorf("trailing data after client_hello: len=%v",
 			len(data)-consumed)
 	}
 
@@ -152,7 +153,7 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 		case ETSupportedGroups:
 			arr, err := ext.Uint16List(2)
 			if err != nil {
-				return err
+				return conn.decodeErrorf("invalid extension: %v", err)
 			}
 			for _, el := range arr {
 				v := NamedGroup(el)
@@ -164,7 +165,7 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 		case ETSignatureAlgorithms:
 			arr, err := ext.Uint16List(2)
 			if err != nil {
-				return err
+				return conn.decodeErrorf("invalid extension: %v", err)
 			}
 			for _, el := range arr {
 				v := SignatureScheme(el)
@@ -176,7 +177,7 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 		case ETSupportedVersions:
 			arr, err := ext.Uint16List(1)
 			if err != nil {
-				return err
+				return conn.decodeErrorf("invalid extension: %v", err)
 			}
 			for _, el := range arr {
 				v := ProtocolVersion(el)
@@ -187,18 +188,18 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 
 		case ETKeyShare:
 			if len(ext.Data) < 2 {
-				// XXX should alert on errors
-				return fmt.Errorf("%v: invalid data", ext.Type)
+				return conn.decodeErrorf("%v: invalid data", ext.Type)
 			}
 			ll := int(bo.Uint16(ext.Data))
 			if 2+ll != len(ext.Data) {
-				return fmt.Errorf("%v: invalid data", ext.Type)
+				return conn.decodeErrorf("%v: invalid data", ext.Type)
 			}
 			for i := 2; i < len(ext.Data); {
 				var entry KeyShareEntry
 				n, err := UnmarshalFrom(ext.Data[i:], &entry)
 				if err != nil {
-					return err
+					return conn.decodeErrorf("%v: invalid data: %v",
+						ext.Type, err)
 				}
 				if supportedGroups[entry.Group] && clientKEX == nil {
 					clientKEX = &KeyShareEntry{
@@ -239,16 +240,18 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 	fmt.Printf("signatureSchemes: %v\n", signatureSchemes)
 	fmt.Printf("clientKEX       : %v\n", clientKEX)
 
-	if len(versions) == 0 || len(cipherSuites) == 0 ||
-		len(groups) == 0 || len(signatureSchemes) == 0 {
-		// XXX alert
-		return fmt.Errorf("no matching algorithms")
+	if len(versions) == 0 {
+		return conn.alert(AlertProtocolVersion)
+	}
+	if len(cipherSuites) == 0 || len(groups) == 0 ||
+		len(signatureSchemes) == 0 {
+		return conn.alert(AlertHandshakeFailure)
 	}
 
 	conn.curve = ecdh.P256()
 	conn.privateKey, err = conn.curve.GenerateKey(rand.Reader)
 	if err != nil {
-		return err
+		return conn.internalErrorf("error creating private key: %v", err)
 	}
 	if clientKEX == nil {
 		// No matching group, send HelloRetryRequest.
@@ -282,7 +285,7 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 		fmt.Printf("HelloRetryRequest: %v\n", req)
 		data, err := Marshal(req)
 		if err != nil {
-			return err
+			return conn.internalErrorf("marshal failed: %v", err)
 		}
 
 		// Set TypeLen
@@ -293,39 +296,60 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 		if err != nil {
 			return err
 		}
-
-		if false {
-			ct, _, err := conn.ReadRecord()
-			if err != nil {
-				return err
-			}
-			fmt.Printf("ct=%v\n", ct)
-
-			ct, _, err = conn.ReadRecord()
-			if err != nil {
-				return err
-			}
-			fmt.Printf("ct=%v\n", ct)
-		}
 	}
 	return nil
 }
 
 func (conn *Connection) recvChangeCipherSpec(data []byte) error {
 	if len(data) != 1 || data[0] != 1 {
-		// XXX alert
-		return fmt.Errorf("invalid change_cipher_spec")
+		return conn.decodeErrorf("invalid change_cipher_spec")
 	}
 	return nil
 }
 
 func (conn *Connection) recvAlert(data []byte) error {
 	if len(data) != 2 {
-		return fmt.Errorf("invalid alert")
+		return conn.decodeErrorf("invalid alert")
 	}
 	desc := AlertDescription(data[1])
 	fmt.Printf("alert: %v: %v\n", desc.Level(), desc)
 	return nil
+}
+
+func (conn *Connection) alert(desc AlertDescription) error {
+	var buf [2]byte
+
+	buf[0] = byte(desc.Level())
+	buf[1] = byte(desc)
+
+	return conn.WriteRecord(CTAlert, buf[:])
+}
+
+func (conn *Connection) decodeErrorf(msg string, a ...interface{}) error {
+	orig := fmt.Errorf(msg, a...)
+	err := conn.alert(AlertDecodeError)
+	if err != nil {
+		return errors.Join(err, orig)
+	}
+	return orig
+}
+
+func (conn *Connection) illegalParameterf(msg string, a ...interface{}) error {
+	orig := fmt.Errorf(msg, a...)
+	err := conn.alert(AlertIllegalParameter)
+	if err != nil {
+		return errors.Join(err, orig)
+	}
+	return orig
+}
+
+func (conn *Connection) internalErrorf(msg string, a ...interface{}) error {
+	orig := fmt.Errorf(msg, a...)
+	err := conn.alert(AlertInternalError)
+	if err != nil {
+		return errors.Join(err, orig)
+	}
+	return orig
 }
 
 // ReadRecord reads a record layer record.
@@ -366,8 +390,6 @@ func (conn *Connection) ReadRecord() (ContentType, []byte, error) {
 // WriteRecord writes a record layer record.
 func (conn *Connection) WriteRecord(ct ContentType, data []byte) error {
 	var hdr [5]byte
-
-	fmt.Printf("len(data)=%v\n", len(data))
 
 	hdr[0] = byte(ct)
 	bo.PutUint16(hdr[1:3], uint16(VersionTLS12))

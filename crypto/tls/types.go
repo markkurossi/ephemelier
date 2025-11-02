@@ -569,7 +569,7 @@ func (desc AlertDescription) String() string {
 	return fmt.Sprintf("{AlertDescription %d}", int(desc))
 }
 
-// Alert Descriptions.
+// Alert descriptions.
 const (
 	AlertCloseNotify                  AlertDescription = 0
 	AlertUnexpectedMessage            AlertDescription = 10
