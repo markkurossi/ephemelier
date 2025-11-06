@@ -40,6 +40,14 @@ type Connection struct {
 	rbuf       []byte
 	curve      ecdh.Curve
 	privateKey *ecdh.PrivateKey
+
+	// KEX.
+	clientHello      *ClientHello
+	versions         []ProtocolVersion
+	cipherSuites     []CipherSuite
+	groups           []NamedGroup
+	signatureSchemes []SignatureScheme
+	clientKEX        *KeyShareEntry
 }
 
 // NewConnection creates a new TLS connection for the argument conn.
@@ -55,8 +63,166 @@ func (conn *Connection) Debugf(format string, a ...interface{}) {
 	fmt.Printf(format, a...)
 }
 
+func (conn *Connection) readHandshakeMsg() (ContentType, []byte, error) {
+	for {
+		ct, data, err := conn.ReadRecord()
+		if err != nil {
+			return CTInvalid, nil, err
+		}
+		switch ct {
+		case CTChangeCipherSpec:
+			err = conn.recvChangeCipherSpec(data)
+			if err != nil {
+				return CTInvalid, nil, err
+			}
+		case CTAlert:
+			err = conn.recvAlert(data)
+			if err != nil {
+				return CTInvalid, nil, err
+			}
+		case CTHandshake:
+			return ct, data, nil
+		default:
+			return CTInvalid, nil,
+				fmt.Errorf("unexpected handshake message: %v", ct)
+		}
+	}
+}
+
+func (conn *Connection) writeHandshakeMsg(ht HandshakeType, data []byte) error {
+	// Set TypeLen
+	typeLen := uint32(ht)<<24 | uint32(len(data)-4)
+	bo.PutUint32(data[0:4], typeLen)
+
+	return conn.WriteRecord(CTHandshake, data)
+}
+
 // ServerHandshake runs the server handshake protocol.
 func (conn *Connection) ServerHandshake() error {
+	//  Client                                               Server
+	//
+	//  ClientHello
+	//  + key_share             -------->
+	//                                            HelloRetryRequest
+	//                          <--------               + key_share
+	//  ClientHello
+	//  + key_share             -------->
+	//                                                  ServerHello
+	//                                                  + key_share
+	//                                        {EncryptedExtensions}
+	//                                        {CertificateRequest*}
+	//                                               {Certificate*}
+	//                                         {CertificateVerify*}
+	//                                                   {Finished}
+	//                          <--------       [Application Data*]
+	//  {Certificate*}
+	//  {CertificateVerify*}
+	//  {Finished}              -------->
+	//  [Application Data]      <------->        [Application Data]
+	//
+	//       Figure 2: Message Flow for a Full Handshake with
+	//                     Mismatched Parameters
+
+	_, data, err := conn.readHandshakeMsg()
+	if err != nil {
+		return err
+	}
+	err = conn.recvClientHandshake(data)
+	if err != nil {
+		return err
+	}
+	if conn.clientKEX == nil {
+		// No matching group, send HelloRetryRequest.
+		req := &ServerHello{
+			LegacyVersion:   VersionTLS12,
+			Random:          HelloRetryRequestRandom,
+			LegacySessionID: conn.clientHello.LegacySessionID,
+			CipherSuite:     conn.cipherSuites[0],
+			Extensions: []Extension{
+				// XXX Other extensions (see Section 4.2) are sent
+				// separately in the EncryptedExtensions message.
+				//NewExtension(ETSignatureAlgorithms,
+				//SigSchemeEcdsaSecp256r1Sha256),
+				Extension{
+					Type: ETSupportedVersions,
+					Data: VersionTLS13.Bytes(),
+				},
+				Extension{
+					Type: ETKeyShare,
+					Data: GroupSecp256r1.Bytes(),
+				},
+			},
+		}
+		fmt.Printf("HelloRetryRequest: %v\n", req)
+		data, err = Marshal(req)
+		if err != nil {
+			return conn.internalErrorf("marshal failed: %v", err)
+		}
+		err = conn.writeHandshakeMsg(HTServerHello, data)
+		if err != nil {
+			return conn.internalErrorf("write failed: %v", err)
+		}
+
+		// Read ClientHello.
+		_, data, err := conn.readHandshakeMsg()
+		if err != nil {
+			return err
+		}
+		err = conn.recvClientHandshake(data)
+		if err != nil {
+			return err
+		}
+		if conn.clientKEX == nil {
+			return conn.alert(AlertHandshakeFailure)
+		}
+	}
+
+	// ServerHello
+
+	conn.curve = ecdh.P256()
+	conn.privateKey, err = conn.curve.GenerateKey(rand.Reader)
+	if err != nil {
+		return conn.internalErrorf("error creating private key: %v", err)
+	}
+
+	keyShare := &KeyShareEntry{
+		Group:       GroupSecp256r1,
+		KeyExchange: conn.privateKey.PublicKey().Bytes(),
+	}
+	req := &ServerHello{
+		LegacyVersion:   VersionTLS12,
+		LegacySessionID: conn.clientHello.LegacySessionID,
+		CipherSuite:     conn.cipherSuites[0],
+		Extensions: []Extension{
+			// XXX Other extensions (see Section 4.2) are sent
+			// separately in the EncryptedExtensions message.
+			//NewExtension(ETSignatureAlgorithms,
+			//SigSchemeEcdsaSecp256r1Sha256),
+			Extension{
+				Type: ETSupportedVersions,
+				Data: VersionTLS13.Bytes(),
+			},
+			Extension{
+				Type: ETKeyShare,
+				Data: keyShare.Bytes(),
+			},
+		},
+	}
+	_, err = rand.Read(req.Random[:])
+	if err != nil {
+		return conn.internalErrorf("failed to create random: %v", err)
+	}
+	fmt.Printf("ServerHello: %v\n", req)
+	data, err = Marshal(req)
+	if err != nil {
+		return conn.internalErrorf("marshal failed: %v", err)
+	}
+
+	err = conn.writeHandshakeMsg(HTServerHello, data)
+	if err != nil {
+		return conn.internalErrorf("write failed: %v", err)
+	}
+
 	for {
 		ct, data, err := conn.ReadRecord()
 		if err != nil {
@@ -100,9 +266,12 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 		return conn.illegalParameterf("invalid handshake: got %v, expected %v",
 			ht, HTClientHello)
 	}
+	return conn.recvClientHello(data)
+}
 
-	var ch ClientHello
-	consumed, err := UnmarshalFrom(data, &ch)
+func (conn *Connection) recvClientHello(data []byte) error {
+	conn.clientHello = new(ClientHello)
+	consumed, err := UnmarshalFrom(data, conn.clientHello)
 	if err != nil {
 		return err
 	}
@@ -111,20 +280,14 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 			len(data)-consumed)
 	}
 
-	var versions []ProtocolVersion
-	var cipherSuites []CipherSuite
-	var groups []NamedGroup
-	var signatureSchemes []SignatureScheme
-	var clientKEX *KeyShareEntry
-
 	conn.Debugf("client_hello:\n")
-	conn.Debugf(" - random: %x\n", ch.Random)
+	conn.Debugf(" - random: %x\n", conn.clientHello.Random)
 
 	conn.Debugf(" - cipher_suites: {")
 	var col int
-	for _, suite := range ch.CipherSuites {
+	for _, suite := range conn.clientHello.CipherSuites {
 		if supportedCipherSuites[suite] {
-			cipherSuites = append(cipherSuites, suite)
+			conn.cipherSuites = append(conn.cipherSuites, suite)
 		}
 
 		name, ok := tls13CipherSuites[suite]
@@ -148,7 +311,7 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 
 	conn.Debugf(" - extensions: {")
 	col = 0
-	for _, ext := range ch.Extensions {
+	for _, ext := range conn.clientHello.Extensions {
 		switch ext.Type {
 		case ETSupportedGroups:
 			arr, err := ext.Uint16List(2)
@@ -158,7 +321,7 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 			for _, el := range arr {
 				v := NamedGroup(el)
 				if supportedGroups[v] {
-					groups = append(groups, v)
+					conn.groups = append(conn.groups, v)
 				}
 			}
 
@@ -170,7 +333,7 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 			for _, el := range arr {
 				v := SignatureScheme(el)
 				if supportedSignatureSchemes[v] {
-					signatureSchemes = append(signatureSchemes, v)
+					conn.signatureSchemes = append(conn.signatureSchemes, v)
 				}
 			}
 
@@ -182,7 +345,7 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 			for _, el := range arr {
 				v := ProtocolVersion(el)
 				if supportedVersions[v] {
-					versions = append(versions, v)
+					conn.versions = append(conn.versions, v)
 				}
 			}
 
@@ -201,12 +364,12 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 					return conn.decodeErrorf("%v: invalid data: %v",
 						ext.Type, err)
 				}
-				if supportedGroups[entry.Group] && clientKEX == nil {
-					clientKEX = &KeyShareEntry{
+				if supportedGroups[entry.Group] && conn.clientKEX == nil {
+					conn.clientKEX = &KeyShareEntry{
 						Group:       entry.Group,
 						KeyExchange: make([]byte, len(entry.KeyExchange)),
 					}
-					copy(clientKEX.KeyExchange, entry.KeyExchange)
+					copy(conn.clientKEX.KeyExchange, entry.KeyExchange)
 				}
 
 				i += n
@@ -234,69 +397,20 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 	}
 	conn.Debugf("   }\n")
 
-	fmt.Printf("versions        : %v\n", versions)
-	fmt.Printf("cipherSuites    : %v\n", cipherSuites)
-	fmt.Printf("groups          : %v\n", groups)
-	fmt.Printf("signatureSchemes: %v\n", signatureSchemes)
-	fmt.Printf("clientKEX       : %v\n", clientKEX)
+	fmt.Printf("versions        : %v\n", conn.versions)
+	fmt.Printf("cipherSuites    : %v\n", conn.cipherSuites)
+	fmt.Printf("groups          : %v\n", conn.groups)
+	fmt.Printf("signatureSchemes: %v\n", conn.signatureSchemes)
+	fmt.Printf("clientKEX       : %v\n", conn.clientKEX)
 
-	if len(versions) == 0 {
+	if len(conn.versions) == 0 {
 		return conn.alert(AlertProtocolVersion)
 	}
-	if len(cipherSuites) == 0 || len(groups) == 0 ||
-		len(signatureSchemes) == 0 {
+	if len(conn.cipherSuites) == 0 || len(conn.groups) == 0 ||
+		len(conn.signatureSchemes) == 0 {
 		return conn.alert(AlertHandshakeFailure)
 	}
 
-	conn.curve = ecdh.P256()
-	conn.privateKey, err = conn.curve.GenerateKey(rand.Reader)
-	if err != nil {
-		return conn.internalErrorf("error creating private key: %v", err)
-	}
-	if clientKEX == nil {
-		// No matching group, send HelloRetryRequest.
-
-		keyShare := &KeyShareEntry{
-			Group:       GroupSecp256r1,
-			KeyExchange: conn.privateKey.PublicKey().Bytes(),
-		}
-		_ = keyShare
-
-		req := &ServerHello{
-			LegacyVersion:   VersionTLS12,
-			Random:          HelloRetryRequestRandom,
-			LegacySessionID: ch.LegacySessionID,
-			CipherSuite:     cipherSuites[0],
-			Extensions: []Extension{
-				// XXX Other extensions (see Section 4.2) are sent
-				// separately in the EncryptedExtensions message.
-				//NewExtension(ETSignatureAlgorithms,
-				//SigSchemeEcdsaSecp256r1Sha256),
-				Extension{
-					Type: ETSupportedVersions,
-					Data: VersionTLS13.Bytes(),
-				},
-				Extension{
-					Type: ETKeyShare,
-					Data: GroupSecp256r1.Bytes(),
-				},
-			},
-		}
-		fmt.Printf("HelloRetryRequest: %v\n", req)
-		data, err := Marshal(req)
-		if err != nil {
-			return conn.internalErrorf("marshal failed: %v", err)
-		}
-
-		// Set TypeLen
-		typeLen := uint32(HTServerHello)<<24 | uint32(len(data)-4)
-		bo.PutUint32(data[0:4], typeLen)
-
-		err = conn.WriteRecord(CTHandshake, data)
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 

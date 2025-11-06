@@ -8,7 +8,10 @@ package tls
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"crypto/sha512"
 	"fmt"
+	"hash"
 )
 
 // ContentType specifies record layer record types.
@@ -181,6 +184,21 @@ var tls13CipherSuites = map[CipherSuite]string{
 	0x1303: "TLS_CHACHA20_POLY1305_SHA256",
 }
 
+// Hash returns the cipher suite's hash function.
+func (cs CipherSuite) Hash() hash.Hash {
+	switch cs {
+	case CipherTLSAes128GcmSha256, CipherTLSChacha20Poly1305Sha256:
+		return sha256.New()
+
+	case CipherTLSAes256GcmSha384:
+		return sha512.New384()
+
+	default:
+		fmt.Printf("CipherSuite.Hash: default SHA-256 for %v", cs)
+		return sha256.New()
+	}
+}
+
 // NamedGroup defines named key exchange groups.
 type NamedGroup uint16
 
@@ -269,6 +287,15 @@ type KeyShareEntry struct {
 
 func (key KeyShareEntry) String() string {
 	return fmt.Sprintf("%v=%x", key.Group, key.KeyExchange)
+}
+
+// Bytes returns the key share entry's protocol encoding.
+func (key KeyShareEntry) Bytes() []byte {
+	data, err := Marshal(key)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal KeyShareEntry: %v", err))
+	}
+	return data
 }
 
 // Extension defines protocol extensions.
@@ -424,7 +451,13 @@ func (ext Extension) String() string {
 
 		ll := int(bo.Uint16(ext.Data))
 		if 2+ll != len(ext.Data) {
-			return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
+			// ServerHello key_share.
+			var entry KeyShareEntry
+			n, err := UnmarshalFrom(ext.Data, &entry)
+			if err != nil || n != len(ext.Data) {
+				return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
+			}
+			return fmt.Sprintf("%v[%d]", entry.Group, len(entry.KeyExchange))
 		}
 
 		ofs := 2

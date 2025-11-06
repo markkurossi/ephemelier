@@ -25,3 +25,13 @@ This implementation will implement:
  - `TLS_AES_128_GCM_SHA256`
  - `ecdsa_secp256r1_sha256`
  - `secp256r1`
+
+### ClientHello Default Proposals `key_share`
+
+ - OpenSSL  : X25519MLKEM768[1216] x25519[32]
+ - chrome   : X25519MLKEM768[1216] x25519[32]
+ - Go 1.25.0: X25519MLKEM768[1216] x25519[32]
+
+```shell
+apps/openssl s_client -connect localhost:8443 -debug -msg
+```
