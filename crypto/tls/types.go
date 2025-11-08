@@ -163,6 +163,11 @@ var HelloRetryRequestRandom = [32]byte{
 	0x07, 0x9E, 0x09, 0xE2, 0xC8, 0xA8, 0x33, 0x9C,
 }
 
+type EncryptedExtensions struct {
+	HandshakeTypeLen uint32
+	Extensions       []Extension `tls:"u16"`
+}
+
 // CipherSuite defines cipher suites.
 type CipherSuite uint16
 

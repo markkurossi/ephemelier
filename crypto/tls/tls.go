@@ -52,6 +52,9 @@ type Connection struct {
 	signatureSchemes []SignatureScheme
 	clientKEX        *KeyShareEntry
 	sharedSecret     []byte
+
+	serverCipher *Cipher
+	clientCipher *Cipher
 }
 
 // NewConnection creates a new TLS connection for the argument conn.
@@ -100,9 +103,14 @@ func (conn *Connection) writeHandshakeMsg(ht HandshakeType, data []byte) error {
 
 	conn.transcript.Write(data)
 
-	// XXX encryption here if we have cipher suite.
+	ct := CTHandshake
 
-	return conn.WriteRecord(CTHandshake, data)
+	if conn.serverCipher != nil {
+		ct = CTApplicationData
+		data = conn.serverCipher.Encrypt(CTHandshake, data)
+	}
+
+	return conn.WriteRecord(ct, data)
 }
 
 // ServerHandshake runs the server handshake protocol.
@@ -231,10 +239,6 @@ func (conn *Connection) ServerHandshake() error {
 		LegacySessionID: conn.clientHello.LegacySessionID,
 		CipherSuite:     conn.cipherSuites[0],
 		Extensions: []Extension{
-			// XXX Other extensions (see Section 4.2) are sent
-			// separately in the EncryptedExtensions message.
-			//NewExtension(ETSignatureAlgorithms,
-			//SigSchemeEcdsaSecp256r1Sha256),
 			Extension{
 				Type: ETSupportedVersions,
 				Data: VersionTLS13.Bytes(),
@@ -263,6 +267,29 @@ func (conn *Connection) ServerHandshake() error {
 	err = conn.deriveServerHandshakeKeys()
 	if err != nil {
 		return err
+	}
+
+	// Nothing to send but this is mandatory.
+	msg := &EncryptedExtensions{
+		Extensions: []Extension{
+			//NewExtension(ETSignatureAlgorithms,
+			// SigSchemeEcdsaSecp256r1Sha256),
+		},
+	}
+	data, err = Marshal(msg)
+	if err != nil {
+		return conn.internalErrorf("marshal failed: %v", err)
+	}
+	fmt.Printf(" > EncryptedExtensions: %v bytes\n", len(data))
+
+	err = conn.writeHandshakeMsg(HTEncryptedExtensions, data)
+	if err != nil {
+		return conn.internalErrorf("write failed: %v", err)
+	}
+
+	for i := 0; i < 0; i++ {
+		c := conn.serverCipher.Encrypt(CTHandshake, []byte("Hello, world!"))
+		fmt.Printf("c%02x: %x\n", i, c)
 	}
 
 	for {
