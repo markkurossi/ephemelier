@@ -14,18 +14,6 @@ import (
 	"github.com/markkurossi/ephemelier/crypto/hkdf"
 )
 
-// HKDF-Extract as per RFC 5869
-func hkdfExtract(salt, ikm []byte) []byte {
-	if salt == nil {
-		salt = make([]byte, sha256.Size)
-	}
-	hash := sha256.New
-	extractor := hkdf.New(hash, ikm, salt, nil)
-	prk := make([]byte, sha256.Size)
-	extractor.Read(prk)
-	return prk
-}
-
 // HKDF-Expand-Label as per TLS 1.3 spec: 7.1. Key Schedule, page 91
 func hkdfExpandLabel(secret []byte, label string, context []byte,
 	length int) []byte {
@@ -61,12 +49,6 @@ func hkdfExpandLabel(secret []byte, label string, context []byte,
 	out := make([]byte, length)
 	io.ReadFull(expander, out)
 	return out
-}
-
-// Derive secret using HKDF-Expand-Label
-func deriveSecretX(secret []byte, label string, messages []byte) []byte {
-	hash := sha256.Sum256(messages)
-	return hkdfExpandLabel(secret, label, hash[:], sha256.Size)
 }
 
 // Derive secret using HKDF-Expand-Label
