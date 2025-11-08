@@ -26,6 +26,10 @@ This implementation will implement:
  - `ecdsa_secp256r1_sha256`
  - `secp256r1`
 
+
+Distributed ECDH with Additive Sharing
+Additive (n-out-of-n) Secret Sharing for Distributed ECDH
+
 ### ClientHello Default Proposals `key_share`
 
  - OpenSSL  : X25519MLKEM768[1216] x25519[32]

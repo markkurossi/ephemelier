@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"net"
 )
 
@@ -40,14 +41,17 @@ type Connection struct {
 	rbuf       []byte
 	curve      ecdh.Curve
 	privateKey *ecdh.PrivateKey
+	clientPub  *ecdh.PublicKey
 
 	// KEX.
+	transcript       hash.Hash
 	clientHello      *ClientHello
 	versions         []ProtocolVersion
 	cipherSuites     []CipherSuite
 	groups           []NamedGroup
 	signatureSchemes []SignatureScheme
 	clientKEX        *KeyShareEntry
+	sharedSecret     []byte
 }
 
 // NewConnection creates a new TLS connection for the argument conn.
@@ -94,6 +98,10 @@ func (conn *Connection) writeHandshakeMsg(ht HandshakeType, data []byte) error {
 	typeLen := uint32(ht)<<24 | uint32(len(data)-4)
 	bo.PutUint32(data[0:4], typeLen)
 
+	conn.transcript.Write(data)
+
+	// XXX encryption here if we have cipher suite.
+
 	return conn.WriteRecord(CTHandshake, data)
 }
 
@@ -131,18 +139,34 @@ func (conn *Connection) ServerHandshake() error {
 	if err != nil {
 		return err
 	}
+
+	// Init transcript.
+	conn.transcript = conn.cipherSuites[0].Hash()
+	conn.transcript.Write(data)
+
 	if conn.clientKEX == nil {
 		// No matching group, send HelloRetryRequest.
+
+		// ClientHello1 is replaced with a special synthetic handshake
+		// message.
+
+		var hdr [4]byte
+		hdr[0] = byte(HTMessageHash)
+		hdr[3] = byte(conn.transcript.Size())
+
+		digest := conn.transcript.Sum(nil)
+
+		conn.transcript.Reset()
+		conn.transcript.Write(hdr[:])
+		conn.transcript.Write(digest)
+
+		// Create HelloRetryRequest message.
 		req := &ServerHello{
 			LegacyVersion:   VersionTLS12,
 			Random:          HelloRetryRequestRandom,
 			LegacySessionID: conn.clientHello.LegacySessionID,
 			CipherSuite:     conn.cipherSuites[0],
 			Extensions: []Extension{
-				// XXX Other extensions (see Section 4.2) are sent
-				// separately in the EncryptedExtensions message.
-				//NewExtension(ETSignatureAlgorithms,
-				//SigSchemeEcdsaSecp256r1Sha256),
 				Extension{
 					Type: ETSupportedVersions,
 					Data: VersionTLS13.Bytes(),
@@ -153,11 +177,12 @@ func (conn *Connection) ServerHandshake() error {
 				},
 			},
 		}
-		fmt.Printf("HelloRetryRequest: %v\n", req)
 		data, err = Marshal(req)
 		if err != nil {
 			return conn.internalErrorf("marshal failed: %v", err)
 		}
+		fmt.Printf(" > HelloRetryRequest: %v bytes\n", len(data))
+
 		err = conn.writeHandshakeMsg(HTServerHello, data)
 		if err != nil {
 			return conn.internalErrorf("write failed: %v", err)
@@ -172,6 +197,8 @@ func (conn *Connection) ServerHandshake() error {
 		if err != nil {
 			return err
 		}
+		conn.transcript.Write(data)
+
 		if conn.clientKEX == nil {
 			return conn.alert(AlertHandshakeFailure)
 		}
@@ -183,6 +210,16 @@ func (conn *Connection) ServerHandshake() error {
 	conn.privateKey, err = conn.curve.GenerateKey(rand.Reader)
 	if err != nil {
 		return conn.internalErrorf("error creating private key: %v", err)
+	}
+
+	// Decode client's public key.
+	conn.clientPub, err = conn.curve.NewPublicKey(conn.clientKEX.KeyExchange)
+	if err != nil {
+		return conn.decodeErrorf("invalid client public key")
+	}
+	conn.sharedSecret, err = conn.privateKey.ECDH(conn.clientPub)
+	if err != nil {
+		return conn.decodeErrorf("ECDH failed")
 	}
 
 	keyShare := &KeyShareEntry{
@@ -212,15 +249,20 @@ func (conn *Connection) ServerHandshake() error {
 	if err != nil {
 		return conn.internalErrorf("failed to create random: %v", err)
 	}
-	fmt.Printf("ServerHello: %v\n", req)
 	data, err = Marshal(req)
 	if err != nil {
 		return conn.internalErrorf("marshal failed: %v", err)
 	}
+	fmt.Printf(" > ServerHello: %v bytes\n", len(data))
 
 	err = conn.writeHandshakeMsg(HTServerHello, data)
 	if err != nil {
 		return conn.internalErrorf("write failed: %v", err)
+	}
+
+	err = conn.deriveServerHandshakeKeys()
+	if err != nil {
+		return err
 	}
 
 	for {
@@ -280,7 +322,7 @@ func (conn *Connection) recvClientHello(data []byte) error {
 			len(data)-consumed)
 	}
 
-	conn.Debugf("client_hello:\n")
+	conn.Debugf(" < client_hello:\n")
 	conn.Debugf(" - random: %x\n", conn.clientHello.Random)
 
 	conn.Debugf(" - cipher_suites: {")
@@ -397,11 +439,11 @@ func (conn *Connection) recvClientHello(data []byte) error {
 	}
 	conn.Debugf("   }\n")
 
-	fmt.Printf("versions        : %v\n", conn.versions)
-	fmt.Printf("cipherSuites    : %v\n", conn.cipherSuites)
-	fmt.Printf("groups          : %v\n", conn.groups)
-	fmt.Printf("signatureSchemes: %v\n", conn.signatureSchemes)
-	fmt.Printf("clientKEX       : %v\n", conn.clientKEX)
+	fmt.Printf(" - versions        : %v\n", conn.versions)
+	fmt.Printf(" - cipherSuites    : %v\n", conn.cipherSuites)
+	fmt.Printf(" - groups          : %v\n", conn.groups)
+	fmt.Printf(" - signatureSchemes: %v\n", conn.signatureSchemes)
+	fmt.Printf(" - clientKEX       : %v\n", conn.clientKEX)
 
 	if len(conn.versions) == 0 {
 		return conn.alert(AlertProtocolVersion)
@@ -476,15 +518,11 @@ func (conn *Connection) ReadRecord() (ContentType, []byte, error) {
 		}
 		i += n
 	}
-	fmt.Printf("Record:\n")
-
 	ct := ContentType(conn.rbuf[0])
 	legacyVersion := ProtocolVersion(bo.Uint16(conn.rbuf[1:3]))
 	length := int(bo.Uint16(conn.rbuf[3:5]))
 
-	fmt.Printf(" - ContentType    : %v\n", ct)
-	fmt.Printf(" - ProtocolVersion: %v\n", legacyVersion)
-	fmt.Printf(" - length         : %v\n", length)
+	fmt.Printf("<< %s %s[%d]\n", legacyVersion, ct, length)
 
 	for i := 0; i < length; {
 		n, err := conn.conn.Read(conn.rbuf[i:length])
@@ -509,7 +547,7 @@ func (conn *Connection) WriteRecord(ct ContentType, data []byte) error {
 	bo.PutUint16(hdr[1:3], uint16(VersionTLS12))
 	bo.PutUint16(hdr[3:5], uint16(len(data)))
 
-	fmt.Printf("WriteRecord: hdr:\n%s", hex.Dump(hdr[:]))
+	fmt.Printf(">> WriteRecord: %v[%d]\n", ct, len(data))
 
 	_, err := conn.conn.Write(hdr[:])
 	if err != nil {

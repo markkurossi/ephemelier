@@ -106,6 +106,8 @@ const (
 	_
 	_
 	HTKeyUpdate
+
+	HTMessageHash HandshakeType = 254
 )
 
 func (ht HandshakeType) String() string {
@@ -127,6 +129,7 @@ var handshakeTypes = map[HandshakeType]string{
 	HTCertificateVerify:   "certificate_verify",
 	HTFinished:            "finished",
 	HTKeyUpdate:           "key_update",
+	HTMessageHash:         "message_hash",
 }
 
 // ClientHello implements the client_hello message.
