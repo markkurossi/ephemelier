@@ -76,23 +76,21 @@ func (conn *Connection) deriveServerHandshakeKeys() error {
 
 	// Derive handshake traffic secrets.
 	transcript := conn.transcript.Sum(nil)
-	clientHandshakeTrafficSecret := deriveSecret(handshakeSecret,
-		"c hs traffic", transcript)
-	serverHandshakeTrafficSecret := deriveSecret(handshakeSecret,
-		"s hs traffic", transcript)
-	fmt.Printf("   c-hs-tr  : %x\n", clientHandshakeTrafficSecret)
-	fmt.Printf("   s-hs-tr  : %x\n", serverHandshakeTrafficSecret)
+	conn.clientHSTr = deriveSecret(handshakeSecret, "c hs traffic", transcript)
+	conn.serverHSTr = deriveSecret(handshakeSecret, "s hs traffic", transcript)
+	fmt.Printf("   c-hs-tr  : %x\n", conn.clientHSTr)
+	fmt.Printf("   s-hs-tr  : %x\n", conn.serverHSTr)
 
 	// Derive keys and IVs from traffic secrets.
 
-	clientHSKey := hkdfExpandLabel(clientHandshakeTrafficSecret, "key", nil, 16)
-	clientHSIV := hkdfExpandLabel(clientHandshakeTrafficSecret, "iv", nil, 12)
+	clientHSKey := hkdfExpandLabel(conn.clientHSTr, "key", nil, 16)
+	clientHSIV := hkdfExpandLabel(conn.clientHSTr, "iv", nil, 12)
 
 	fmt.Printf("   c-hs-key : %x\n", clientHSKey)
 	fmt.Printf("   c-hs-iv  : %x\n", clientHSIV)
 
-	serverHSKey := hkdfExpandLabel(serverHandshakeTrafficSecret, "key", nil, 16)
-	serverHSIV := hkdfExpandLabel(serverHandshakeTrafficSecret, "iv", nil, 12)
+	serverHSKey := hkdfExpandLabel(conn.serverHSTr, "key", nil, 16)
+	serverHSIV := hkdfExpandLabel(conn.serverHSTr, "iv", nil, 12)
 
 	fmt.Printf("   s-hs-key : %x\n", serverHSKey)
 	fmt.Printf("   s-hs-iv  : %x\n", serverHSIV)

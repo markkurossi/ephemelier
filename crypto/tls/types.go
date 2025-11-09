@@ -163,9 +163,30 @@ var HelloRetryRequestRandom = [32]byte{
 	0x07, 0x9E, 0x09, 0xE2, 0xC8, 0xA8, 0x33, 0x9C,
 }
 
+// EncryptedExtensions implements the encrypted_extensions handshake
+// message.
 type EncryptedExtensions struct {
 	HandshakeTypeLen uint32
 	Extensions       []Extension `tls:"u16"`
+}
+
+// Certificate implements the certificate handshake message.
+type Certificate struct {
+	HandshakeTypeLen          uint32
+	CertificateRequestContext []byte             `tls:"u8"`
+	CertificateList           []CertificateEntry `tls:"u24"`
+}
+
+// CertificateEntry defines a certificate entry in the Certificate
+// message.
+type CertificateEntry struct {
+	Data       []byte      `tls:"u24"`
+	Extensions []Extension `tls:"u16"`
+}
+
+// Finished implements the finished handshake message.
+type Finished struct {
+	VerifyData [32]byte
 }
 
 // CipherSuite defines cipher suites.

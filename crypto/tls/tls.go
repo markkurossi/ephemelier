@@ -8,7 +8,9 @@ package tls
 
 import (
 	"crypto/ecdh"
+	"crypto/ecdsa"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -37,11 +39,11 @@ var (
 
 // Connection implements a TLS connection.
 type Connection struct {
-	conn       net.Conn
-	rbuf       []byte
-	curve      ecdh.Curve
-	privateKey *ecdh.PrivateKey
-	clientPub  *ecdh.PublicKey
+	conn net.Conn
+	rbuf []byte
+
+	serverKey  *ecdsa.PrivateKey
+	serverCert *x509.Certificate
 
 	// KEX.
 	transcript       hash.Hash
@@ -52,6 +54,8 @@ type Connection struct {
 	signatureSchemes []SignatureScheme
 	clientKEX        *KeyShareEntry
 	sharedSecret     []byte
+	clientHSTr       []byte
+	serverHSTr       []byte
 
 	serverCipher *Cipher
 	clientCipher *Cipher
@@ -114,7 +118,9 @@ func (conn *Connection) writeHandshakeMsg(ht HandshakeType, data []byte) error {
 }
 
 // ServerHandshake runs the server handshake protocol.
-func (conn *Connection) ServerHandshake() error {
+func (conn *Connection) ServerHandshake(key *ecdsa.PrivateKey,
+	cert *x509.Certificate) error {
+
 	//  Client                                               Server
 	//
 	//  ClientHello
@@ -138,6 +144,9 @@ func (conn *Connection) ServerHandshake() error {
 	//
 	//       Figure 2: Message Flow for a Full Handshake with
 	//                     Mismatched Parameters
+
+	conn.serverKey = key
+	conn.serverCert = cert
 
 	_, data, err := conn.readHandshakeMsg()
 	if err != nil {
@@ -214,25 +223,25 @@ func (conn *Connection) ServerHandshake() error {
 
 	// ServerHello
 
-	conn.curve = ecdh.P256()
-	conn.privateKey, err = conn.curve.GenerateKey(rand.Reader)
+	ecdhCurve := ecdh.P256()
+	ecdhPriv, err := ecdhCurve.GenerateKey(rand.Reader)
 	if err != nil {
 		return conn.internalErrorf("error creating private key: %v", err)
 	}
 
 	// Decode client's public key.
-	conn.clientPub, err = conn.curve.NewPublicKey(conn.clientKEX.KeyExchange)
+	ecdhClientPub, err := ecdhCurve.NewPublicKey(conn.clientKEX.KeyExchange)
 	if err != nil {
 		return conn.decodeErrorf("invalid client public key")
 	}
-	conn.sharedSecret, err = conn.privateKey.ECDH(conn.clientPub)
+	conn.sharedSecret, err = ecdhPriv.ECDH(ecdhClientPub)
 	if err != nil {
 		return conn.decodeErrorf("ECDH failed")
 	}
 
 	keyShare := &KeyShareEntry{
 		Group:       GroupSecp256r1,
-		KeyExchange: conn.privateKey.PublicKey().Bytes(),
+		KeyExchange: ecdhPriv.PublicKey().Bytes(),
 	}
 	req := &ServerHello{
 		LegacyVersion:   VersionTLS12,
@@ -269,7 +278,7 @@ func (conn *Connection) ServerHandshake() error {
 		return err
 	}
 
-	// Nothing to send but this is mandatory.
+	// EncryptedExtensions.
 	msg := &EncryptedExtensions{
 		Extensions: []Extension{
 			//NewExtension(ETSignatureAlgorithms,
@@ -281,8 +290,44 @@ func (conn *Connection) ServerHandshake() error {
 		return conn.internalErrorf("marshal failed: %v", err)
 	}
 	fmt.Printf(" > EncryptedExtensions: %v bytes\n", len(data))
-
 	err = conn.writeHandshakeMsg(HTEncryptedExtensions, data)
+	if err != nil {
+		return conn.internalErrorf("write failed: %v", err)
+	}
+
+	// Certificate.
+	msgCertificate := &Certificate{
+		CertificateList: []CertificateEntry{
+			CertificateEntry{
+				Data: conn.serverCert.Raw,
+			},
+		},
+	}
+	data, err = Marshal(msgCertificate)
+	if err != nil {
+		return conn.internalErrorf("marshal failed: %v", err)
+	}
+	fmt.Printf(" > Certificate: %v bytes\n%v", len(data), hex.Dump(data))
+	err = conn.writeHandshakeMsg(HTCertificate, data)
+	if err != nil {
+		return conn.internalErrorf("write failed: %v", err)
+	}
+
+	// XXX CertificateVerify
+
+	// Finished.
+	var verifyData [32]byte
+	copy(verifyData[0:], conn.transcript.Sum(nil))
+	finished := &Finished{
+		VerifyData: verifyData,
+	}
+	data, err = Marshal(finished)
+	if err != nil {
+		return conn.internalErrorf("marshal failed: %v", err)
+	}
+	fmt.Printf(" > Finished: %v bytes\n", len(data))
+
+	err = conn.writeHandshakeMsg(HTFinished, data)
 	if err != nil {
 		return conn.internalErrorf("write failed: %v", err)
 	}
