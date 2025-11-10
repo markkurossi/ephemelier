@@ -184,9 +184,18 @@ type CertificateEntry struct {
 	Extensions []Extension `tls:"u16"`
 }
 
+// CertificateVerify implements the certificate_verify handshake
+// message.
+type CertificateVerify struct {
+	HandshakeTypeLen uint32
+	Algorithm        SignatureScheme
+	Signature        []byte `tls:"u16"`
+}
+
 // Finished implements the finished handshake message.
 type Finished struct {
-	VerifyData [32]byte
+	HandshakeTypeLen uint32
+	VerifyData       [32]byte
 }
 
 // CipherSuite defines cipher suites.

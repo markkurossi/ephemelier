@@ -307,19 +307,40 @@ func (conn *Connection) ServerHandshake(key *ecdsa.PrivateKey,
 	if err != nil {
 		return conn.internalErrorf("marshal failed: %v", err)
 	}
-	fmt.Printf(" > Certificate: %v bytes\n%v", len(data), hex.Dump(data))
+	fmt.Printf(" > Certificate: %v bytes\n", len(data))
 	err = conn.writeHandshakeMsg(HTCertificate, data)
 	if err != nil {
 		return conn.internalErrorf("write failed: %v", err)
 	}
 
-	// XXX CertificateVerify
+	// CertificateVerify.
+	signature, err := conn.serverCertificateVerify()
+	if err != nil {
+		return conn.internalErrorf("signature failed: %v", err)
+	}
+	msgCertVerify := &CertificateVerify{
+		Algorithm: conn.signatureSchemes[0],
+		Signature: signature,
+	}
+	data, err = Marshal(msgCertVerify)
+	if err != nil {
+		return conn.internalErrorf("marshal failed: %v", err)
+	}
+	fmt.Printf(" > CertificateVerify: %v bytes\n", len(data))
+	err = conn.writeHandshakeMsg(HTCertificateVerify, data)
+	if err != nil {
+		return conn.internalErrorf("write failed: %v", err)
+	}
 
 	// Finished.
-	var verifyData [32]byte
-	copy(verifyData[0:], conn.transcript.Sum(nil))
+	verifyData, err := conn.finished()
+	if err != nil {
+		return conn.internalErrorf("finished failed: %v", err)
+	}
+	var vd32 [32]byte
+	copy(vd32[0:], verifyData)
 	finished := &Finished{
-		VerifyData: verifyData,
+		VerifyData: vd32,
 	}
 	data, err = Marshal(finished)
 	if err != nil {
@@ -332,10 +353,7 @@ func (conn *Connection) ServerHandshake(key *ecdsa.PrivateKey,
 		return conn.internalErrorf("write failed: %v", err)
 	}
 
-	for i := 0; i < 0; i++ {
-		c := conn.serverCipher.Encrypt(CTHandshake, []byte("Hello, world!"))
-		fmt.Printf("c%02x: %x\n", i, c)
-	}
+	fmt.Printf("*** Finished!\n")
 
 	for {
 		ct, data, err := conn.ReadRecord()
@@ -359,6 +377,7 @@ func (conn *Connection) ServerHandshake(key *ecdsa.PrivateKey,
 				return err
 			}
 		default:
+			fmt.Printf("??? here\n")
 			return conn.illegalParameterf("unexpected record %v", ct)
 		}
 	}

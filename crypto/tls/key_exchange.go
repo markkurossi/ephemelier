@@ -7,8 +7,11 @@
 package tls
 
 import (
+	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -107,6 +110,34 @@ func (conn *Connection) deriveServerHandshakeKeys() error {
 	}
 
 	return nil
+}
+
+var (
+	serverSignatureCtx = []byte("TLS 1.3, server CertificateVerify")
+	clientSignatureCtx = []byte("TLS 1.3, client CertificateVerify")
+)
+
+func (conn *Connection) serverCertificateVerify() ([]byte, error) {
+	data := make([]byte, 0, 64+len(serverSignatureCtx)+1+conn.transcript.Size())
+
+	for i := 0; i < 64; i++ {
+		data = append(data, 32)
+	}
+	data = append(data, serverSignatureCtx...)
+	data = append(data, 0)
+	data = conn.transcript.Sum(data)
+
+	sum := sha256.Sum256(data)
+
+	return conn.serverKey.Sign(rand.Reader, sum[:], crypto.SHA256)
+}
+
+func (conn *Connection) finished() ([]byte, error) {
+	finishedKey := hkdfExpandLabel(conn.serverHSTr, "finished", nil,
+		sha256.Size)
+	hash := hmac.New(sha256.New, finishedKey)
+	hash.Write(conn.transcript.Sum(nil))
+	return hash.Sum(nil), nil
 }
 
 // Cipher implements an AEAD cipher instance.
