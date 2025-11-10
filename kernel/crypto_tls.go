@@ -53,6 +53,20 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 		return err
 	}
 
+	var buf [4096]byte
+
+	n, err := conn.Read(buf[:])
+	if err != nil {
+		return err
+	}
+	_ = n
+
+	n, err = conn.Write([]byte("Hello, world!"))
+	if err != nil {
+		return err
+	}
+	_ = n
+
 	sys.SetArg0(-1)
 	return nil
 }

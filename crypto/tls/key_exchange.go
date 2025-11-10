@@ -13,6 +13,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 
@@ -73,14 +74,16 @@ func (conn *Connection) deriveServerHandshakeKeys() error {
 	derivedSecret := deriveSecret(earlySecret, "derived", emptyHash[:])
 	fmt.Printf("   derived  : %x\n", derivedSecret)
 
-	handshakeSecret := hkdf.Extract(sha256.New, conn.sharedSecret,
+	conn.handshakeSecret = hkdf.Extract(sha256.New, conn.sharedSecret,
 		derivedSecret)
-	fmt.Printf("   handshake: %x\n", handshakeSecret)
+	fmt.Printf("   handshake: %x\n", conn.handshakeSecret)
 
 	// Derive handshake traffic secrets.
 	transcript := conn.transcript.Sum(nil)
-	conn.clientHSTr = deriveSecret(handshakeSecret, "c hs traffic", transcript)
-	conn.serverHSTr = deriveSecret(handshakeSecret, "s hs traffic", transcript)
+	conn.clientHSTr = deriveSecret(conn.handshakeSecret, "c hs traffic",
+		transcript)
+	conn.serverHSTr = deriveSecret(conn.handshakeSecret, "s hs traffic",
+		transcript)
 	fmt.Printf("   c-hs-tr  : %x\n", conn.clientHSTr)
 	fmt.Printf("   s-hs-tr  : %x\n", conn.serverHSTr)
 
@@ -98,6 +101,8 @@ func (conn *Connection) deriveServerHandshakeKeys() error {
 	fmt.Printf("   s-hs-key : %x\n", serverHSKey)
 	fmt.Printf("   s-hs-iv  : %x\n", serverHSIV)
 
+	// Instantiate handshake keys.
+
 	var err error
 
 	conn.serverCipher, err = NewCipher(serverHSKey, serverHSIV)
@@ -105,6 +110,51 @@ func (conn *Connection) deriveServerHandshakeKeys() error {
 		return err
 	}
 	conn.clientCipher, err = NewCipher(clientHSKey, clientHSIV)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (conn *Connection) deriveKeys() error {
+	zeroHash := make([]byte, sha256.Size)
+	emptyHash := sha256.Sum256([]byte{})
+
+	derivedSecret := deriveSecret(conn.handshakeSecret, "derived", emptyHash[:])
+	fmt.Printf("   derived  : %x\n", derivedSecret)
+
+	masterSecret := hkdf.Extract(sha256.New, zeroHash, derivedSecret)
+	fmt.Printf("   master   : %x\n", masterSecret)
+
+	// Derive application traffic secrets.
+	transcript := conn.transcript.Sum(nil)
+	clientAppTr := deriveSecret(masterSecret, "c ap traffic", transcript)
+	serverAppTr := deriveSecret(masterSecret, "s ap traffic", transcript)
+
+	// Derive keys and IVs from traffic secrets.
+
+	clientAppKey := hkdfExpandLabel(clientAppTr, "key", nil, 16)
+	clientAppIV := hkdfExpandLabel(clientAppTr, "iv", nil, 12)
+
+	fmt.Printf("   c-app-key: %x\n", clientAppKey)
+	fmt.Printf("   c-app-iv : %x\n", clientAppIV)
+
+	serverAppKey := hkdfExpandLabel(serverAppTr, "key", nil, 16)
+	serverAppIV := hkdfExpandLabel(serverAppTr, "iv", nil, 12)
+
+	fmt.Printf("   s-app-key: %x\n", serverAppKey)
+	fmt.Printf("   s-app-iv : %x\n", serverAppIV)
+
+	// Instantiate application keys.
+
+	var err error
+
+	conn.serverCipher, err = NewCipher(serverAppKey, serverAppIV)
+	if err != nil {
+		return err
+	}
+	conn.clientCipher, err = NewCipher(clientAppKey, clientAppIV)
 	if err != nil {
 		return err
 	}
@@ -132,12 +182,17 @@ func (conn *Connection) serverCertificateVerify() ([]byte, error) {
 	return conn.serverKey.Sign(rand.Reader, sum[:], crypto.SHA256)
 }
 
-func (conn *Connection) finished() ([]byte, error) {
-	finishedKey := hkdfExpandLabel(conn.serverHSTr, "finished", nil,
-		sha256.Size)
+func (conn *Connection) finished(server bool) []byte {
+	var baseKey []byte
+	if server {
+		baseKey = conn.serverHSTr
+	} else {
+		baseKey = conn.clientHSTr
+	}
+	finishedKey := hkdfExpandLabel(baseKey, "finished", nil, sha256.Size)
 	hash := hmac.New(sha256.New, finishedKey)
 	hash.Write(conn.transcript.Sum(nil))
-	return hash.Sum(nil), nil
+	return hash.Sum(nil)
 }
 
 // Cipher implements an AEAD cipher instance.
@@ -194,7 +249,35 @@ func (cipher *Cipher) Encrypt(ct ContentType, data []byte) []byte {
 	bo.PutUint16(hdr[3:5], uint16(cipherLen))
 
 	// IV.
+	iv := cipher.IV()
 
+	return cipher.cipher.Seal(nil, iv, plaintext, hdr[:])
+}
+
+// Decrypt decrypts the data and returns its content type and
+// decrypted content.
+func (cipher *Cipher) Decrypt(data []byte) (ContentType, []byte, error) {
+	// Additional data is the TLS record header.
+	var hdr [5]byte
+	hdr[0] = byte(CTApplicationData)
+	bo.PutUint16(hdr[1:3], uint16(VersionTLS12))
+	bo.PutUint16(hdr[3:5], uint16(len(data)))
+
+	iv := cipher.IV()
+
+	plain, err := cipher.cipher.Open(nil, iv, data, hdr[:])
+	if err != nil {
+		return CTInvalid, nil, err
+	}
+
+	// XXX padding
+	fmt.Printf("plain:\n%s", hex.Dump(plain))
+
+	return ContentType(plain[len(plain)-1]), plain[:len(plain)-1], nil
+}
+
+// IV creates the IV for the next encrypt/decrypt operation.
+func (cipher *Cipher) IV() []byte {
 	iv := make([]byte, len(cipher.iv))
 	copy(iv, cipher.iv)
 
@@ -206,9 +289,5 @@ func (cipher *Cipher) Encrypt(ct ContentType, data []byte) []byte {
 		iv[len(iv)-len(seq)+i] ^= seq[i]
 	}
 
-	fmt.Printf("iv : %x\n", cipher.iv)
-	fmt.Printf("seq:         %x\n", seq[:])
-	fmt.Printf(" =>: %x\n", iv)
-
-	return cipher.cipher.Seal(nil, iv, plaintext, hdr[:])
+	return iv
 }

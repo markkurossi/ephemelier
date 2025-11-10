@@ -7,6 +7,7 @@
 package tls
 
 import (
+	"bytes"
 	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/rand"
@@ -45,7 +46,8 @@ type Connection struct {
 	serverKey  *ecdsa.PrivateKey
 	serverCert *x509.Certificate
 
-	// KEX.
+	// Handshake.
+	handshakeState   HandshakeState
 	transcript       hash.Hash
 	clientHello      *ClientHello
 	versions         []ProtocolVersion
@@ -54,11 +56,38 @@ type Connection struct {
 	signatureSchemes []SignatureScheme
 	clientKEX        *KeyShareEntry
 	sharedSecret     []byte
+	handshakeSecret  []byte
 	clientHSTr       []byte
 	serverHSTr       []byte
 
 	serverCipher *Cipher
 	clientCipher *Cipher
+}
+
+// HandshakeState defines the connection's handshake state.
+type HandshakeState uint8
+
+// Handshake states.
+const (
+	HSClientHello HandshakeState = iota
+	HSServerHello
+	HSServerDone
+	HSDone
+)
+
+func (hs HandshakeState) String() string {
+	name, ok := handshakeStates[hs]
+	if ok {
+		return name
+	}
+	return fmt.Sprintf("{HandshakeState %d}", int(hs))
+}
+
+var handshakeStates = map[HandshakeState]string{
+	HSClientHello: "client_hello",
+	HSServerHello: "server_hello",
+	HSServerDone:  "server_done",
+	HSDone:        "done",
 }
 
 // NewConnection creates a new TLS connection for the argument conn.
@@ -80,6 +109,16 @@ func (conn *Connection) readHandshakeMsg() (ContentType, []byte, error) {
 		if err != nil {
 			return CTInvalid, nil, err
 		}
+		if ct == CTApplicationData {
+			if conn.clientCipher == nil {
+				return CTInvalid, nil, fmt.Errorf("unexpected %v message", ct)
+			}
+			ct, data, err = conn.clientCipher.Decrypt(data)
+			if err != nil {
+				return CTInvalid, nil, err
+			}
+		}
+
 		switch ct {
 		case CTChangeCipherSpec:
 			err = conn.recvChangeCipherSpec(data)
@@ -220,6 +259,7 @@ func (conn *Connection) ServerHandshake(key *ecdsa.PrivateKey,
 			return conn.alert(AlertHandshakeFailure)
 		}
 	}
+	conn.handshakeState = HSServerHello
 
 	// ServerHello
 
@@ -333,10 +373,7 @@ func (conn *Connection) ServerHandshake(key *ecdsa.PrivateKey,
 	}
 
 	// Finished.
-	verifyData, err := conn.finished()
-	if err != nil {
-		return conn.internalErrorf("finished failed: %v", err)
-	}
+	verifyData := conn.finished(true)
 	var vd32 [32]byte
 	copy(vd32[0:], verifyData)
 	finished := &Finished{
@@ -347,40 +384,58 @@ func (conn *Connection) ServerHandshake(key *ecdsa.PrivateKey,
 		return conn.internalErrorf("marshal failed: %v", err)
 	}
 	fmt.Printf(" > Finished: %v bytes\n", len(data))
-
 	err = conn.writeHandshakeMsg(HTFinished, data)
 	if err != nil {
 		return conn.internalErrorf("write failed: %v", err)
 	}
+	conn.handshakeState = HSServerDone
 
-	fmt.Printf("*** Finished!\n")
+	// Server handshake done. We could not derive the server
+	// application keys but since we won't send any data before the
+	// client handshake is finished below, we can derive the
+	// application keys once the handshake is complete. Please, note
+	// that the client Finished is encrypted with the handshake keys.
 
-	for {
-		ct, data, err := conn.ReadRecord()
+	// Server handshake done. Read client messages until Finished to
+	// complete the handshake.
+	for conn.handshakeState != HSDone {
+		_, data, err := conn.readHandshakeMsg()
+		err = conn.recvClientHandshake(data)
 		if err != nil {
 			return err
 		}
-		switch ct {
-		case CTHandshake:
-			err := conn.recvClientHandshake(data)
-			if err != nil {
-				return err
-			}
-		case CTChangeCipherSpec:
-			err := conn.recvChangeCipherSpec(data)
-			if err != nil {
-				return err
-			}
-		case CTAlert:
-			err := conn.recvAlert(data)
-			if err != nil {
-				return err
-			}
-		default:
-			fmt.Printf("??? here\n")
-			return conn.illegalParameterf("unexpected record %v", ct)
-		}
 	}
+
+	err = conn.deriveKeys()
+	if err != nil {
+		return conn.internalErrorf("key derivation failed: %v", err)
+	}
+
+	return nil
+}
+
+func (conn *Connection) Read(p []byte) (n int, err error) {
+	ct, data, err := conn.ReadRecord()
+	if err != nil {
+		return 0, err
+	}
+	fmt.Printf("ct=%v, data=%x\n", ct, data)
+	ct, data, err = conn.clientCipher.Decrypt(data)
+	if err != nil {
+		return 0, err
+	}
+	fmt.Printf("ct=%v, data:\n%s", ct, hex.Dump(data))
+
+	return 0, nil
+}
+
+func (conn *Connection) Write(p []byte) (int, error) {
+	cipher := conn.serverCipher.Encrypt(CTApplicationData, p)
+	err := conn.WriteRecord(CTApplicationData, cipher)
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
 func (conn *Connection) recvClientHandshake(data []byte) error {
@@ -395,11 +450,19 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 			"handshake length mismatch: got %v, expected %v",
 			length+4, len(data))
 	}
-	if ht != HTClientHello {
-		return conn.illegalParameterf("invalid handshake: got %v, expected %v",
-			ht, HTClientHello)
+	switch conn.handshakeState {
+	case HSClientHello:
+		if ht == HTClientHello {
+			return conn.recvClientHello(data)
+		}
+	case HSServerDone:
+		switch ht {
+		case HTFinished:
+			return conn.recvClientFinished(data)
+		}
 	}
-	return conn.recvClientHello(data)
+	return conn.illegalParameterf("%s: invalid handshake message: %v",
+		conn.handshakeState, ht)
 }
 
 func (conn *Connection) recvClientHello(data []byte) error {
@@ -543,6 +606,34 @@ func (conn *Connection) recvClientHello(data []byte) error {
 		len(conn.signatureSchemes) == 0 {
 		return conn.alert(AlertHandshakeFailure)
 	}
+
+	return nil
+}
+
+func (conn *Connection) recvClientFinished(data []byte) error {
+	var finished Finished
+
+	consumed, err := UnmarshalFrom(data, &finished)
+	if err != nil {
+		return err
+	}
+	if consumed != len(data) {
+		return conn.decodeErrorf("trailing data after client finished: len=%d",
+			len(data)-consumed)
+	}
+	conn.Debugf(" < finished:\n")
+	conn.Debugf(" - verify_data: %x\n", finished.VerifyData)
+
+	verifyData := conn.finished(false)
+	conn.Debugf(" - computed   : %x\n", verifyData)
+
+	if bytes.Compare(finished.VerifyData[:], verifyData) != 0 {
+		return conn.alert(AlertDecryptError)
+	}
+
+	// XXX derive traffic keys.
+
+	conn.handshakeState = HSDone
 
 	return nil
 }
