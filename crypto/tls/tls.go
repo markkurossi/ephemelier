@@ -115,7 +115,7 @@ func (conn *Connection) readHandshakeMsg() (ContentType, []byte, error) {
 			}
 			ct, data, err = conn.clientCipher.Decrypt(data)
 			if err != nil {
-				return CTInvalid, nil, err
+				return CTInvalid, nil, conn.alert(AlertBadRecordMAC)
 			}
 		}
 
@@ -415,19 +415,34 @@ func (conn *Connection) ServerHandshake(key *ecdsa.PrivateKey,
 }
 
 func (conn *Connection) Read(p []byte) (n int, err error) {
-	ct, data, err := conn.ReadRecord()
-	if err != nil {
-		return 0, err
-	}
-	// XXX switch by ct.
-	fmt.Printf("ct=%v, data=%x\n", ct, data)
-	ct, data, err = conn.clientCipher.Decrypt(data)
-	if err != nil {
-		return 0, err
-	}
-	fmt.Printf("ct=%v, data:\n%s", ct, hex.Dump(data))
+	for {
+		ct, data, err := conn.ReadRecord()
+		if err != nil {
+			return 0, err
+		}
+		if ct != CTApplicationData {
+			return 0, conn.alert(AlertUnexpectedMessage)
+		}
+		ct, data, err = conn.clientCipher.Decrypt(data)
+		if err != nil {
+			return 0, conn.alert(AlertBadRecordMAC)
+		}
+		switch ct {
+		case CTAlert:
+			err = conn.recvAlert(data)
+			if err != nil {
+				return 0, err
+			}
 
-	return 0, nil
+		case CTApplicationData:
+			// XXX check if len(p) < len(data)
+			fmt.Printf("ct=%v, data:\n%s", ct, hex.Dump(data))
+			return copy(p, data), nil
+
+		default:
+			return 0, conn.alert(AlertUnexpectedMessage)
+		}
+	}
 }
 
 func (conn *Connection) Write(p []byte) (int, error) {
@@ -672,6 +687,8 @@ func (conn *Connection) alert(desc AlertDescription) error {
 
 	buf[0] = byte(desc.Level())
 	buf[1] = byte(desc)
+
+	// XXX encrypted alerts after handshake
 
 	return conn.WriteRecord(CTAlert, buf[:])
 }
