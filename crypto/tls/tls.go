@@ -390,7 +390,7 @@ func (conn *Connection) ServerHandshake(key *ecdsa.PrivateKey,
 	}
 	conn.handshakeState = HSServerDone
 
-	// Server handshake done. We could not derive the server
+	// Server handshake done. We could now derive the server
 	// application keys but since we won't send any data before the
 	// client handshake is finished below, we can derive the
 	// application keys once the handshake is complete. Please, note
@@ -419,6 +419,7 @@ func (conn *Connection) Read(p []byte) (n int, err error) {
 	if err != nil {
 		return 0, err
 	}
+	// XXX switch by ct.
 	fmt.Printf("ct=%v, data=%x\n", ct, data)
 	ct, data, err = conn.clientCipher.Decrypt(data)
 	if err != nil {
@@ -457,6 +458,14 @@ func (conn *Connection) recvClientHandshake(data []byte) error {
 		}
 	case HSServerDone:
 		switch ht {
+		case HTCertificate:
+			conn.transcript.Write(data)
+			return conn.internalErrorf("client %v not implemented yet", ht)
+
+		case HTCertificateVerify:
+			conn.transcript.Write(data)
+			return conn.internalErrorf("client %v not implemented yet", ht)
+
 		case HTFinished:
 			return conn.recvClientFinished(data)
 		}
@@ -475,6 +484,12 @@ func (conn *Connection) recvClientHello(data []byte) error {
 		return conn.decodeErrorf("trailing data after client_hello: len=%v",
 			len(data)-consumed)
 	}
+
+	// Clear all negotiation parameters from the initial ClientHello.
+	conn.versions = nil
+	conn.cipherSuites = nil
+	conn.groups = nil
+	conn.signatureSchemes = nil
 
 	conn.Debugf(" < client_hello:\n")
 	conn.Debugf(" - random: %x\n", conn.clientHello.Random)
@@ -630,8 +645,6 @@ func (conn *Connection) recvClientFinished(data []byte) error {
 	if bytes.Compare(finished.VerifyData[:], verifyData) != 0 {
 		return conn.alert(AlertDecryptError)
 	}
-
-	// XXX derive traffic keys.
 
 	conn.handshakeState = HSDone
 

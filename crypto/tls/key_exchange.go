@@ -13,11 +13,15 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 
 	"github.com/markkurossi/ephemelier/crypto/hkdf"
+)
+
+var (
+	errUnexpectedMessage = errors.New("unexpected_message")
 )
 
 // HKDF-Expand-Label as per TLS 1.3 spec: 7.1. Key Schedule, page 91
@@ -270,10 +274,18 @@ func (cipher *Cipher) Decrypt(data []byte) (ContentType, []byte, error) {
 		return CTInvalid, nil, err
 	}
 
-	// XXX padding
-	fmt.Printf("plain:\n%s", hex.Dump(plain))
+	// Remove padding and resolve the original content type.
+	var end int
+	for end = len(plain) - 1; end > 0; end-- {
+		if plain[end] != 0 {
+			break
+		}
+	}
+	if end == 0 {
+		return CTInvalid, nil, errUnexpectedMessage
+	}
 
-	return ContentType(plain[len(plain)-1]), plain[:len(plain)-1], nil
+	return ContentType(plain[end]), plain[:end], nil
 }
 
 // IV creates the IV for the next encrypt/decrypt operation.
