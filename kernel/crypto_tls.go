@@ -59,7 +59,7 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 	if err != nil {
 		return err
 	}
-	_ = n
+	fmt.Printf("read: %s\n", buf[:n])
 
 	n, err = conn.Write([]byte("Hello, world!"))
 	if err != nil {
