@@ -125,3 +125,49 @@ func LoadKeyAndCert(keyPath, certPath string) (
 
 	return privateKey, cert, nil
 }
+
+// TLSAlertToErrno maps TLS 1.3 alerts to Errno codes.
+var TLSAlertToErrno = map[tls.AlertDescription]Errno{
+	// Clean closure - no error.
+	tls.AlertCloseNotify: 0,
+
+	// Protocol/format errors.
+	tls.AlertUnexpectedMessage:    EPROTO,          // Protocol error
+	tls.AlertBadRecordMAC:         EBADMSG,         // Bad message
+	tls.AlertRecordOverflow:       EMSGSIZE,        // Message too long
+	tls.AlertDecodeError:          EBADMSG,         // Bad message
+	tls.AlertIllegalParameter:     EINVAL,          // Invalid argument
+	tls.AlertProtocolVersion:      EPROTONOSUPPORT, // Protocol not supported
+	tls.AlertMissingExtension:     EPROTO,          // Protocol error
+	tls.AlertUnsupportedExtension: EOPNOTSUPP,      // Operation not supported
+	tls.AlertUnrecognizedName:     ENOENT,          // No such entry (SNI)
+
+	// Handshake failures.
+	tls.AlertHandshakeFailure:      ECONNABORTED, // Connection aborted
+	tls.AlertInappropriateFallback: EPROTO,       // Protocol error
+
+	// Certificate errors.
+	tls.AlertBadCertificate:               EAUTH,      // Authentication error
+	tls.AlertUnsupportedCertificate:       EOPNOTSUPP, // Operation not supported
+	tls.AlertCertificateRevoked:           EAUTH,      // Authentication error
+	tls.AlertCertificateExpired:           ETIMEDOUT,  // Timed out
+	tls.AlertCertificateUnknown:           EAUTH,      // Authentication error
+	tls.AlertUnknownCA:                    EAUTH,      // Authentication error
+	tls.AlertCertificateRequired:          EAUTH,      // Authentication error
+	tls.AlertBadCertificateStatusResponse: EAUTH,      // Authentication error
+
+	// Access/permission errors.
+	tls.AlertAccessDenied: EACCES, // Permission denied
+
+	// Security errors.
+	tls.AlertDecryptError:         EAUTH, // Authentication error
+	tls.AlertInsufficientSecurity: EAUTH, // Authentication error
+	tls.AlertUnknownPSKIdentity:   EAUTH, // Authentication error
+
+	// Internal/resource errors.
+	tls.AlertInternalError: EFAULT, // Internal error
+
+	// User/application errors.
+	tls.AlertUserCanceled:          ECANCELED,       // Operation canceled
+	tls.AlertNoApplicationProtocol: EPROTONOSUPPORT, // Protocol not supported
+}
