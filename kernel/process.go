@@ -482,8 +482,8 @@ run:
 			if err != nil {
 				return err
 			}
-			result, err = circuit.Garbler(proc.conn, proc.oti, state.Circ,
-				input, proc.verbose())
+			result, err = circuit.Garbler(proc.kern.params.MPCConfig,
+				proc.conn, proc.oti, state.Circ, input, proc.verbose())
 			if err != nil {
 				return err
 			}

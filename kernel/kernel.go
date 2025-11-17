@@ -7,7 +7,6 @@
 package kernel
 
 import (
-	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -15,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/markkurossi/ephemelier/eef"
+	"github.com/markkurossi/mpc/env"
 	"github.com/markkurossi/mpc/ot"
 	"github.com/markkurossi/mpc/p2p"
 )
@@ -82,6 +82,7 @@ type Params struct {
 	Stdin       *FD
 	Stdout      *FD
 	Stderr      *FD
+	MPCConfig   *env.Config
 }
 
 // Kernel implements the Ephemelier kernel.
@@ -101,6 +102,9 @@ func New(params *Params) *Kernel {
 	}
 	if params != nil {
 		kern.params = *params
+	}
+	if kern.params.MPCConfig == nil {
+		kern.params.MPCConfig = &env.Config{}
 	}
 	return kern
 }
@@ -187,6 +191,8 @@ func (kern *Kernel) Spawn(file string, stdin, stdout, stderr *FD) (
 func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
 	stdin, stdout, stderr *FD) (*Process, error) {
 
+	rand := kern.params.MPCConfig.GetRandom()
+
 	var key [KeySize]byte
 	_, err := rand.Read(key[:])
 	if err != nil {
@@ -197,7 +203,7 @@ func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
 		kern:    kern,
 		role:    role,
 		conn:    conn,
-		oti:     ot.NewCO(),
+		oti:     ot.NewCO(rand),
 		iostats: p2p.NewIOStats(),
 		key:     key[:],
 		fds:     make(map[int32]*FD),
