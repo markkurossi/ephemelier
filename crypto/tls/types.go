@@ -145,13 +145,13 @@ type ClientHello struct {
 
 // ServerHello implements the server_hello message.
 type ServerHello struct {
-	HandshakeTypeLen         uint32
-	LegacyVersion            ProtocolVersion
-	Random                   [32]byte
-	LegacySessionID          []byte `tls:"u8"`
-	CipherSuite              CipherSuite
-	LegacyCompressionMethods byte
-	Extensions               []Extension `tls:"u16"`
+	HandshakeTypeLen        uint32
+	LegacyVersion           ProtocolVersion
+	Random                  [32]byte
+	LegacySessionID         []byte `tls:"u8"`
+	CipherSuite             CipherSuite
+	LegacyCompressionMethod byte
+	Extensions              []Extension `tls:"u16"`
 }
 
 // HelloRetryRequestRandom defines the well-known value of the
@@ -196,6 +196,16 @@ type CertificateVerify struct {
 type Finished struct {
 	HandshakeTypeLen uint32
 	VerifyData       [32]byte
+}
+
+// NewSessionTicket implements the new_session_ticket message.
+type NewSessionTicket struct {
+	HandshakeTypeLen uint32
+	TicketLifetime   uint32
+	TicketAgeAdd     uint32
+	TicketNonce      []byte      `tls:"u8"`
+	Ticket           []byte      `tls:"u16"`
+	Extensions       []Extension `tls:"u16"`
 }
 
 // CipherSuite defines cipher suites.
@@ -327,6 +337,17 @@ func (key KeyShareEntry) String() string {
 	return fmt.Sprintf("%v=%x", key.Group, key.KeyExchange)
 }
 
+// Clone creates an independent copy of the KeyShareEntry.
+func (key KeyShareEntry) Clone() *KeyShareEntry {
+	result := &KeyShareEntry{
+		Group:       key.Group,
+		KeyExchange: make([]byte, len(key.KeyExchange)),
+	}
+	copy(result.KeyExchange, key.KeyExchange)
+
+	return result
+}
+
 // Bytes returns the key share entry's protocol encoding.
 func (key KeyShareEntry) Bytes() []byte {
 	data, err := Marshal(key)
@@ -334,6 +355,12 @@ func (key KeyShareEntry) Bytes() []byte {
 		panic(fmt.Sprintf("failed to marshal KeyShareEntry: %v", err))
 	}
 	return data
+}
+
+// ServerName defines a server_name extension.
+type ServerName struct {
+	NameType uint8
+	Hostname []byte `tls:"u16"`
 }
 
 // Extension defines protocol extensions.
@@ -349,7 +376,7 @@ func NewExtension(t ExtensionType, values ...interface{}) Extension {
 
 	var ll int
 	switch t {
-	case ETSupportedGroups, ETSignatureAlgorithms, ETKeyShare:
+	case ETSupportedGroups, ETSignatureAlgorithms, ETKeyShare, ETServerName:
 		ll = 2
 	case ETSupportedVersions:
 		ll = 1
@@ -378,6 +405,13 @@ func NewExtension(t ExtensionType, values ...interface{}) Extension {
 			data, err := Marshal(v)
 			if err != nil {
 				panic(fmt.Sprintf("failed to marshal KeyShareEntry: %v", err))
+			}
+			result.Write(data)
+
+		case *ServerName:
+			data, err := Marshal(v)
+			if err != nil {
+				panic(fmt.Sprintf("failed to marshal ServerName: %v", err))
 			}
 			result.Write(data)
 
@@ -436,6 +470,31 @@ func (ext Extension) Uint16List(lsize int) ([]uint16, error) {
 
 func (ext Extension) String() string {
 	switch ext.Type {
+	case ETServerName:
+		if len(ext.Data) == 0 {
+			// SNI acknowledgment.
+			return fmt.Sprintf("%v: \u2713", ext.Type)
+		}
+		if len(ext.Data) < 2 {
+			return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
+		}
+		result := fmt.Sprintf("%v:", ext.Type)
+
+		ll := int(bo.Uint16(ext.Data))
+		if 2+ll != len(ext.Data) {
+			return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
+		}
+		for i := 2; i < len(ext.Data); {
+			var name ServerName
+			n, err := UnmarshalFrom(ext.Data[i:], &name)
+			if err != nil {
+				return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
+			}
+			result += fmt.Sprintf(" %s", string(name.Hostname))
+			i += n
+		}
+		return result
+
 	case ETSupportedGroups:
 		arr, err := ext.Uint16List(2)
 		if err != nil {
@@ -498,16 +557,15 @@ func (ext Extension) String() string {
 			return fmt.Sprintf("%v[%d]", entry.Group, len(entry.KeyExchange))
 		}
 
-		ofs := 2
-		for ofs < len(ext.Data) {
+		for i := 2; i < len(ext.Data); {
 			var entry KeyShareEntry
-			n, err := UnmarshalFrom(ext.Data[ofs:], &entry)
+			n, err := UnmarshalFrom(ext.Data[i:], &entry)
 			if err != nil {
 				return fmt.Sprintf("%v: \u26A0 %x", ext.Type, ext.Data)
 			}
 			result += fmt.Sprintf(" %v[%d]",
 				entry.Group, len(entry.KeyExchange))
-			ofs += n
+			i += n
 		}
 		return result
 
@@ -563,6 +621,7 @@ func (et ExtensionType) String() string {
 }
 
 var tls13Extensions = map[ExtensionType]string{
+	ETServerName:          "server_name",
 	ETSupportedVersions:   "supported_versions",
 	ETSignatureAlgorithms: "signature_algorithms",
 	ETSupportedGroups:     "supported_groups",
@@ -624,9 +683,13 @@ const (
 // AlertDescription describes the alert.
 type AlertDescription uint8
 
+func (desc AlertDescription) Error() string {
+	return desc.String()
+}
+
 // Level returns the alert description's severity.
 func (desc AlertDescription) Level() AlertLevel {
-	if desc == 0 || desc == 90 {
+	if desc == AlertCloseNotify || desc == AlertUserCanceled {
 		return AlertLevelWarning
 	}
 	return AlertLevelFatal

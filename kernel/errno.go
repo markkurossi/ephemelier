@@ -52,6 +52,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+
+	"github.com/markkurossi/ephemelier/crypto/tls"
 )
 
 // Errno defines error numbers.
@@ -390,6 +392,14 @@ func mapError(err error) int {
 	if errors.As(err, &perr) || errors.Is(err, io.EOF) {
 		return int(-EBADF)
 	}
+	var tlsAlert tls.AlertDescription
+	if errors.As(err, &tlsAlert) {
+		errno, ok := TLSAlertToErrno[tlsAlert]
+		if ok {
+			return int(-errno)
+		}
+	}
+
 	fmt.Printf("kernel : unknown error, defaulting to: %v\n", EINVAL)
 	fmt.Printf(" - err : %v\n", err)
 	fmt.Printf(" - type: %T\n", err)

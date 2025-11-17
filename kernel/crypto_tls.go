@@ -40,14 +40,18 @@ func (proc *Process) tlsServer(sys *syscall) {
 }
 
 func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
-	conn := tls.NewConnection(sock.conn)
-
 	priv, cert, err := LoadKeyAndCert("ephemelier-key.pem",
 		"ephemelier-cert.pem")
 	if err != nil {
 		return err
 	}
 
+	conn := tls.NewConnection(sock.conn, &tls.Config{
+		PrivateKey:  priv,
+		Certificate: cert,
+	})
+
+	// XXX priv and cert are in config.
 	err = conn.ServerHandshake(priv, cert)
 	if err != nil {
 		return err
@@ -61,7 +65,7 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 	}
 	fmt.Printf("read: %s\n", buf[:n])
 
-	n, err = conn.Write([]byte("Hello, world!"))
+	n, err = conn.Write([]byte("Hello, world!\n"))
 	if err != nil {
 		return err
 	}
