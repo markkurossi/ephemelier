@@ -71,7 +71,8 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 	}
 	_ = n
 
-	sys.SetArg0(-1)
+	sys.SetArg0(0)
+
 	return nil
 }
 
@@ -130,8 +131,7 @@ func LoadKeyAndCert(keyPath, certPath string) (
 	return privateKey, cert, nil
 }
 
-// TLSAlertToErrno maps TLS 1.3 alerts to Errno codes.
-var TLSAlertToErrno = map[tls.AlertDescription]Errno{
+var tlsAlertToErrno = map[tls.AlertDescription]Errno{
 	// Clean closure - no error.
 	tls.AlertCloseNotify: 0,
 

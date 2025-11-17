@@ -386,25 +386,20 @@ func (conn *Conn) ServerHandshake(key *ecdsa.PrivateKey,
 
 	// ServerHello
 
-	ecdhCurve := ecdh.P256()
-	ecdhPriv, err := ecdhCurve.GenerateKey(rand.Reader)
-	if err != nil {
-		return conn.internalErrorf("error creating private key: %v", err)
-	}
+	var kex []byte
 
-	// Decode client's public key.
-	ecdhClientPub, err := ecdhCurve.NewPublicKey(conn.peerKeyShare.KeyExchange)
-	if err != nil {
-		return conn.decodeErrorf("invalid client public key: %v", err)
+	if false {
+		conn.sharedSecret, kex, err = conn.stdDH(conn.peerKeyShare.KeyExchange)
+	} else {
+		conn.sharedSecret, kex, err = conn.mpcDH(conn.peerKeyShare.KeyExchange)
 	}
-	conn.sharedSecret, err = ecdhPriv.ECDH(ecdhClientPub)
 	if err != nil {
-		return conn.decodeErrorf("ECDH failed: %v", err)
+		return err
 	}
 
 	keyShare := &KeyShareEntry{
 		Group:       GroupSecp256r1,
-		KeyExchange: ecdhPriv.PublicKey().Bytes(),
+		KeyExchange: kex,
 	}
 	req := &ServerHello{
 		LegacyVersion:   VersionTLS12,

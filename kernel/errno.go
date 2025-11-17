@@ -394,7 +394,7 @@ func mapError(err error) int {
 	}
 	var tlsAlert tls.AlertDescription
 	if errors.As(err, &tlsAlert) {
-		errno, ok := TLSAlertToErrno[tlsAlert]
+		errno, ok := tlsAlertToErrno[tlsAlert]
 		if ok {
 			return int(-errno)
 		}
