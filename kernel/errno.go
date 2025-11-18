@@ -52,6 +52,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 
 	"github.com/markkurossi/ephemelier/crypto/tls"
 )
@@ -397,6 +398,19 @@ func mapError(err error) int {
 		errno, ok := tlsAlertToErrno[tlsAlert]
 		if ok {
 			return int(-errno)
+		}
+	}
+	var netOpError *net.OpError
+	if errors.As(err, &netOpError) {
+		if false {
+			fmt.Printf(" - Op    : %v\n", netOpError.Op)
+			fmt.Printf(" - Net   : %v\n", netOpError.Net)
+			fmt.Printf(" - Source: %v\n", netOpError.Source)
+			fmt.Printf(" - Addr  : %v\n", netOpError.Addr)
+			fmt.Printf(" - Err   : %v\n", netOpError.Err)
+		}
+		if errors.Is(netOpError.Err, net.ErrClosed) {
+			return int(-EBADF)
 		}
 	}
 
