@@ -17,10 +17,6 @@ import (
 	"github.com/markkurossi/ephemelier/crypto/tls"
 )
 
-// FDTLS implements TLS client and server FDs.
-type FDTLS struct {
-}
-
 type tlsMsg uint8
 
 const (
@@ -93,8 +89,6 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 	if err != nil {
 		return err
 	}
-
-	// XXX we need a TLSFD that wraps sock and contains TLS info.
 
 	conn := tls.NewConnection(sock.conn, &tls.Config{
 		PrivateKey:  priv,
@@ -232,7 +226,20 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 	}
 	_ = n
 
-	sys.SetArg0(0)
+	// Return TLS FD.
+	fd := NewTLSFD(conn)
+	sys.SetArg0(proc.AllocFD(fd))
+
+	// Sync FD with evaluator.
+	err = proc.conn.SendUint32(int(sys.arg0))
+	if err == nil {
+		err = proc.conn.Flush()
+	}
+	if err != nil {
+		fd.Close()
+		proc.FreeFD(sys.arg0)
+		sys.arg0 = int32(mapError(err))
+	}
 
 	return nil
 }
@@ -258,7 +265,7 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 			return err
 		}
 		fmt.Printf(" - KeyShare: %x\n", msg.KeyShare)
-		peerPublicKey, err := decodePublicKey(msg.KeyShare[:16])
+		peerPublicKey, err := decodePublicKey(msg.KeyShare)
 		if err != nil {
 			proc.tlsPeerErrf(err, "invalid client public key: %v", err)
 			return err
@@ -316,7 +323,20 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 		return nil
 	}
 
-	sys.SetArg0(0)
+	// Return TLS FD.
+	fd := NewTLSFD(nil)
+
+	// Get FD from garbler.
+	gfd, err := proc.conn.ReceiveUint32()
+	if err == nil {
+		sys.SetArg0(int32(gfd))
+		err = proc.SetFD(sys.arg0, fd)
+	}
+	if err != nil {
+		fd.Close()
+		sys.SetArg0(int32(mapError(err)))
+	}
+
 	return nil
 }
 
