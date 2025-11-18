@@ -264,13 +264,11 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 			proc.tlsPeerErrf(err, "failed to unmarshal message: %v", err)
 			return err
 		}
-		fmt.Printf(" - KeyShare: %x\n", msg.KeyShare)
 		peerPublicKey, err := decodePublicKey(msg.KeyShare)
 		if err != nil {
 			proc.tlsPeerErrf(err, "invalid client public key: %v", err)
 			return err
 		}
-		fmt.Printf(" - publicKey: %v\n", peerPublicKey)
 		dhPeer, err = NewDHPeer("Evaluator")
 		if err != nil {
 			proc.tlsPeerErrf(err, "failed to create DH peer: %v", err)
