@@ -51,8 +51,16 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 		Certificate: cert,
 	})
 
-	// XXX priv and cert are in config.
-	err = conn.ServerHandshake(priv, cert)
+	clientKex, err := conn.ServerHandshake()
+	if err != nil {
+		return err
+	}
+
+	sharedSecret, kex, err := proc.mpcDH(clientKex)
+	if err != nil {
+		return err
+	}
+	err = conn.ServerHandshakeServerHello(sharedSecret, kex)
 	if err != nil {
 		return err
 	}

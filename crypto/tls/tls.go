@@ -60,9 +60,6 @@ type Conn struct {
 	config *Config
 	rbuf   []byte
 
-	serverKey  *ecdsa.PrivateKey
-	serverCert *x509.Certificate
-
 	// Handshake.
 	handshakeState   HandshakeState
 	transcript       hash.Hash
@@ -279,9 +276,8 @@ func (conn *Conn) ClientHandshake() error {
 	return nil
 }
 
-// ServerHandshake runs the server handshake protocol.
-func (conn *Conn) ServerHandshake(key *ecdsa.PrivateKey,
-	cert *x509.Certificate) error {
+// ServerHandshake starts the server handshake protocol.
+func (conn *Conn) ServerHandshake() ([]byte, error) {
 
 	//  Client                                               Server
 	//
@@ -307,16 +303,13 @@ func (conn *Conn) ServerHandshake(key *ecdsa.PrivateKey,
 	//       Figure 2: Message Flow for a Full Handshake with
 	//                     Mismatched Parameters
 
-	conn.serverKey = key
-	conn.serverCert = cert
-
 	_, data, err := conn.readHandshakeMsg()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = conn.recvClientHandshake(data)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Init transcript.
@@ -358,44 +351,44 @@ func (conn *Conn) ServerHandshake(key *ecdsa.PrivateKey,
 		}
 		data, err = Marshal(req)
 		if err != nil {
-			return conn.internalErrorf("marshal failed: %v", err)
+			return nil, conn.internalErrorf("marshal failed: %v", err)
 		}
 		conn.Debugf(" > HelloRetryRequest: %v bytes\n", len(data))
 
 		err = conn.writeHandshakeMsg(HTServerHello, data)
 		if err != nil {
-			return conn.internalErrorf("write failed: %v", err)
+			return nil, conn.internalErrorf("write failed: %v", err)
 		}
 
 		// Read ClientHello.
 		_, data, err := conn.readHandshakeMsg()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		err = conn.recvClientHandshake(data)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		conn.transcript.Write(data)
 
 		if conn.peerKeyShare == nil {
-			return conn.alert(AlertHandshakeFailure)
+			return nil, conn.alert(AlertHandshakeFailure)
 		}
 	}
 	conn.handshakeState = HSServerHello
 
+	return conn.peerKeyShare.KeyExchange, nil
+}
+
+// ServerHandshakeServerHello continues the server handshake protocol
+// with the ServerHello message. The sharedSecret specifies the shared
+// secret from ECDH and kex contains the server's KeyShare i.e. our
+// public key.
+func (conn *Conn) ServerHandshakeServerHello(sharedSecret, kex []byte) error {
+
 	// ServerHello
 
-	var kex []byte
-
-	if false {
-		conn.sharedSecret, kex, err = conn.stdDH(conn.peerKeyShare.KeyExchange)
-	} else {
-		conn.sharedSecret, kex, err = conn.mpcDH(conn.peerKeyShare.KeyExchange)
-	}
-	if err != nil {
-		return err
-	}
+	conn.sharedSecret = sharedSecret
 
 	keyShare := &KeyShareEntry{
 		Group:       GroupSecp256r1,
@@ -416,11 +409,11 @@ func (conn *Conn) ServerHandshake(key *ecdsa.PrivateKey,
 			},
 		},
 	}
-	_, err = rand.Read(req.Random[:])
+	_, err := rand.Read(req.Random[:])
 	if err != nil {
 		return conn.internalErrorf("failed to create random: %v", err)
 	}
-	data, err = Marshal(req)
+	data, err := Marshal(req)
 	if err != nil {
 		return conn.internalErrorf("marshal failed: %v", err)
 	}
@@ -454,7 +447,7 @@ func (conn *Conn) ServerHandshake(key *ecdsa.PrivateKey,
 	msgCertificate := &Certificate{
 		CertificateList: []CertificateEntry{
 			CertificateEntry{
-				Data: conn.serverCert.Raw,
+				Data: conn.config.Certificate.Raw,
 			},
 		},
 	}
@@ -471,7 +464,7 @@ func (conn *Conn) ServerHandshake(key *ecdsa.PrivateKey,
 	// CertificateVerify.
 	hashFunc := crypto.SHA256
 	digest := conn.certificateVerify(hashFunc)
-	signature, err := conn.serverKey.Sign(rand.Reader, digest, hashFunc)
+	signature, err := conn.config.PrivateKey.Sign(rand.Reader, digest, hashFunc)
 	if err != nil {
 		return conn.internalErrorf("signature failed: %v", err)
 	}

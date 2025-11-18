@@ -872,6 +872,14 @@ func decodeSyscall(sys *syscall, values []interface{}) error {
 	return nil
 }
 
+func (proc *Process) debugf(format string, a ...interface{}) {
+	if !proc.kern.params.Diagnostics && false {
+		return
+	}
+	fmt.Printf("%s: ", proc.prog.Name)
+	fmt.Printf(format, a...)
+}
+
 func (proc *Process) ktracePrefix() {
 	if !proc.kern.params.Trace {
 		return

@@ -4,10 +4,9 @@
 // All rights reserved.
 //
 
-package tls
+package kernel
 
 import (
-	"crypto/ecdh"
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/hex"
@@ -15,32 +14,10 @@ import (
 	"math/big"
 )
 
-func (conn *Conn) stdDH(peerPub []byte) ([]byte, []byte, error) {
-	ecdhCurve := ecdh.P256()
-	ecdhPriv, err := ecdhCurve.GenerateKey(rand.Reader)
-	if err != nil {
-		return nil, nil, conn.internalErrorf("error creating private key: %v",
-			err)
-	}
-
-	// Decode client's public key.
-	ecdhClientPub, err := ecdhCurve.NewPublicKey(peerPub)
-	if err != nil {
-		return nil, nil, conn.decodeErrorf("invalid client public key: %v", err)
-	}
-	sharedSecret, err := ecdhPriv.ECDH(ecdhClientPub)
-	if err != nil {
-		return nil, nil, conn.decodeErrorf("ECDH failed: %v", err)
-	}
-
-	return sharedSecret, ecdhPriv.PublicKey().Bytes(), nil
-}
-
-func (conn *Conn) mpcDH(peerPub []byte) ([]byte, []byte, error) {
+func (proc *Process) mpcDH(peerPub []byte) ([]byte, []byte, error) {
 	// Decode peer's public key.
 	if len(peerPub) != 65 || peerPub[0] != 0x04 {
-		fmt.Printf("*** pub:\n%s", hex.Dump(peerPub))
-		return nil, nil, conn.decodeErrorf("invalid client public key")
+		return nil, nil, fmt.Errorf("invalid client public key")
 	}
 	peerX := new(big.Int).SetBytes(peerPub[1:33])
 	peerY := new(big.Int).SetBytes(peerPub[33:65])
@@ -87,11 +64,11 @@ func (conn *Conn) mpcDH(peerPub []byte) ([]byte, []byte, error) {
 
 	partialResults := make([]*Point, len(dhPeers))
 
-	fmt.Println("Partial DH Computations:")
+	proc.debugf("Partial DH Computations:\n")
 	for i, peer := range dhPeers {
 		partial := peer.ComputePartialDH(peerPublicKey)
 		partialResults[i] = partial
-		fmt.Printf(" • %s computes αᵢ·(β·G): (%s..., %s...)\n",
+		proc.debugf(" • %s computes αᵢ·(β·G): (%s..., %s...)\n",
 			peer.Name,
 			hex.EncodeToString(partial.X.Bytes())[:16],
 			hex.EncodeToString(partial.Y.Bytes())[:16])
@@ -99,13 +76,13 @@ func (conn *Conn) mpcDH(peerPub []byte) ([]byte, []byte, error) {
 
 	// MPC engine computes αβ·G = Σ(αᵢ·(β·G))
 
-	fmt.Println("SMPC Engine Combining Results:")
+	proc.debugf("SMPC Engine Combining Results:\n")
 	finalX := big.NewInt(0)
 	finalY := big.NewInt(0)
 
 	for i, partial := range partialResults {
 		finalX, finalY = curveAdd(finalX, finalY, partial.X, partial.Y)
-		fmt.Printf(" • Added contribution from DHPeer%d\n", i)
+		proc.debugf(" • Added contribution from DHPeer%d\n", i)
 	}
 
 	// Use X-coordinate as shared secret (standard ECDH practice)
