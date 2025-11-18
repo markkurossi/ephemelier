@@ -11,10 +11,58 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"math/big"
 	"os"
 
 	"github.com/markkurossi/ephemelier/crypto/tls"
 )
+
+// FDTLS implements TLS client and server FDs.
+type FDTLS struct {
+}
+
+type tlsMsg uint8
+
+const (
+	tlsMsgInit tlsMsg = iota
+	tlsMsgKEX
+	tlsMsgKEXResult
+	tlsMsgError
+)
+
+func (msg tlsMsg) String() string {
+	name, ok := tlsMsgs[msg]
+	if ok {
+		return name
+	}
+	return fmt.Sprintf("{tlsMsg %d}", int(msg))
+}
+
+var tlsMsgs = map[tlsMsg]string{
+	tlsMsgInit:      "tlsMsgInit",
+	tlsMsgKEX:       "tlsMsgKEX",
+	tlsMsgKEXResult: "tlsMsgKEXResult",
+	tlsMsgError:     "tlsMsgError",
+}
+
+// TLSKEX implements the tlsMsgKEX message.
+type TLSKEX struct {
+	KeyShare []byte
+}
+
+// TLSKEXResult implements the tlsMsgKEXResult message.
+type TLSKEXResult struct {
+	PubkeyX  []byte
+	PubkeyY  []byte
+	PartialX []byte
+	PartialY []byte
+}
+
+// TLSError implements the tlsMsgError message.
+type TLSError struct {
+	Message []byte
+	Errno   uint32
+}
 
 func (proc *Process) tlsServer(sys *syscall) {
 	fd, ok := proc.fds[sys.arg0]
@@ -46,6 +94,8 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 		return err
 	}
 
+	// XXX we need a TLSFD that wraps sock and contains TLS info.
+
 	conn := tls.NewConnection(sock.conn, &tls.Config{
 		PrivateKey:  priv,
 		Certificate: cert,
@@ -53,16 +103,119 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 
 	clientKex, err := conn.ServerHandshake()
 	if err != nil {
+		proc.tlsPeerErrf(err, "handshake failed: %v", err)
+		return err
+	}
+	peerPublicKey, err := decodePublicKey(clientKex)
+	if err != nil {
+		proc.tlsPeerErrf(err, "invalid client public key: %v", err)
 		return err
 	}
 
-	sharedSecret, kex, err := proc.mpcDH(clientKex)
+	dhPeer, err := NewDHPeer("Garbler")
+	if err != nil {
+		proc.tlsPeerErrf(err, "failed to create DH peer: %v", err)
+		return err
+	}
+
+	// Communicate client public key with evaluator.
+	data, err := Marshal(&TLSKEX{
+		KeyShare: clientKex,
+	})
+	if err != nil {
+		proc.tlsPeerErrf(err, "failed to marshal message: %v", err)
+		return err
+	}
+	err = proc.conn.SendByte(byte(tlsMsgKEX))
 	if err != nil {
 		return err
 	}
-	err = conn.ServerHandshakeServerHello(sharedSecret, kex)
+	err = proc.conn.SendData(data)
 	if err != nil {
 		return err
+	}
+	err = proc.conn.Flush()
+	if err != nil {
+		return err
+	}
+
+	// Read evaluator's kex result.
+	b, err := proc.conn.ReceiveByte()
+	if err != nil {
+		return err
+	}
+	proc.debugf("recv %v\n", tlsMsg(b))
+	switch tlsMsg(b) {
+	case tlsMsgKEXResult:
+		data, err = proc.conn.ReceiveData()
+		if err != nil {
+			return err
+		}
+		var kexResult TLSKEXResult
+		_, err = UnmarshalFrom(data, &kexResult)
+		if err != nil {
+			proc.tlsPeerErrf(err, "failed to unmarshal message: %v", err)
+			return err
+		}
+
+		// Compute our public key: α·G = Σ(αᵢ·G)
+		pubkeyX, pubkeyY := curve.Add(dhPeer.Pubkey.X, dhPeer.Pubkey.Y,
+			new(big.Int).SetBytes(kexResult.PubkeyX),
+			new(big.Int).SetBytes(kexResult.PubkeyY))
+
+		// Encode public key into uncompressed SEC 1 format.
+
+		pubkey := make([]byte, 65)
+		pubkey[0] = 0x04
+
+		xBytes := pubkeyX.Bytes()
+		copy(pubkey[1+32-len(xBytes):], xBytes)
+
+		yBytes := pubkeyY.Bytes()
+		copy(pubkey[1+64-len(yBytes):], yBytes)
+
+		// Compute partial DH αᵢ·(β·G)
+		partial := dhPeer.ComputePartialDH(peerPublicKey)
+
+		// XXX call conn.ServerHandshakeServerHello which only sends
+		// the server hello.
+		//
+		// XXX end syscall here and return necessary components to MPC
+		// space: transcript, partial; continue the handshake from
+		// MPC.
+
+		// Compute shared secret αβ·G = Σ(αᵢ·(β·G)). XXX moved to MPC.
+		finalX, _ := curveAdd(partial.X, partial.Y,
+			new(big.Int).SetBytes(kexResult.PartialX),
+			new(big.Int).SetBytes(kexResult.PartialY))
+
+		// Use X-coordinate as shared secret (standard ECDH practice).
+		sharedSecret := finalX.Bytes()
+
+		// Pad to 32 bytes if necessary
+		if len(sharedSecret) < 32 {
+			padded := make([]byte, 32)
+			copy(padded[32-len(sharedSecret):], sharedSecret)
+			sharedSecret = padded
+		}
+		err = conn.ServerHandshakeServerHello(sharedSecret, pubkey)
+		if err != nil {
+			return err
+		}
+
+	case tlsMsgError:
+		data, err = proc.conn.ReceiveData()
+		if err != nil {
+			return err
+		}
+		var msgError TLSError
+		_, err = UnmarshalFrom(data, &msgError)
+		if err != nil {
+			return err
+		}
+		proc.debugf("peer error: %v\n", string(msgError.Message))
+		sys.SetArg0(-int32(msgError.Errno))
+		return nil
 	}
 
 	var buf [4096]byte
@@ -85,8 +238,105 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 }
 
 func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
+	var dhPeer *DHPeer
+
+	b, err := proc.conn.ReceiveByte()
+	if err != nil {
+		return err
+	}
+	proc.debugf("recv %v\n", tlsMsg(b))
+	switch tlsMsg(b) {
+	case tlsMsgKEX:
+		data, err := proc.conn.ReceiveData()
+		if err != nil {
+			return err
+		}
+		var msg TLSKEX
+		_, err = UnmarshalFrom(data, &msg)
+		if err != nil {
+			proc.tlsPeerErrf(err, "failed to unmarshal message: %v", err)
+			return err
+		}
+		fmt.Printf(" - KeyShare: %x\n", msg.KeyShare)
+		peerPublicKey, err := decodePublicKey(msg.KeyShare[:16])
+		if err != nil {
+			proc.tlsPeerErrf(err, "invalid client public key: %v", err)
+			return err
+		}
+		fmt.Printf(" - publicKey: %v\n", peerPublicKey)
+		dhPeer, err = NewDHPeer("Evaluator")
+		if err != nil {
+			proc.tlsPeerErrf(err, "failed to create DH peer: %v", err)
+			return err
+		}
+
+		// Compute partial Diffie-Hellman.
+		partial := dhPeer.ComputePartialDH(peerPublicKey)
+
+		// XXX return only dhPeer.Pubkey.{X,Y} in TLSKEXResult.
+		//
+		// XXX end syscall here and return partial to MPC
+		// space. Continue the handshake from MPC.
+
+		data, err = Marshal(&TLSKEXResult{
+			PubkeyX:  dhPeer.Pubkey.X.Bytes(),
+			PubkeyY:  dhPeer.Pubkey.Y.Bytes(),
+			PartialX: partial.X.Bytes(),
+			PartialY: partial.Y.Bytes(),
+		})
+		if err != nil {
+			proc.tlsPeerErrf(err, "failed to marshal message: %v", err)
+			return err
+		}
+		err = proc.conn.SendByte(byte(tlsMsgKEXResult))
+		if err != nil {
+			return err
+		}
+		err = proc.conn.SendData(data)
+		if err != nil {
+			return err
+		}
+		err = proc.conn.Flush()
+		if err != nil {
+			return err
+		}
+
+	case tlsMsgError:
+		data, err := proc.conn.ReceiveData()
+		if err != nil {
+			return err
+		}
+		var msgError TLSError
+		_, err = UnmarshalFrom(data, &msgError)
+		if err != nil {
+			return err
+		}
+		proc.debugf("peer error: %v\n", string(msgError.Message))
+		sys.SetArg0(-int32(msgError.Errno))
+		return nil
+	}
+
 	sys.SetArg0(0)
 	return nil
+}
+
+func (proc *Process) tlsPeerErrf(err error, format string, a ...interface{}) {
+	msg := fmt.Sprintf(format, a...)
+	data, err := Marshal(&TLSError{
+		Message: []byte(msg),
+		Errno:   uint32(-mapError(err)),
+	})
+	if err != nil {
+		proc.debugf("tlsPeerErrf: Marshal failed: %v\n", err)
+		return
+	}
+	fmt.Printf("tlsMsgError=%v/%d\n", tlsMsgError, int(tlsMsgError))
+	err = proc.conn.SendByte(byte(tlsMsgError))
+	if err != nil {
+		return
+	}
+	proc.conn.SendData(data)
+	proc.conn.Flush()
 }
 
 // LoadKeyAndCert loads the private key and certificate from PEM files

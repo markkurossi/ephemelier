@@ -12,19 +12,28 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+
+	"github.com/markkurossi/ephemelier/crypto/tls"
 )
+
+func decodePublicKey(data []byte) (*Point, error) {
+	if len(data) != 65 || data[0] != 0x04 {
+		return nil, tls.AlertDecodeError
+	}
+	x := new(big.Int).SetBytes(data[1:33])
+	y := new(big.Int).SetBytes(data[33:65])
+
+	return &Point{
+		X: x,
+		Y: y,
+	}, nil
+}
 
 func (proc *Process) mpcDH(peerPub []byte) ([]byte, []byte, error) {
 	// Decode peer's public key.
-	if len(peerPub) != 65 || peerPub[0] != 0x04 {
-		return nil, nil, fmt.Errorf("invalid client public key")
-	}
-	peerX := new(big.Int).SetBytes(peerPub[1:33])
-	peerY := new(big.Int).SetBytes(peerPub[33:65])
-
-	peerPublicKey := &Point{
-		X: peerX,
-		Y: peerY,
+	peerPublicKey, err := decodePublicKey(peerPub)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	const numShares = 2
@@ -46,7 +55,7 @@ func (proc *Process) mpcDH(peerPub []byte) ([]byte, []byte, error) {
 
 	for _, peer := range dhPeers {
 		pubkeyX, pubkeyY = curve.Add(pubkeyX, pubkeyY,
-			peer.PubKey.X, peer.PubKey.Y)
+			peer.Pubkey.X, peer.Pubkey.Y)
 	}
 
 	// Encode public key into uncompressed SEC 1 format.
@@ -113,7 +122,7 @@ type Point struct {
 type DHPeer struct {
 	Name   string
 	AlphaI *big.Int // Private key share: αᵢ
-	PubKey *Point   // Public key share: αᵢ·G
+	Pubkey *Point   // Public key share: αᵢ·G
 }
 
 // NewDHPeer creates a new MPC DH peer with a random key share.
@@ -131,7 +140,10 @@ func NewDHPeer(name string) (*DHPeer, error) {
 	return &DHPeer{
 		Name:   name,
 		AlphaI: alphaI,
-		PubKey: &Point{X: pubX, Y: pubY},
+		Pubkey: &Point{
+			X: pubX,
+			Y: pubY,
+		},
 	}, nil
 }
 
