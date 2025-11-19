@@ -227,7 +227,7 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 	_ = n
 
 	// Return TLS FD.
-	fd := NewTLSFD(conn)
+	fd := NewTLSFD(conn, priv, cert)
 	sys.SetArg0(proc.AllocFD(fd))
 
 	// Sync FD with evaluator.
@@ -322,7 +322,7 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 	}
 
 	// Return TLS FD.
-	fd := NewTLSFD(nil)
+	fd := NewTLSFD(nil, nil, nil)
 
 	// Get FD from garbler.
 	gfd, err := proc.conn.ReceiveUint32()

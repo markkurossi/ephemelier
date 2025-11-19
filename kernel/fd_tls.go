@@ -7,6 +7,8 @@
 package kernel
 
 import (
+	"crypto/ecdsa"
+	"crypto/x509"
 	"errors"
 	"io"
 
@@ -16,14 +18,19 @@ import (
 // FDTLS implements TLS client and server FDs.
 type FDTLS struct {
 	conn *tls.Conn
-	// XXX key bundle with certificate and private key share.
+	priv *ecdsa.PrivateKey
+	cert *x509.Certificate
 }
 
-// NewTLSFD creates a new TLS FD. The argument conn must be non-nil
-// for garbler and nil for evaluator.
-func NewTLSFD(conn *tls.Conn) *FD {
+// NewTLSFD creates a new TLS FD. The arguments must be non-nil for
+// garbler and nil for evaluator.
+func NewTLSFD(conn *tls.Conn, priv *ecdsa.PrivateKey,
+	cert *x509.Certificate) *FD {
+
 	return NewFD(&FDTLS{
 		conn: conn,
+		priv: priv,
+		cert: cert,
 	})
 }
 
