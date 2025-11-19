@@ -8,6 +8,7 @@ package kernel
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -105,8 +106,9 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 		proc.tlsPeerErrf(err, "invalid client public key: %v", err)
 		return err
 	}
+	curve := elliptic.P256()
 
-	dhPeer, err := NewDHPeer("Garbler")
+	dhPeer, err := NewDHPeer("Garbler", curve)
 	if err != nil {
 		proc.tlsPeerErrf(err, "failed to create DH peer: %v", err)
 		return err
@@ -220,11 +222,10 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 	}
 	fmt.Printf("read: %s\n", buf[:n])
 
-	n, err = conn.Write([]byte("Hello, world!\n"))
+	_, err = conn.Write([]byte("Hello, world!\n"))
 	if err != nil {
 		return err
 	}
-	_ = n
 
 	// Return TLS FD.
 	fd := NewTLSFD(conn, priv, cert)
@@ -269,7 +270,8 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 			proc.tlsPeerErrf(err, "invalid client public key: %v", err)
 			return err
 		}
-		dhPeer, err = NewDHPeer("Evaluator")
+		curve := elliptic.P256()
+		dhPeer, err = NewDHPeer("Evaluator", curve)
 		if err != nil {
 			proc.tlsPeerErrf(err, "failed to create DH peer: %v", err)
 			return err

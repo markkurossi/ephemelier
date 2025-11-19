@@ -38,10 +38,11 @@ func (proc *Process) mpcDH(peerPub []byte) ([]byte, []byte, error) {
 
 	const numShares = 2
 	dhPeers := make([]*DHPeer, numShares)
+	curve := elliptic.P256()
 
 	// Step 1.1: Each server Pᵢ samples αᵢ and computes αᵢ·G
 	for i := 0; i < numShares; i++ {
-		dhPeer, err := NewDHPeer(fmt.Sprintf("DHPeer%d", i))
+		dhPeer, err := NewDHPeer(fmt.Sprintf("DHPeer%d", i), curve)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -107,12 +108,6 @@ func (proc *Process) mpcDH(peerPub []byte) ([]byte, []byte, error) {
 	return sharedSecret, pubkey, nil
 }
 
-// P256 curve parameters.
-var (
-	curve       = elliptic.P256()
-	curveParams = curve.Params()
-)
-
 // Point represents an elliptic curve point.
 type Point struct {
 	X, Y *big.Int
@@ -121,14 +116,15 @@ type Point struct {
 // DHPeer represents a MPC DH peer with its share of the private key.
 type DHPeer struct {
 	Name   string
+	Curve  elliptic.Curve
 	AlphaI *big.Int // Private key share: αᵢ
 	Pubkey *Point   // Public key share: αᵢ·G
 }
 
 // NewDHPeer creates a new MPC DH peer with a random key share.
-func NewDHPeer(name string) (*DHPeer, error) {
+func NewDHPeer(name string, curve elliptic.Curve) (*DHPeer, error) {
 	// Sample αᵢ ← Z_p+
-	alphaI, err := rand.Int(rand.Reader, curveParams.N)
+	alphaI, err := rand.Int(rand.Reader, curve.Params().N)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate alphaI for %s: %w",
 			name, err)
@@ -139,6 +135,7 @@ func NewDHPeer(name string) (*DHPeer, error) {
 
 	return &DHPeer{
 		Name:   name,
+		Curve:  curve,
 		AlphaI: alphaI,
 		Pubkey: &Point{
 			X: pubX,
@@ -151,7 +148,7 @@ func NewDHPeer(name string) (*DHPeer, error) {
 // DH result.
 func (p *DHPeer) ComputePartialDH(peerPublicKey *Point) *Point {
 	// Compute αᵢ·(β·G)
-	partialX, partialY := curve.ScalarMult(peerPublicKey.X, peerPublicKey.Y,
+	partialX, partialY := p.Curve.ScalarMult(peerPublicKey.X, peerPublicKey.Y,
 		p.AlphaI.Bytes())
 
 	return &Point{
