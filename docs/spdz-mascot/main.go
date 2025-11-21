@@ -17,12 +17,6 @@
 // - Adding commitment schemes and zero-knowledge proofs
 // - Optimizing finite field arithmetic
 // - Handling edge cases (point doubling, point at infinity, etc.)
-//
-// But as an educational implementation showing how SPDZ works for
-// cryptographic operations, this is a solid foundation! Let me know if
-// you want to extend it further (like adding scalar multiplication or
-// full Diffie-Hellman with scalar operations).RetryClaude can make
-// mistakes. Please double-check responses. Sonnet 4.5
 
 package main
 
@@ -76,7 +70,8 @@ func NewPeer(id int, macKeyShare *big.Int) *Peer {
 
 // ========== MASCOT Offline Phase ==========
 
-// GenerateMACKey generates shares of the global MAC key using a simple 2-party protocol
+// GenerateMACKey generates shares of the global MAC key using a
+// simple 2-party protocol.
 func GenerateMACKey() (*big.Int, *big.Int) {
 	// α = α_1 + α_2 (mod p)
 	alpha1, _ := rand.Int(rand.Reader, P256Prime)
@@ -84,10 +79,12 @@ func GenerateMACKey() (*big.Int, *big.Int) {
 	return alpha1, alpha2
 }
 
-// MASCOTTripleGen generates a multiplication triple using MASCOT (simplified OT-based approach)
+// MASCOTTripleGen generates a multiplication triple using MASCOT
+// (simplified OT-based approach).
 func MASCOTTripleGen(peer1, peer2 *Peer) (*Triple, *Triple) {
-	// In real MASCOT, this uses oblivious transfer (OT) and homomorphic commitments
-	// This is a simplified simulation for demonstration
+	// In real MASCOT, this uses oblivious transfer (OT) and
+	// homomorphic commitments This is a simplified simulation for
+	// demonstration.
 
 	// Generate random a and b
 	a, _ := rand.Int(rand.Reader, P256Prime)
@@ -148,11 +145,14 @@ func generateAdditiveShares(value, modulus *big.Int) (*big.Int, *big.Int) {
 
 // computeMAC computes MAC share for a value
 func computeMAC(value, globalAlpha, localAlphaShare, modulus *big.Int) *big.Int {
-	// For share value_i, the MAC share is: MAC_i = α * value (full value, not just share)
+	// For share value_i, the MAC share is: MAC_i = α * value (full
+	// value, not just share)
+	//
 	// But we need to distribute this, so: MAC_i = α_i * value
-	// However, the correct way is: MAC = α * value, split as MAC_1 + MAC_2 = α * value
-	// Where α = α_1 + α_2
-	// So MAC_i is a random share such that MAC_1 + MAC_2 = α * value
+	//
+	// However, the correct way is: MAC = α * value, split as MAC_1 +
+	// MAC_2 = α * value Where α = α_1 + α_2 So MAC_i is a random
+	// share such that MAC_1 + MAC_2 = α * value
 	mac := new(big.Int).Mul(globalAlpha, value)
 	mac.Mod(mac, modulus)
 	return mac
@@ -161,7 +161,9 @@ func computeMAC(value, globalAlpha, localAlphaShare, modulus *big.Int) *big.Int 
 // ========== SPDZ Online Phase ==========
 
 // SecretShare creates SPDZ shares of a value
-func (p *Peer) SecretShare(value *big.Int, otherPeer *Peer) (*SPDZShare, *SPDZShare) {
+func (p *Peer) SecretShare(value *big.Int, otherPeer *Peer) (
+	*SPDZShare, *SPDZShare) {
+
 	share1, share2 := generateAdditiveShares(value, P256Prime)
 
 	// Global MAC key
@@ -186,7 +188,7 @@ func (p *Peer) SecretShare(value *big.Int, otherPeer *Peer) (*SPDZShare, *SPDZSh
 	return s1, s2
 }
 
-// Add performs addition of two SPDZ shares locally
+// Add performs addition of two SPDZ shares locally.
 func (p *Peer) Add(a, b *SPDZShare) *SPDZShare {
 	value := new(big.Int).Add(a.Value, b.Value)
 	value.Mod(value, P256Prime)
@@ -510,33 +512,27 @@ func main() {
 	fmt.Printf("✓ Generated %d multiplication triples\n", numTriples)
 
 	// ========== Diffie-Hellman Setup ==========
-	fmt.Println("\n--- Diffie-Hellman Key Exchange Setup ---")
+	fmt.Println("\n--- Creating sample points ---")
 
 	curve := elliptic.P256()
 
-	// Peer 1's secret scalar and public key
-	secret1, _ := rand.Int(rand.Reader, curve.Params().N)
-	pub1X, pub1Y := curve.ScalarBaseMult(secret1.Bytes())
-	fmt.Printf("Peer 1: Generated public key P1 = [%s..., %s...]\n",
-		pub1X.String()[:20], pub1Y.String()[:20])
-
-	// Peer 2's secret scalar and public key
-	secret2, _ := rand.Int(rand.Reader, curve.Params().N)
-	pub2X, pub2Y := curve.ScalarBaseMult(secret2.Bytes())
-	fmt.Printf("Peer 2: Generated public key P2 = [%s..., %s...]\n",
-		pub2X.String()[:20], pub2Y.String()[:20])
+	x1, ok := new(big.Int).SetString("bb32c4722cbd5a05510cfbb9c4c152f144e70fa24b9e428b9b3bf9f39dd43bbe", 16)
+	y1, ok := new(big.Int).SetString("25b7f3d9d79e5ca057b0ba7a940d5c917d41cc0a08d41cb1b2b83905e795c7db", 16)
+	x2, ok := new(big.Int).SetString("7aaf9286743dc0adbd8fa93d305521cf0f62947ee5831bc8e355b133de65bd5a", 16)
+	y2, ok := new(big.Int).SetString("5e183e2d1f66256cc42883de880fdc7c177e99f2e003a2dd298e458aaebcc799", 16)
+	_ = ok
 
 	// ========== SPDZ Online Phase ==========
 	fmt.Println("\n--- SPDZ Online Phase: Secure Point Addition ---")
 
 	// Share peer 1's public key
-	x1Share1, x1Share2 := peer1.SecretShare(pub1X, peer2)
-	y1Share1, y1Share2 := peer1.SecretShare(pub1Y, peer2)
+	x1Share1, x1Share2 := peer1.SecretShare(x1, peer2)
+	y1Share1, y1Share2 := peer1.SecretShare(y1, peer2)
 	fmt.Println("✓ Peer 1's public key shared")
 
 	// Share peer 2's public key
-	x2Share1, x2Share2 := peer2.SecretShare(pub2X, peer1)
-	y2Share1, y2Share2 := peer2.SecretShare(pub2Y, peer1)
+	x2Share1, x2Share2 := peer2.SecretShare(x2, peer1)
+	y2Share1, y2Share2 := peer2.SecretShare(y2, peer1)
 	fmt.Println("✓ Peer 2's public key shared")
 
 	// Perform secure point addition: P1 + P2
@@ -571,11 +567,11 @@ func main() {
 	}
 
 	fmt.Printf("\nResult point: P3 = P1 + P2\n")
-	fmt.Printf("X: %s...\n", x3.String()[:50])
-	fmt.Printf("Y: %s...\n", y3.String()[:50])
+	fmt.Printf("X: %s\n", x3.Text(16))
+	fmt.Printf("Y: %s\n", y3.Text(16))
 
 	// Verify against direct computation
-	directX, directY := curve.Add(pub1X, pub1Y, pub2X, pub2Y)
+	directX, directY := curve.Add(x1, y1, x2, y2)
 
 	if x3.Cmp(directX) == 0 && y3.Cmp(directY) == 0 {
 		fmt.Println("\n✓ SUCCESS: SPDZ result matches direct computation!")
