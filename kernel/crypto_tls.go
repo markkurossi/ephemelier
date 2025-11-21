@@ -181,9 +181,17 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 		// MPC.
 
 		// Compute shared secret αβ·G = Σ(αᵢ·(β·G)). XXX moved to MPC.
-		finalX, _ := curveAdd(partial.X, partial.Y,
+		finalX, finalY := curveAdd(partial.X, partial.Y,
 			new(big.Int).SetBytes(kexResult.PartialX),
 			new(big.Int).SetBytes(kexResult.PartialY))
+
+		fmt.Printf("curveAdd:\n")
+		fmt.Printf(" - g.X: %x\n", partial.X.Bytes())
+		fmt.Printf(" - g.Y: %x\n", partial.Y.Bytes())
+		fmt.Printf(" - e.X: %x\n", kexResult.PartialX)
+		fmt.Printf(" - e.Y: %x\n", kexResult.PartialY)
+		fmt.Printf(" =>  X: %x\n", finalX.Bytes())
+		fmt.Printf(" =>  Y: %x\n", finalY.Bytes())
 
 		// Use X-coordinate as shared secret (standard ECDH practice).
 		sharedSecret := finalX.Bytes()
