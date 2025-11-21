@@ -31,7 +31,12 @@ go.work.sum
 # .idea/
 # .vscode/
 
-cmd/ephemelier/ephemelier
 *.mpclc
 *.stamp
 ,*
+*~
+
+cmd/ephemelier/ephemelier
+
+docs/additive-ss/additive-ss
+docs/spdz-mascot/spdz-mascot
