@@ -37,6 +37,7 @@ go.work.sum
 *~
 
 cmd/ephemelier/ephemelier
+cmd/ca/ca
 
 docs/additive-ss/additive-ss
 docs/spdz-mascot/spdz-mascot
