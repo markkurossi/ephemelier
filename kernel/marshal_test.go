@@ -55,7 +55,7 @@ func TestMarshalValues(t *testing.T) {
 	if data.U64 != data2.U64 {
 		t.Errorf("U64: %x, %x\n", data.U64, data.U64)
 	}
-	if bytes.Compare(data.Data, data2.Data) != 0 {
+	if !bytes.Equal(data.Data, data2.Data) {
 		t.Errorf("Data: %x, %x\n", data.Data, data2.Data)
 	}
 }

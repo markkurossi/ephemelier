@@ -294,7 +294,7 @@ run:
 			outputs = state.Circ.Outputs
 
 			if proc.diagnostics() {
-				mpc.PrintResults(result, state.Circ.Outputs)
+				mpc.PrintResults(result, state.Circ.Outputs, 0)
 			}
 		} else {
 			// Streaming MPCL.
@@ -316,7 +316,7 @@ run:
 				return err
 			}
 			if proc.diagnostics() {
-				mpc.PrintResults(result, outputs)
+				mpc.PrintResults(result, outputs, 0)
 			}
 		}
 
@@ -490,7 +490,7 @@ run:
 			outputs = state.Circ.Outputs
 
 			if proc.diagnostics() {
-				mpc.PrintResults(result, state.Circ.Outputs)
+				mpc.PrintResults(result, state.Circ.Outputs, 0)
 			}
 		} else {
 			// Streaming MPCL.
@@ -513,7 +513,7 @@ run:
 				return err
 			}
 			if proc.diagnostics() {
-				mpc.PrintResults(result, outputs)
+				mpc.PrintResults(result, outputs, 0)
 			}
 		}
 

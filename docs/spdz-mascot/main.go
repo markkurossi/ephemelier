@@ -516,11 +516,13 @@ func main() {
 
 	curve := elliptic.P256()
 
-	x1, ok := new(big.Int).SetString("bb32c4722cbd5a05510cfbb9c4c152f144e70fa24b9e428b9b3bf9f39dd43bbe", 16)
-	y1, ok := new(big.Int).SetString("25b7f3d9d79e5ca057b0ba7a940d5c917d41cc0a08d41cb1b2b83905e795c7db", 16)
-	x2, ok := new(big.Int).SetString("7aaf9286743dc0adbd8fa93d305521cf0f62947ee5831bc8e355b133de65bd5a", 16)
-	y2, ok := new(big.Int).SetString("5e183e2d1f66256cc42883de880fdc7c177e99f2e003a2dd298e458aaebcc799", 16)
-	_ = ok
+	x1, ok1 := new(big.Int).SetString("bb32c4722cbd5a05510cfbb9c4c152f144e70fa24b9e428b9b3bf9f39dd43bbe", 16)
+	y1, ok2 := new(big.Int).SetString("25b7f3d9d79e5ca057b0ba7a940d5c917d41cc0a08d41cb1b2b83905e795c7db", 16)
+	x2, ok3 := new(big.Int).SetString("7aaf9286743dc0adbd8fa93d305521cf0f62947ee5831bc8e355b133de65bd5a", 16)
+	y2, ok4 := new(big.Int).SetString("5e183e2d1f66256cc42883de880fdc7c177e99f2e003a2dd298e458aaebcc799", 16)
+	if !(ok1 && ok2 && ok3 && ok4) {
+		panic("oks")
+	}
 
 	// ========== SPDZ Online Phase ==========
 	fmt.Println("\n--- SPDZ Online Phase: Secure Point Addition ---")

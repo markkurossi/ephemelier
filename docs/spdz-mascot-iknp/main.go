@@ -43,7 +43,7 @@ import (
 	"math/big"
 )
 
-// Field operations are over P256's coordinate field
+// P256Prime defines the P256's coordinate field
 var P256Prime = elliptic.P256().Params().P
 
 // ========== OT Extension Components ==========
@@ -595,18 +595,39 @@ func (p *Peer) CompleteMult(tripleIdx int, epsilonOpen, deltaOpen *big.Int) *SPD
 }
 
 // Open reveals a shared value with MAC check
-func Open(share1, share2 *SPDZShare, peer1, peer2 *Peer) (*big.Int, error) {
+func Open(share1, share2 *SPDZShare, peer1, peer2 *Peer, debug bool) (
+	*big.Int, error) {
+
 	value := new(big.Int).Add(share1.Value, share2.Value)
 	value.Mod(value, P256Prime)
+
+	if debug {
+		fmt.Printf("Open:\n")
+		fmt.Printf(" - value: %s\n", value.Text(16))
+		fmt.Printf(" -  MAC1: %s\n", share1.MAC.Text(16))
+		fmt.Printf(" -  MAC2: %s\n", share2.MAC.Text(16))
+	}
 
 	mac := new(big.Int).Add(share1.MAC, share2.MAC)
 	mac.Mod(mac, P256Prime)
 
+	if debug {
+		fmt.Printf(" - mac  : %s\n", mac.Text(16))
+	}
+
 	alpha := new(big.Int).Add(peer1.MACKey, peer2.MACKey)
 	alpha.Mod(alpha, P256Prime)
 
+	if debug {
+		fmt.Printf(" - alpha: %s\n", alpha.Text(16))
+	}
+
 	expectedMAC := new(big.Int).Mul(alpha, value)
 	expectedMAC.Mod(expectedMAC, P256Prime)
+
+	if debug {
+		fmt.Printf(" - eMAC : %s\n", expectedMAC.Text(16))
+	}
 
 	if mac.Cmp(expectedMAC) != 0 {
 		return nil, fmt.Errorf("MAC check failed")
@@ -657,7 +678,7 @@ func ECPointAddition(x1Share1, y1Share1, x2Share1, y2Share1 *SPDZShare,
 	denominator1 := peer1.Add(x2Share1, negX1Share1)
 	denominator2 := peer2.Add(x2Share2, negX1Share2)
 
-	denomOpen, err := Open(denominator1, denominator2, peer1, peer2)
+	denomOpen, err := Open(denominator1, denominator2, peer1, peer2, false)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -742,7 +763,8 @@ func ECPointAddition(x1Share1, y1Share1, x2Share1, y2Share1 *SPDZShare,
 }
 
 func main() {
-	fmt.Println("=== SPDZ-MASCOT with OT Extension for Secure P256 Diffie-Hellman ===\n")
+	fmt.Println("=== SPDZ-MASCOT with OT Extension for Secure P256 Diffie-Hellman ===")
+	fmt.Println()
 
 	// ========== Setup Phase ==========
 	fmt.Println("--- Setup Phase ---")
@@ -802,12 +824,20 @@ func main() {
 	fmt.Printf("Peer 2: Generated public key P2 = [%s..., %s...]\n",
 		pub2X.String()[:20], pub2Y.String()[:20])
 
-	var ok bool
-	pub1X, ok = new(big.Int).SetString("bb32c4722cbd5a05510cfbb9c4c152f144e70fa24b9e428b9b3bf9f39dd43bbe", 16)
-	pub1Y, ok = new(big.Int).SetString("25b7f3d9d79e5ca057b0ba7a940d5c917d41cc0a08d41cb1b2b83905e795c7db", 16)
-	pub2X, ok = new(big.Int).SetString("7aaf9286743dc0adbd8fa93d305521cf0f62947ee5831bc8e355b133de65bd5a", 16)
-	pub2Y, ok = new(big.Int).SetString("5e183e2d1f66256cc42883de880fdc7c177e99f2e003a2dd298e458aaebcc799", 16)
-	_ = ok
+	//  - g.X: bb32c4722cbd5a05510cfbb9c4c152f144e70fa24b9e428b9b3bf9f39dd43bbe
+	//  - g.Y: 25b7f3d9d79e5ca057b0ba7a940d5c917d41cc0a08d41cb1b2b83905e795c7db
+	//  - e.X: 7aaf9286743dc0adbd8fa93d305521cf0f62947ee5831bc8e355b133de65bd5a
+	//  - e.Y: 5e183e2d1f66256cc42883de880fdc7c177e99f2e003a2dd298e458aaebcc799
+	//  =>  X: 72ebc952286e5b3956525ea0cf2a055ab6ec01ad840da4330714dd5578d6e76a
+	//  =>  Y: 8aaff44f299ad260e21c9ff30885a69ff11cede1d9e7786d32e40080ec95c253
+
+	pub1X, ok1 := new(big.Int).SetString("bb32c4722cbd5a05510cfbb9c4c152f144e70fa24b9e428b9b3bf9f39dd43bbe", 16)
+	pub1Y, ok2 := new(big.Int).SetString("25b7f3d9d79e5ca057b0ba7a940d5c917d41cc0a08d41cb1b2b83905e795c7db", 16)
+	pub2X, ok3 := new(big.Int).SetString("7aaf9286743dc0adbd8fa93d305521cf0f62947ee5831bc8e355b133de65bd5a", 16)
+	pub2Y, ok4 := new(big.Int).SetString("5e183e2d1f66256cc42883de880fdc7c177e99f2e003a2dd298e458aaebcc799", 16)
+	if !(ok1 && ok2 && ok3 && ok4) {
+		panic("oks")
+	}
 
 	// ========== SPDZ Online Phase ==========
 	fmt.Println("\n--- SPDZ Online Phase: Secure Point Addition ---")
@@ -841,13 +871,17 @@ func main() {
 	fmt.Println("\n--- Opening and Verifying Result ---")
 
 	// Open the result
-	x3, err := Open(x3Share1, x3Share2, peer1, peer2)
+	x3, err := Open(x3Share1, x3Share2, peer1, peer2, true)
 	if err != nil {
 		fmt.Printf("Error opening x3: %v\n", err)
 		return
 	}
+	fmt.Printf("G: -i 0x%s,0x%s,0x%s\n",
+		x3Share1.Value.Text(16), x3Share1.MAC.Text(16), peer1.MACKey.Text(16))
+	fmt.Printf("E: -i 0x%s,0x%s,0x%s\n",
+		x3Share2.Value.Text(16), x3Share2.MAC.Text(16), peer2.MACKey.Text(16))
 
-	y3, err := Open(y3Share1, y3Share2, peer1, peer2)
+	y3, err := Open(y3Share1, y3Share2, peer1, peer2, true)
 	if err != nil {
 		fmt.Printf("Error opening y3: %v\n", err)
 		return
