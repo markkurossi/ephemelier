@@ -1,4 +1,398 @@
-# SPDZ Online Phase: Detailed Breakdown from Each Peer's Perspective
+# SPDZ-MASCOT Protocol: Complete Breakdown from Each Peer's Perspective
+
+## Phase 0: Setup - MAC Key Generation with OT
+
+### Current Implementation
+
+```go
+func GenerateMACKeyWithOT() (*big.Int, *big.Int, error) {
+    alpha1, _ := rand.Int(rand.Reader, P256Prime)
+    alpha2, _ := rand.Int(rand.Reader, P256Prime)
+    return alpha1, alpha2, nil
+}
+```
+
+**⚠️ Note**: The current implementation is simplified. In production MASCOT, this uses a coin-tossing protocol with commitments to ensure neither party can bias the MAC key.
+
+### How It Should Work (Production MASCOT)
+
+#### Goal
+Generate `α = α₁ + α₂ (mod P)` such that:
+- Peer 1 knows only `α₁`
+- Peer 2 knows only `α₂`
+- Neither knows the full `α`
+- Neither can bias the result
+
+#### Protocol Steps
+
+**Step 1: Commitment Phase**
+
+```
+Peer 1:
+  1. Generate random α₁ ← Random(P256Prime)
+  2. Compute commitment: C₁ = Hash(α₁ || r₁) where r₁ is random nonce
+  3. Send C₁ to Peer 2
+
+Peer 2:
+  1. Generate random α₂ ← Random(P256Prime)
+  2. Compute commitment: C₂ = Hash(α₂ || r₂) where r₂ is random nonce
+  3. Send C₂ to Peer 1
+```
+
+**📡 Communication**: Each peer sends 32-byte commitment
+
+**Step 2: Reveal Phase**
+
+```
+Peer 1:
+  1. Send (α₁, r₁) to Peer 2
+
+Peer 2:
+  1. Send (α₂, r₂) to Peer 1
+  2. Verify: C₁ = Hash(α₁ || r₁)
+  3. If valid, accept α₁
+
+Peer 1:
+  1. Verify: C₂ = Hash(α₂ || r₂)
+  2. If valid, accept α₂
+```
+
+**📡 Communication**: Each peer sends ~32 bytes (α value) + nonce
+
+**Step 3: Local Computation**
+
+```
+Both peers compute (locally, no communication):
+  α = α₁ + α₂ (mod P)
+```
+
+But each peer only stores their share:
+- Peer 1 stores: `α₁`
+- Peer 2 stores: `α₂`
+
+### What Each Peer Knows After MAC Key Generation
+
+| Peer 1 Knowledge | Peer 2 Knowledge | Neither Knows |
+|------------------|------------------|---------------|
+| `α₁` (private) | `α₂` (private) | Full `α` |
+| `α₂` (received) | `α₁` (received) | |
+| Can compute `α = α₁ + α₂` | Can compute `α = α₁ + α₂` | |
+
+**🔑 Key Property**: While both peers *can* compute `α`, they only *store* their own share. This is safe because:
+- MACs are verified using `α`, which both can compute
+- But individual shares `α₁`, `α₂` remain secret to each peer
+- An adversary compromising one peer doesn't learn `α` alone
+
+### Security Analysis
+
+#### Why Commitments?
+Without commitments, a malicious peer could:
+1. Wait to see the other peer's value
+2. Choose their value to bias the result
+3. Example: If Peer 2 wants `α = 0`, wait for `α₁`, then send `α₂ = -α₁`
+
+With commitments:
+- Must commit before seeing other's value
+- Cannot change after seeing commitment
+- Ensures randomness from both parties
+
+#### Current Simplified Implementation
+The current code skips commitments because:
+- Simpler for demonstration
+- Assumes semi-honest adversaries (follow protocol)
+- In production, would need full commitment scheme
+
+---
+
+## Phase 1: OT Extension Setup
+
+Before generating triples, peers set up OT extension infrastructure.
+
+### Parameters
+
+```go
+params := &OTExtensionParams{
+    SecurityParam: 128,  // κ = 128 base OTs
+    NumOTs:        18,   // 3 triples × 6 OTs per triple
+}
+```
+
+### Step 1: Base OTs (Roles Reversed!)
+
+**Important**: In OT extension, roles are reversed for base OTs.
+
+```go
+SetupBaseOTs(peer1.OTSender, peer2.OTReceiver)
+```
+
+#### Peer 1 (Future OT Sender, Current OT Receiver):
+
+```
+1. Generate global correlation: Δ ← Random(128 bits)
+2. For i = 0 to 127:
+   - Extract bit: δᵢ = i-th bit of Δ
+   - Prepare to receive: Will learn kᵢ^(δᵢ)
+```
+
+#### Peer 2 (Future OT Receiver, Current OT Sender):
+
+```
+1. For i = 0 to 127:
+   - Generate two random seeds: k₀ᵢ, k₁ᵢ (16 bytes each)
+   - Send both through base OT
+   - Peer 1 receives: kᵢ^(δᵢ) based on their choice bit δᵢ
+```
+
+**📡 Communication**: 128 OTs × 2 seeds × 16 bytes = 4 KB (with optimizations)
+
+**After base OTs:**
+- **Peer 1 knows**: Δ (128-bit string), {kᵢ^(δᵢ)}ᵢ₌₀..₁₂₇
+- **Peer 2 knows**: {(k₀ᵢ, k₁ᵢ)}ᵢ₌₀..₁₂₇
+
+### Step 2: OT Extension (IKNP)
+
+Now roles return to normal - Peer 1 as sender, Peer 2 as receiver.
+
+#### Peer 2 (OT Receiver):
+
+```go
+U, err := peer2.OTReceiver.ExtendReceiver()
+```
+
+**Operations:**
+
+```
+1. Choose selection bits: r = (r₀, r₁, ..., r₁₇) - 18 random bits
+2. For each OT j = 0 to 17:
+   a. Compute row Tⱼ using PRG:
+      Tⱼ[i] = PRG(kᵢ)[j] for i = 0..127
+
+   b. Create matrix U to send:
+      If rⱼ = 0: Uⱼ = Tⱼ
+      If rⱼ = 1: Uⱼ = Tⱼ ⊕ s (where s is correlation string)
+
+3. Send U matrix to Peer 1
+```
+
+**📡 Communication**: 18 rows × 16 bytes = 288 bytes
+
+#### Peer 1 (OT Sender):
+
+```go
+err = peer1.OTSender.ExtendSender(U)
+```
+
+**Operations:**
+
+```
+1. Receive U matrix from Peer 2
+2. For each OT j = 0 to 17:
+   a. Compute Qⱼ using PRG:
+      Qⱼ = PRG(k^δ)[j] for all base OTs
+
+   b. Compute other matrix:
+      Tⱼ = Qⱼ ⊕ Uⱼ
+
+3. Store matrices Q and T
+```
+
+**After extension:**
+- **Peer 1 has**: Matrices Q (for x₀ values) and T (for x₁ values)
+- **Peer 2 has**: Matrix T and selection bits r
+- **Property**: T corresponds to Peer 2's selected values
+
+### Step 3: Bidirectional Setup
+
+The same process is repeated in the opposite direction:
+
+```go
+SetupBaseOTs(peer2.OTSender, peer1.OTReceiver)
+U, err := peer1.OTReceiver.ExtendReceiver()
+err = peer2.OTSender.ExtendSender(U)
+```
+
+Now both peers can act as sender OR receiver as needed.
+
+### Summary of OT Extension Setup
+
+**Total Communication:**
+- Base OTs (both directions): ~8 KB
+- Extensions (both directions): ~576 bytes
+- **Total**: ~9 KB
+
+**Result:**
+- 18 OTs ready in each direction
+- Can generate 3 multiplication triples (6 OTs per triple)
+- Amortized cost: ~500 bytes per triple
+
+---
+
+## Phase 2: MASCOT Offline Phase - Triple Generation with OT
+
+### Goal
+Generate multiplication triples `(a, b, c)` where `c = a × b (mod P)` such that:
+- Peer 1 holds: `(a₁, b₁, c₁)` with MACs
+- Peer 2 holds: `(a₂, b₂, c₂)` with MACs
+- `a = a₁ + a₂`, `b = b₁ + b₂`, `c = c₁ + c₂`
+- `c = a × b (mod P)`
+
+### Triple Generation Process
+
+```go
+triple1, triple2, err := MASCOTTripleGenWithOT(peer1, peer2, tripleIndex)
+```
+
+#### Step 1: Generate Random Values (Centralized in Demo)
+
+**⚠️ In production MASCOT**: This would use distributed generation, but for simplicity:
+
+```
+Generate (not by any peer, this is the "ideal" triple):
+  a ← Random(P256Prime)
+  b ← Random(P256Prime)
+  c = a × b (mod P)
+```
+
+#### Step 2: Use OT to Distribute Shares
+
+**Calculate OT indices for this triple:**
+```
+baseOTIdx = tripleIndex × 6
+Use OTs: [baseOTIdx, baseOTIdx+1, ..., baseOTIdx+5]
+```
+
+**Peer 1 (OT Sender) prepares inputs:**
+
+```
+For each of 6 OTs needed:
+  Generate random x₀ ← Random(256 bits)
+  Compute x₁ = x₀ + Δ (mod P)  // Correlated using OT delta
+
+Store:
+  x₀[baseOTIdx] - will become a₁
+  x₀[baseOTIdx+1] - will become b₁
+  x₀[baseOTIdx+2] - will become c₁
+  (and 3 more for MACs)
+```
+
+**Peer 1 encrypts and sends:**
+
+```go
+encX0, encX1, err := peer1.OTSender.DeriveOTs(x0Inputs, x1Inputs)
+```
+
+```
+For each OT j:
+  H₀ⱼ = Hash(Qⱼ || 0)
+  H₁ⱼ = Hash(Tⱼ || 1)
+
+  encX0[j] = x₀[j] ⊕ H₀ⱼ
+  encX1[j] = x₁[j] ⊕ H₁ⱼ
+```
+
+**📡 Communication**: 18 encrypted values × 32 bytes = 576 bytes
+
+**Peer 2 (OT Receiver) decrypts:**
+
+```go
+otOutputs, err := peer2.OTReceiver.ReceiveOTs(encX0, encX1)
+```
+
+```
+For each OT j:
+  H = Hash(Tⱼ || rⱼ)  // rⱼ is the selection bit
+
+  If rⱼ = 0:
+    output[j] = encX0[j] ⊕ H  // Recovers x₀
+  If rⱼ = 1:
+    output[j] = encX1[j] ⊕ H  // Recovers x₁ = x₀ + Δ
+```
+
+#### Step 3: Adjust Shares to Match Target Triple
+
+**Peer 1:**
+```
+aShare1 = x₀[baseOTIdx] mod P
+bShare1 = x₀[baseOTIdx+1] mod P
+cShare1 = x₀[baseOTIdx+2] mod P
+```
+
+**Peer 2:**
+```
+aShare2 = a - aShare1 (mod P)
+bShare2 = b - bShare1 (mod P)
+cShare2 = c - cShare1 (mod P)
+```
+
+#### Step 4: Generate MACs
+
+Both peers compute (using the shared knowledge of α = α₁ + α₂):
+
+```
+MAC(a) = α × a (mod P)
+MAC(b) = α × b (mod P)
+MAC(c) = α × c (mod P)
+```
+
+Then split each MAC additively:
+
+```
+Peer 1 gets: aMAC₁, bMAC₁, cMAC₁
+Peer 2 gets: aMAC₂, bMAC₂, cMAC₂
+
+Where: aMACᵢ + aMAC₂ = α × a (mod P)
+```
+
+**⚠️ Current implementation**: Uses simple additive sharing of MACs. Production MASCOT uses authenticated OT for this step.
+
+#### Step 5: Store Triples
+
+**Peer 1 stores:**
+```go
+triple1 := &Triple{
+    A: &SPDZShare{Value: aShare1, MAC: aMAC1},
+    B: &SPDZShare{Value: bShare1, MAC: bMAC1},
+    C: &SPDZShare{Value: cShare1, MAC: cMAC1},
+}
+```
+
+**Peer 2 stores:**
+```go
+triple2 := &Triple{
+    A: &SPDZShare{Value: aShare2, MAC: aMAC2},
+    B: &SPDZShare{Value: bShare2, MAC: bMAC2},
+    C: &SPDZShare{Value: cShare2, MAC: cMAC2},
+}
+```
+
+### Verification (In Production MASCOT)
+
+After generating N triples, perform "cut-and-choose":
+
+```
+1. Randomly select N/2 triples to check
+2. Both peers open these triples completely
+3. Verify: c = a × b for each opened triple
+4. If all checks pass, use remaining N/2 triples
+5. If any check fails, abort (malicious behavior detected)
+```
+
+**Current implementation**: Skips cut-and-choose for simplicity.
+
+### Summary of Triple Generation
+
+**Per triple:**
+- **Communication**: ~192 bytes (6 OTs × 32 bytes)
+- **Computation**:
+  - Peer 1: 6 PRG calls, 6 hashes, 3 additions
+  - Peer 2: 6 PRG calls, 6 hashes, 6 additions
+- **Result**: Both peers have authenticated shares of `(a, b, c)` where `c = a × b`
+
+**For 3 triples:**
+- **Total communication**: ~576 bytes
+- **Time**: Milliseconds (dominated by network)
+
+---
 
 ## Initial State
 
@@ -295,6 +689,4 @@ The SPDZ online phase demonstrates how two parties can jointly compute an ellipt
 3. **Beaver triples** - enable secure multiplication
 4. **Selective opening** - only reveal what's necessary
 
-This makes SPDZ particularly well-suited for protocols requiring
-multiple operations and conditional reveals, unlike garbled circuits
-which require the full computation graph upfront.
+This makes SPDZ particularly well-suited for protocols requiring multiple operations and conditional reveals, unlike garbled circuits which require the full computation graph upfront.
