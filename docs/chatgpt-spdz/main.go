@@ -69,21 +69,56 @@ func main() {
 	rx := add(gx, ex)
 	ry := add(gy, ey)
 
-	fmt.Printf("rx: %v\n", rx.Text(16))
-	fmt.Printf("ry: %v\n", ry.Text(16))
+	fmt.Printf("Rx: %v\n", rx.Text(16))
+	fmt.Printf("Ry: %v\n", ry.Text(16))
+
+	fmt.Printf("P0x: %v\n", exi.Text(16))
+	fmt.Printf("P0y: %v\n", eyi.Text(16))
+
+	fmt.Printf("P1x: %v\n", gxi.Text(16))
+	fmt.Printf("P1y: %v\n", gyi.Text(16))
 
 	xx, yy := Curve.Add(exi, eyi, gxi, gyi)
 
-	fmt.Printf("xx: %v\n", xx.Text(16))
-	fmt.Printf("yy: %v\n", yy.Text(16))
+	fmt.Printf("Cx: %v\n", xx.Text(16))
+	fmt.Printf("Cy: %v\n", yy.Text(16))
+
+	reconstructAndCompare(gx, gy, ex, ey, gxi, gyi, exi, eyi)
 }
 
 func add(x, y *big.Int) *big.Int {
 	r := new(big.Int).Add(x, y)
 
-	return new(big.Int).Mod(r, mod256)
+	return new(big.Int).Mod(r, P)
 }
 
+func reconstructAndCompare(x0, y0, x1, y1 *big.Int, Px, Py, Qx, Qy *big.Int) {
+	p := elliptic.P256().Params().P
+
+	// reconstructed
+	Rx := new(big.Int).Add(x0, x1)
+	Rx.Mod(Rx, p)
+	Ry := new(big.Int).Add(y0, y1)
+	Ry.Mod(Ry, p)
+
+	fmt.Printf("Reconstructed Rx: %064x\n", Rx)
+	fmt.Printf("Reconstructed Ry: %064x\n", Ry)
+
+	// reference using Go's curve add
+	curve := elliptic.P256()
+	RxRef, RyRef := curve.Add(Px, Py, Qx, Qy)
+	// ensure reduce (should already be mod p)
+	RxRef.Mod(RxRef, p)
+	RyRef.Mod(RyRef, p)
+	fmt.Printf("Reference  Rx: %064x\n", RxRef)
+	fmt.Printf("Reference  Ry: %064x\n", RyRef)
+
+	if Rx.Cmp(RxRef) == 0 && Ry.Cmp(RyRef) == 0 {
+		fmt.Println("MATCH: SPDZ result equals reference P+Q")
+	} else {
+		fmt.Println("MISMATCH: SPDZ result differs from reference P+Q")
+	}
+}
 func newReadWriter(in io.Reader, out io.Writer) io.ReadWriter {
 	return &wrap{
 		in:  in,
