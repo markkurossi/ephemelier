@@ -476,6 +476,28 @@ func Peer(oti ot.OT, id int, conn *p2p.Conn, xInput, yInput *big.Int) (xOut, yOu
 	return modReduce(x3Share.V), modReduce(y3Share.V), nil
 }
 
+// ExpandLabelToField interprets the 16-byte Label as a 128-bit big.Int
+// and reduces it modulo p256P to produce a valid field element.
+func ExpandLabelToField(l ot.Label) *big.Int {
+	var d ot.LabelData
+	l.GetData(&d)
+	x := new(big.Int).SetBytes(d[:])
+	x.Mod(x, p256P)
+	return x
+}
+
+func randomBools(n int) []bool {
+	out := make([]bool, n)
+	buf := make([]byte, (n+7)/8)
+	if _, err := rand.Read(buf); err != nil {
+		panic(err)
+	}
+	for i := 0; i < n; i++ {
+		out[i] = ((buf[i/8] >> (i % 8)) & 1) == 1
+	}
+	return out
+}
+
 // ---------- Optional debug helpers (only used when debug==true) ----------
 
 func debugPrintf(format string, a ...interface{}) {

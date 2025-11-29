@@ -260,8 +260,8 @@ operations:
 
 // Wire implements a wire with 0 and 1 labels.
 type Wire struct {
-	L0 []Label
-	L1 []Label
+	L0 Label
+	L1 Label
 }
 
 // Label implements a 128 bit wire label.
