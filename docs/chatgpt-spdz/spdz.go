@@ -13,15 +13,21 @@ import (
 	"github.com/markkurossi/mpc/p2p"
 )
 
-// ---------- Constants & Helpers (P-256 prime) ----------
+// Production SPDZ implementation for two parties (P-256 field).
+// Debugging is available behind the `debug` constant (default: false).
+
+const debug = false
 
 var (
 	p256P *big.Int
+	m     sync.Mutex // used only for debug printing ordering
 )
 
 func init() {
 	p256P = elliptic.P256().Params().P
 }
+
+// ---------- Helpers ----------
 
 func modReduce(x *big.Int) *big.Int {
 	z := new(big.Int).Mod(x, p256P)
@@ -60,7 +66,7 @@ func recvField(conn *p2p.Conn) (*big.Int, error) {
 	return read32ToBig(b), nil
 }
 
-// ---------- SPDZ types ----------
+// ---------- Share & Triple ----------
 
 type Share struct {
 	V *big.Int
@@ -76,21 +82,23 @@ func SubShare(a, b *Share) *Share {
 	return NewShare(z)
 }
 
-// ---------- Beaver triple ----------
-
 type Triple struct {
 	A *Share
 	B *Share
 	C *Share
 }
 
-// Dealer triples (peer0 is dealer)
-// Corrected: dealer samples global a,b, computes c=a*b, then splits into additive shares.
+// ---------- Beaver triple (dealer) ----------
+
+// GenerateBeaverTriplesDealer: peer 0 is dealer. Produces `n` triples.
+// Dealer samples global a,b, computes c = a*b mod p, then splits into additive shares:
+//   - peer0 receives (a0,b0,c0) random
+//   - peer1 receives (a1,b1,c1) = (a-a0, b-b0, c-c0)
 func GenerateBeaverTriplesDealer(conn *p2p.Conn, oti ot.OT, id int, n int) ([]*Triple, error) {
 	triples := make([]*Triple, n)
 	if id == 0 {
 		for i := 0; i < n; i++ {
-			// sample global values a,b
+			// global a,b
 			aGlob, err := randomFieldElement(rand.Reader)
 			if err != nil {
 				return nil, err
@@ -99,10 +107,9 @@ func GenerateBeaverTriplesDealer(conn *p2p.Conn, oti ot.OT, id int, n int) ([]*T
 			if err != nil {
 				return nil, err
 			}
-			// c = a*b mod p
 			cGlob := new(big.Int).Mod(new(big.Int).Mul(aGlob, bGlob), p256P)
 
-			// sample random local shares for peer0
+			// local (peer0) random shares
 			a0, err := randomFieldElement(rand.Reader)
 			if err != nil {
 				return nil, err
@@ -116,7 +123,7 @@ func GenerateBeaverTriplesDealer(conn *p2p.Conn, oti ot.OT, id int, n int) ([]*T
 				return nil, err
 			}
 
-			// compute peer1 shares to make additive decomposition
+			// peer1 shares = global - local
 			a1 := new(big.Int).Sub(aGlob, a0)
 			a1.Mod(a1, p256P)
 			b1 := new(big.Int).Sub(bGlob, b0)
@@ -138,11 +145,7 @@ func GenerateBeaverTriplesDealer(conn *p2p.Conn, oti ot.OT, id int, n int) ([]*T
 				return nil, err
 			}
 
-			triples[i] = &Triple{
-				A: NewShare(a0),
-				B: NewShare(b0),
-				C: NewShare(c0),
-			}
+			triples[i] = &Triple{A: NewShare(a0), B: NewShare(b0), C: NewShare(c0)}
 		}
 	} else {
 		for i := 0; i < n; i++ {
@@ -158,18 +161,15 @@ func GenerateBeaverTriplesDealer(conn *p2p.Conn, oti ot.OT, id int, n int) ([]*T
 			if err != nil {
 				return nil, err
 			}
-			triples[i] = &Triple{
-				A: NewShare(a1),
-				B: NewShare(b1),
-				C: NewShare(c1),
-			}
+			triples[i] = &Triple{A: NewShare(a1), B: NewShare(b1), C: NewShare(c1)}
 		}
 	}
 	return triples, nil
 }
 
-// ---------- Open / reconstruction helpers ----------
+// ---------- Opening helpers ----------
 
+// openShare: asymmetric ordering to avoid deadlock
 func openShare(conn *p2p.Conn, id int, s *Share) (*big.Int, error) {
 	if id == 0 {
 		if err := sendField(conn, s.V); err != nil {
@@ -200,6 +200,7 @@ func openShare(conn *p2p.Conn, id int, s *Share) (*big.Int, error) {
 	}
 }
 
+// openTwoShares opens two shares in one round-trip
 func openTwoShares(conn *p2p.Conn, id int, s1, s2 *Share) (*big.Int, *big.Int, error) {
 	if id == 0 {
 		if err := sendField(conn, s1.V); err != nil {
@@ -246,8 +247,10 @@ func openTwoShares(conn *p2p.Conn, id int, s1, s2 *Share) (*big.Int, *big.Int, e
 	}
 }
 
-// ---------- MulShare (Beaver) ----------
+// ---------- Beaver multiplication (MulShare) ----------
 
+// MulShare computes a*b given shares and a Beaver triple.
+// Note: to avoid doubling d*e term, only one party (id==0) adds dv*ev.
 func MulShare(conn *p2p.Conn, id int, a, b *Share, triple *Triple) (*Share, error) {
 	d := SubShare(a, triple.A)
 	e := SubShare(b, triple.B)
@@ -262,7 +265,6 @@ func MulShare(conn *p2p.Conn, id int, a, b *Share, triple *Triple) (*Share, erro
 	term.Add(term, tmp)
 	tmp2 := new(big.Int).Mul(ev, triple.A.V)
 	term.Add(term, tmp2)
-	// IMPORTANT: add d*e only on one party to avoid doubling.
 	if id == 0 {
 		tmp3 := new(big.Int).Mul(dv, ev)
 		term.Add(term, tmp3)
@@ -272,60 +274,13 @@ func MulShare(conn *p2p.Conn, id int, a, b *Share, triple *Triple) (*Share, erro
 	return NewShare(term), nil
 }
 
-var m sync.Mutex
+// ---------- safeMul wrapper ----------
 
-// ---------- safeMulDebug: debug version used in ExpShare ----------
-
-func safeMulDebug(conn *p2p.Conn, id int, a, b *Share, triples []*Triple, tripleIndex *int, debugLimit int) (*Share, error) {
+func safeMul(conn *p2p.Conn, id int, a, b *Share, triples []*Triple, tripleIndex *int) (*Share, error) {
 	if *tripleIndex >= len(triples) {
 		return nil, errors.New("not enough triples for multiplication")
 	}
-	idx := *tripleIndex
-	t := triples[idx]
-
-	// If within debug window: open d,e and compute term locally and print
-	if idx < debugLimit {
-		// compute local d,e
-		d := SubShare(a, t.A)
-		e := SubShare(b, t.B)
-
-		// open d,e (this consumes network round)
-		dv, ev, err := openTwoShares(conn, id, d, e)
-		if err != nil {
-			return nil, err
-		}
-
-		// compute expected assembled term (match MulShare: only id==0 adds dv*ev)
-		expected := new(big.Int).Set(t.C.V)
-		tmp := new(big.Int).Mul(dv, t.B.V)
-		expected.Add(expected, tmp)
-		tmp2 := new(big.Int).Mul(ev, t.A.V)
-		expected.Add(expected, tmp2)
-		if id == 0 {
-			tmp3 := new(big.Int).Mul(dv, ev)
-			expected.Add(expected, tmp3)
-		}
-		expected.Mod(expected, p256P)
-
-		// Print diagnostics
-		m.Lock()
-		fmt.Printf("DEBUG safeMulDebug idx=%d (peer %d):\n", idx, id)
-		fmt.Printf("  triple.A (local) = %064x\n", t.A.V)
-		fmt.Printf("  triple.B (local) = %064x\n", t.B.V)
-		fmt.Printf("  triple.C (local) = %064x\n", t.C.V)
-		fmt.Printf("  opened d = %064x\n", dv)
-		fmt.Printf("  opened e = %064x\n", ev)
-		fmt.Printf("  expected term = %064x\n", expected)
-		m.Unlock()
-
-		// consume triple
-		*tripleIndex++
-
-		// return share corresponding to expected term
-		return NewShare(expected), nil
-	}
-
-	// fallback: normal MulShare and consume triple
+	t := triples[*tripleIndex]
 	res, err := MulShare(conn, id, a, b, t)
 	if err != nil {
 		return nil, err
@@ -334,17 +289,20 @@ func safeMulDebug(conn *p2p.Conn, id int, a, b *Share, triples []*Triple, triple
 	return res, nil
 }
 
-// ---------- ExpShare / InvShare (uses safeMulDebug) ----------
+// ---------- ExpShare / InvShare (production) ----------
 
+// ExpShare computes [x]^exponent (exponent is public) using square-and-multiply.
+// It uses Beaver triples provided in 'triples' and advances tripleIndex accordingly.
 func ExpShare(conn *p2p.Conn, id int, x *Share, exponent *big.Int, triples []*Triple, tripleIndex *int) (*Share, error) {
-	// initialize [res] = 1 (peer0 holds 1, peer1 holds 0)
+	// Initialize [res] = 1 additive share (peer0 holds 1, peer1 holds 0).
 	var res *Share
 	if id == 0 {
 		res = NewShare(big.NewInt(1))
 	} else {
 		res = NewShare(big.NewInt(0))
 	}
-	// copy of base
+
+	// base copy
 	base := NewShare(new(big.Int).Set(x.V))
 
 	if exponent == nil {
@@ -354,29 +312,27 @@ func ExpShare(conn *p2p.Conn, id int, x *Share, exponent *big.Int, triples []*Tr
 		return res, nil
 	}
 
-	// debugLimit: how many first multiplications to print
-	debugLimit := 64
-
+	// Square-and-multiply (left-to-right)
 	bitLen := exponent.BitLen()
 	for i := bitLen - 1; i >= 0; i-- {
 		// square
 		var err error
-		res, err = safeMulDebug(conn, id, res, res, triples, tripleIndex, debugLimit)
+		res, err = safeMul(conn, id, res, res, triples, tripleIndex)
 		if err != nil {
 			return nil, err
 		}
-		// conditional multiply
+		// if bit set, multiply by base
 		if exponent.Bit(i) == 1 {
-			res, err = safeMulDebug(conn, id, res, base, triples, tripleIndex, debugLimit)
+			res, err = safeMul(conn, id, res, base, triples, tripleIndex)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
-	// final resShare returned (not opened here)
 	return res, nil
 }
 
+// InvShare computes multiplicative inverse via Fermat: x^(p-2)
 func InvShare(conn *p2p.Conn, id int, x *Share, triples []*Triple, tripleIndex *int) (*Share, error) {
 	exp := new(big.Int).Sub(p256P, big.NewInt(2))
 	return ExpShare(conn, id, x, exp, triples, tripleIndex)
@@ -385,14 +341,17 @@ func InvShare(conn *p2p.Conn, id int, x *Share, triples []*Triple, tripleIndex *
 // ---------- SPDZ point addition ----------
 
 func SPDZPointAdd(conn *p2p.Conn, id int, x1, y1, x2, y2 *Share, triples []*Triple, tripleIndex *int) (*Share, *Share, error) {
+	// dx = x2 - x1 ; dy = y2 - y1
 	dx := SubShare(x2, x1)
 	dy := SubShare(y2, y1)
 
+	// invDx = inv(dx) inside MPC
 	invDx, err := InvShare(conn, id, dx, triples, tripleIndex)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	// lam = dy * invDx
 	if *tripleIndex >= len(triples) {
 		return nil, nil, errors.New("not enough triples for lam")
 	}
@@ -402,6 +361,7 @@ func SPDZPointAdd(conn *p2p.Conn, id int, x1, y1, x2, y2 *Share, triples []*Trip
 	}
 	*tripleIndex++
 
+	// lam2 = lam * lam
 	if *tripleIndex >= len(triples) {
 		return nil, nil, errors.New("not enough triples for lam2")
 	}
@@ -411,9 +371,11 @@ func SPDZPointAdd(conn *p2p.Conn, id int, x1, y1, x2, y2 *Share, triples []*Trip
 	}
 	*tripleIndex++
 
+	// x3 = lam2 - x1 - x2
 	tmp := SubShare(lam2, x1)
 	x3 := SubShare(tmp, x2)
 
+	// y3 = lam*(x1 - x3) - y1
 	diff := SubShare(x1, x3)
 	if *tripleIndex >= len(triples) {
 		return nil, nil, errors.New("not enough triples for lam*diff")
@@ -428,8 +390,10 @@ func SPDZPointAdd(conn *p2p.Conn, id int, x1, y1, x2, y2 *Share, triples []*Trip
 	return x3, y3, nil
 }
 
-// ---------- Share input ----------
+// ---------- Input sharing ----------
 
+// ShareInput: owner==true => mask with random s and send o = val - s to peer; return local s.
+// owner==false => receive o and use as local share.
 func ShareInput(conn *p2p.Conn, id int, owner bool, val *big.Int) (*Share, error) {
 	if owner {
 		s, err := randomFieldElement(rand.Reader)
@@ -454,13 +418,16 @@ func ShareInput(conn *p2p.Conn, id int, owner bool, val *big.Int) (*Share, error
 	}
 }
 
-// ---------- Peer: top-level SPDZ online flow ----------
+// ---------- Peer (top-level) ----------
 
+// Peer(oti, id, conn, xInput, yInput) : each peer supplies only its own point.
+// - If id==0, (xInput,yInput) is P; if id==1, (xInput,yInput) is Q.
 func Peer(oti ot.OT, id int, conn *p2p.Conn, xInput, yInput *big.Int) (xOut, yOut *big.Int, err error) {
 	if id != 0 && id != 1 {
 		return nil, nil, errors.New("id must be 0 or 1")
 	}
 
+	// Init OT roles if needed
 	if id == 0 {
 		if err := oti.InitSender(conn); err != nil {
 			return nil, nil, err
@@ -471,6 +438,7 @@ func Peer(oti ot.OT, id int, conn *p2p.Conn, xInput, yInput *big.Int) (xOut, yOu
 		}
 	}
 
+	// Share inputs
 	isOwnerP := (id == 0)
 	isOwnerQ := (id == 1)
 
@@ -491,12 +459,14 @@ func Peer(oti ot.OT, id int, conn *p2p.Conn, xInput, yInput *big.Int) (xOut, yOu
 		return nil, nil, err
 	}
 
-	triplesNeeded := 1600
+	// Generate Beaver triples (dealer = peer 0)
+	triplesNeeded := 1400 // safe upper bound for inversion + intermediate multiplications
 	triples, err := GenerateBeaverTriplesDealer(conn, oti, id, triplesNeeded)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	// Run SPDZ point-add
 	tripleIndex := 0
 	x3Share, y3Share, err := SPDZPointAdd(conn, id, x1Share, y1Share, x2Share, y2Share, triples, &tripleIndex)
 	if err != nil {
@@ -504,4 +474,15 @@ func Peer(oti ot.OT, id int, conn *p2p.Conn, xInput, yInput *big.Int) (xOut, yOu
 	}
 
 	return modReduce(x3Share.V), modReduce(y3Share.V), nil
+}
+
+// ---------- Optional debug helpers (only used when debug==true) ----------
+
+func debugPrintf(format string, a ...interface{}) {
+	if !debug {
+		return
+	}
+	m.Lock()
+	defer m.Unlock()
+	fmt.Printf(format, a...)
 }

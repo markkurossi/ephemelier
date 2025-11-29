@@ -69,8 +69,13 @@ func main() {
 	rx := add(gx, ex)
 	ry := add(gy, ey)
 
-	fmt.Printf("Rx: %v\n", rx.Text(16))
-	fmt.Printf("Ry: %v\n", ry.Text(16))
+	fmt.Println("--Garbler's random share-------------------------------------")
+	fmt.Printf("Gx : %v\n", gx.Text(16))
+	fmt.Printf("Gy : %v\n", gy.Text(16))
+	fmt.Println("-------------------------------------------------------------")
+
+	fmt.Printf("Rx : %v\n", rx.Text(16))
+	fmt.Printf("Ry : %v\n", ry.Text(16))
 
 	fmt.Printf("P0x: %v\n", exi.Text(16))
 	fmt.Printf("P0y: %v\n", eyi.Text(16))
@@ -80,8 +85,10 @@ func main() {
 
 	xx, yy := Curve.Add(exi, eyi, gxi, gyi)
 
-	fmt.Printf("Cx: %v\n", xx.Text(16))
-	fmt.Printf("Cy: %v\n", yy.Text(16))
+	fmt.Println("--Correct result---------------------------------------------")
+	fmt.Printf("Cx : %v\n", xx.Text(16))
+	fmt.Printf("Cy : %v\n", yy.Text(16))
+	fmt.Println("-------------------------------------------------------------")
 
 	reconstructAndCompare(gx, gy, ex, ey, gxi, gyi, exi, eyi)
 }
@@ -101,8 +108,8 @@ func reconstructAndCompare(x0, y0, x1, y1 *big.Int, Px, Py, Qx, Qy *big.Int) {
 	Ry := new(big.Int).Add(y0, y1)
 	Ry.Mod(Ry, p)
 
-	fmt.Printf("Reconstructed Rx: %064x\n", Rx)
-	fmt.Printf("Reconstructed Ry: %064x\n", Ry)
+	fmt.Printf("Reconstruc Rx: %064x\n", Rx)
+	fmt.Printf("Reconstruc Ry: %064x\n", Ry)
 
 	// reference using Go's curve add
 	curve := elliptic.P256()
