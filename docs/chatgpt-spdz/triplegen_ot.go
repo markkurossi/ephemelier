@@ -11,10 +11,13 @@ import (
 	"github.com/markkurossi/mpc/p2p"
 )
 
-// -----------------------------------------------------------------------------
-// GenerateBeaverTriplesOT
-// -----------------------------------------------------------------------------
-
+// GenerateBeaverTriplesOT produces n Beaver triples (a,b,c) in additive shares using IKNP and CrossMultiplyViaOT.
+// - conn: p2p connection between the two parties
+// - oti: base OT instance (must be a fresh ot.OT implementation instance)
+// - id: party id (0 or 1)
+// - n: number of triples to produce
+// - auditRate: optional fraction [0,1) to audit produced triples (set 0 to disable)
+// Returns local shares of triples (length n) or error.
 func GenerateBeaverTriplesOT(conn *p2p.Conn, oti ot.OT, id int, n int, auditRate float64) ([]*Triple, error) {
 	if id != 0 && id != 1 {
 		return nil, errors.New("id must be 0 or 1")
@@ -23,7 +26,7 @@ func GenerateBeaverTriplesOT(conn *p2p.Conn, oti ot.OT, id int, n int, auditRate
 		return nil, errors.New("n must be positive")
 	}
 
-	// Base OT role must be initialized before IKNP Setup.
+	// Initialize base-OT roles before IKNP Setup
 	if id == 0 {
 		if err := oti.InitSender(conn); err != nil {
 			return nil, fmt.Errorf("InitSender: %w", err)
@@ -40,14 +43,15 @@ func GenerateBeaverTriplesOT(conn *p2p.Conn, oti ot.OT, id int, n int, auditRate
 	}
 
 	ext := otext.NewIKNPExt(oti, conn, role)
-
 	if err := ext.Setup(rand.Reader); err != nil {
 		return nil, fmt.Errorf("IKNP Setup: %w", err)
 	}
 
 	triples := make([]*Triple, n)
 
-	const batchSize = 1024
+	// We'll operate in small batches to avoid large memory spikes; batch size tunable.
+	const batchSize = 256
+
 	for base := 0; base < n; base += batchSize {
 		end := base + batchSize
 		if end > n {
@@ -55,23 +59,25 @@ func GenerateBeaverTriplesOT(conn *p2p.Conn, oti ot.OT, id int, n int, auditRate
 		}
 		m := end - base
 
-		// ---------------------------
-		// 1. A values via IKNP
-		// ---------------------------
+		// -------------------------
+		// Sample A shares via IKNP
+		// -------------------------
 		if id == 0 {
+			// sender side: expand send to get wires (L0,L1)
 			wires, err := ext.ExpandSend(m)
 			if err != nil {
-				return nil, fmt.Errorf("ExpandSend(A): %w", err)
+				return nil, fmt.Errorf("ExpandSend A: %w", err)
 			}
 			for i := 0; i < m; i++ {
 				a0 := ExpandLabelToField(wires[i].L0)
 				triples[base+i] = &Triple{A: NewShare(a0)}
 			}
 		} else {
+			// receiver side: choose flags and receive labels
 			flags := randomBools(m)
 			labels, err := ext.ExpandReceive(flags)
 			if err != nil {
-				return nil, fmt.Errorf("ExpandReceive(A): %w", err)
+				return nil, fmt.Errorf("ExpandReceive A: %w", err)
 			}
 			for i := 0; i < m; i++ {
 				a1 := ExpandLabelToField(labels[i])
@@ -79,19 +85,21 @@ func GenerateBeaverTriplesOT(conn *p2p.Conn, oti ot.OT, id int, n int, auditRate
 			}
 		}
 
-		// Exchange complementary A shares.
+		// Exchange complementary A shares so both parties hold additive shares of a.
 		if id == 0 {
 			for i := 0; i < m; i++ {
 				if err := sendField(conn, triples[base+i].A.V); err != nil {
-					return nil, err
+					return nil, fmt.Errorf("send a0: %w", err)
 				}
 			}
-			conn.Flush()
+			if err := conn.Flush(); err != nil {
+				return nil, fmt.Errorf("flush a0: %w", err)
+			}
 		} else {
 			for i := 0; i < m; i++ {
 				a0, err := recvField(conn)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("recv a0: %w", err)
 				}
 				aLabel := triples[base+i].A.V
 				a1 := new(big.Int).Sub(aLabel, a0)
@@ -100,13 +108,13 @@ func GenerateBeaverTriplesOT(conn *p2p.Conn, oti ot.OT, id int, n int, auditRate
 			}
 		}
 
-		// ---------------------------
-		// 2. B values via IKNP
-		// ---------------------------
+		// -------------------------
+		// Sample B shares via IKNP
+		// -------------------------
 		if id == 0 {
 			wires, err := ext.ExpandSend(m)
 			if err != nil {
-				return nil, fmt.Errorf("ExpandSend(B): %w", err)
+				return nil, fmt.Errorf("ExpandSend B: %w", err)
 			}
 			for i := 0; i < m; i++ {
 				b0 := ExpandLabelToField(wires[i].L0)
@@ -116,7 +124,7 @@ func GenerateBeaverTriplesOT(conn *p2p.Conn, oti ot.OT, id int, n int, auditRate
 			flags := randomBools(m)
 			labels, err := ext.ExpandReceive(flags)
 			if err != nil {
-				return nil, fmt.Errorf("ExpandReceive(B): %w", err)
+				return nil, fmt.Errorf("ExpandReceive B: %w", err)
 			}
 			for i := 0; i < m; i++ {
 				b1 := ExpandLabelToField(labels[i])
@@ -124,18 +132,21 @@ func GenerateBeaverTriplesOT(conn *p2p.Conn, oti ot.OT, id int, n int, auditRate
 			}
 		}
 
+		// Exchange complementary B shares
 		if id == 0 {
 			for i := 0; i < m; i++ {
 				if err := sendField(conn, triples[base+i].B.V); err != nil {
-					return nil, err
+					return nil, fmt.Errorf("send b0: %w", err)
 				}
 			}
-			conn.Flush()
+			if err := conn.Flush(); err != nil {
+				return nil, fmt.Errorf("flush b0: %w", err)
+			}
 		} else {
 			for i := 0; i < m; i++ {
 				b0, err := recvField(conn)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("recv b0: %w", err)
 				}
 				bLabel := triples[base+i].B.V
 				b1 := new(big.Int).Sub(bLabel, b0)
@@ -144,71 +155,25 @@ func GenerateBeaverTriplesOT(conn *p2p.Conn, oti ot.OT, id int, n int, auditRate
 			}
 		}
 
-		// ---------------------------
-		// 3. C = A * B
-		// ---------------------------
+		// -------------------------
+		// Compute C shares via CrossMultiplyViaOT
+		// -------------------------
 		for i := 0; i < m; i++ {
 			aS := triples[base+i].A
 			bS := triples[base+i].B
 
-			// Try OT-based cross multiplication.
 			cS, err := CrossMultiplyViaOT(conn, oti, id, aS, bS)
-			if err == nil {
-				triples[base+i].C = cS
-				continue
+			if err != nil {
+				return nil, fmt.Errorf("CrossMultiplyViaOT failed at idx %d: %w", base+i, err)
 			}
-
-			// Dealer fallback.
-			if id == 0 {
-				// Receive other shares
-				a1, err := recvField(conn)
-				if err != nil {
-					return nil, err
-				}
-				b1, err := recvField(conn)
-				if err != nil {
-					return nil, err
-				}
-
-				a0 := aS.V
-				b0 := bS.V
-
-				aTot := new(big.Int).Add(a0, a1)
-				bTot := new(big.Int).Add(b0, b1)
-				aTot.Mod(aTot, p256P)
-				bTot.Mod(bTot, p256P)
-
-				cTot := new(big.Int).Mul(aTot, bTot)
-				cTot.Mod(cTot, p256P)
-
-				c1, _ := randomFieldElement(rand.Reader)
-				c0 := new(big.Int).Sub(cTot, c1)
-				c0.Mod(c0, p256P)
-
-				triples[base+i].C = NewShare(c0)
-
-				if err := sendField(conn, c1); err != nil {
-					return nil, err
-				}
-			} else {
-				if err := sendField(conn, aS.V); err != nil {
-					return nil, err
-				}
-				if err := sendField(conn, bS.V); err != nil {
-					return nil, err
-				}
-				c1, err := recvField(conn)
-				if err != nil {
-					return nil, err
-				}
-				triples[base+i].C = NewShare(c1)
-			}
+			triples[base+i].C = cS
 		}
 	}
 
+	// Optional auditing (enabled by auditRate > 0). If auditTriples not implemented it may return error.
 	if auditRate > 0 {
 		if err := auditTriples(conn, id, triples, auditRate); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("audit failed: %w", err)
 		}
 	}
 
