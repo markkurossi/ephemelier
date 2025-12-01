@@ -28,14 +28,9 @@ var (
 
 func main() {
 
-	gr, ew := io.Pipe()
-	er, gw := io.Pipe()
-
-	gio := newReadWriter(gr, gw)
-	eio := newReadWriter(er, ew)
+	gConn, eConn := p2p.Pipe()
 
 	var wg sync.WaitGroup
-	var oti = ot.NewCO(rand.Reader)
 
 	var ex, ey, exi, eyi *big.Int
 
@@ -47,7 +42,8 @@ func main() {
 			panic("e")
 		}
 		var err error
-		ex, ey, err = Peer(oti, 1, p2p.NewConn(eio), exi, eyi)
+		var peerOTI = ot.NewCO(rand.Reader)
+		ex, ey, err = Peer(peerOTI, 1, eConn, exi, eyi)
 		if err != nil {
 			panic(err)
 		}
@@ -59,7 +55,8 @@ func main() {
 		panic("g")
 	}
 
-	gx, gy, err := Peer(oti, 0, p2p.NewConn(gio), gxi, gyi)
+	var peerOTI = ot.NewCO(rand.Reader)
+	gx, gy, err := Peer(peerOTI, 0, gConn, gxi, gyi)
 	if err != nil {
 		panic(err)
 	}
@@ -108,8 +105,8 @@ func reconstructAndCompare(x0, y0, x1, y1 *big.Int, Px, Py, Qx, Qy *big.Int) {
 	Ry := new(big.Int).Add(y0, y1)
 	Ry.Mod(Ry, p)
 
-	fmt.Printf("Reconstruc Rx: %064x\n", Rx)
-	fmt.Printf("Reconstruc Ry: %064x\n", Ry)
+	fmt.Printf("Reconstr. Rx: %064x\n", Rx)
+	fmt.Printf("Reconstr. Ry: %064x\n", Ry)
 
 	// reference using Go's curve add
 	curve := elliptic.P256()
@@ -117,8 +114,8 @@ func reconstructAndCompare(x0, y0, x1, y1 *big.Int, Px, Py, Qx, Qy *big.Int) {
 	// ensure reduce (should already be mod p)
 	RxRef.Mod(RxRef, p)
 	RyRef.Mod(RyRef, p)
-	fmt.Printf("Reference  Rx: %064x\n", RxRef)
-	fmt.Printf("Reference  Ry: %064x\n", RyRef)
+	fmt.Printf("Reference Rx: %064x\n", RxRef)
+	fmt.Printf("Reference Ry: %064x\n", RyRef)
 
 	if Rx.Cmp(RxRef) == 0 && Ry.Cmp(RyRef) == 0 {
 		fmt.Println("MATCH: SPDZ result equals reference P+Q")
