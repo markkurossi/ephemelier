@@ -41,6 +41,8 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"math/big"
+
+	"github.com/markkurossi/mpc/p2p"
 )
 
 // P256Prime defines the P256's coordinate field
@@ -295,6 +297,7 @@ type Triple struct {
 // Peer represents a party in the SPDZ protocol
 type Peer struct {
 	ID         int
+	Conn       *p2p.Conn
 	Curve      elliptic.Curve
 	MACKey     *big.Int
 	Triples    []*Triple
@@ -304,9 +307,10 @@ type Peer struct {
 }
 
 // NewPeer creates a new peer
-func NewPeer(id int, macKeyShare *big.Int) *Peer {
+func NewPeer(id int, conn *p2p.Conn, macKeyShare *big.Int) *Peer {
 	return &Peer{
 		ID:        id,
+		Conn:      conn,
 		Curve:     elliptic.P256(),
 		MACKey:    macKeyShare,
 		Triples:   make([]*Triple, 0),
@@ -763,8 +767,10 @@ func ECPointAddition(x1Share1, y1Share1, x2Share1, y2Share1 *SPDZShare,
 }
 
 func main() {
-	fmt.Println("=== SPDZ-MASCOT with OT Extension for Secure P256 Diffie-Hellman ===")
+	fmt.Println("=== SPDZ-MASCOT-IKNP for Secure P256 Point Addition ===")
 	fmt.Println()
+
+	gConn, eConn := p2p.Pipe()
 
 	// ========== Setup Phase ==========
 	fmt.Println("--- Setup Phase ---")
@@ -778,8 +784,8 @@ func main() {
 	fmt.Println("✓ Generated MAC key shares")
 
 	// Create peers
-	peer1 := NewPeer(1, alpha1)
-	peer2 := NewPeer(2, alpha2)
+	peer1 := NewPeer(1, gConn, alpha1)
+	peer2 := NewPeer(2, eConn, alpha2)
 
 	// ========== OT Extension Setup ==========
 	fmt.Println("\n--- OT Extension Setup ---")
