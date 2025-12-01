@@ -19,9 +19,9 @@ require (
 	github.com/gtank/ristretto255 v0.2.0 // indirect
 	github.com/markkurossi/crypto v0.0.0-20240520115340-daed3f9a1082 // indirect
 	github.com/markkurossi/tabulate v0.0.0-20251004141156-4c8b7c8b825a // indirect
-	golang.org/x/crypto v0.43.0 // indirect
-	golang.org/x/sys v0.37.0 // indirect
-	golang.org/x/text v0.30.0 // indirect
+	golang.org/x/crypto v0.45.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 )
 
 replace github.com/markkurossi/mpc => ../mpc
