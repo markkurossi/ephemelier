@@ -461,7 +461,7 @@ func Peer(oti ot.OT, id int, conn *p2p.Conn, xInput, yInput *big.Int) (xOut, yOu
 
 	// Generate Beaver triples (dealer = peer 0)
 	triplesNeeded := 1400 // safe upper bound for inversion + intermediate multiplications
-	triples, err := GenerateBeaverTriplesDealer(conn, oti, id, triplesNeeded)
+	triples, err := GenerateBeaverTriplesOTBatch(conn, oti, id, triplesNeeded, 0)
 	if err != nil {
 		return nil, nil, err
 	}
