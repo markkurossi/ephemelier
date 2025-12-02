@@ -90,10 +90,11 @@ type Triple struct {
 
 // ---------- Beaver triple (dealer) ----------
 
-// GenerateBeaverTriplesDealer: peer 0 is dealer. Produces `n` triples.
-// Dealer samples global a,b, computes c = a*b mod p, then splits into additive shares:
-//   - peer0 receives (a0,b0,c0) random
-//   - peer1 receives (a1,b1,c1) = (a-a0, b-b0, c-c0)
+// GenerateBeaverTriplesDealer implements the Beaver triple
+// dealer. Peer 0 is dealer. Produces `n` triples.  Dealer samples
+// global a,b, computes c = a*b mod p, then splits into additive
+// shares: - peer0 receives (a0,b0,c0) random - peer1 receives
+// (a1,b1,c1) = (a-a0, b-b0, c-c0)
 func GenerateBeaverTriplesDealer(conn *p2p.Conn, oti ot.OT, id int, n int) ([]*Triple, error) {
 	triples := make([]*Triple, n)
 	if id == 0 {
@@ -392,8 +393,9 @@ func SPDZPointAdd(conn *p2p.Conn, id int, x1, y1, x2, y2 *Share, triples []*Trip
 
 // ---------- Input sharing ----------
 
-// ShareInput: owner==true => mask with random s and send o = val - s to peer; return local s.
-// owner==false => receive o and use as local share.
+// ShareInput shares with the peer: owner==true => mask with random s
+// and send o = val - s to peer; return local s.  owner==false =>
+// receive o and use as local share.
 func ShareInput(conn *p2p.Conn, id int, owner bool, val *big.Int) (*Share, error) {
 	if owner {
 		s, err := randomFieldElement(rand.Reader)
@@ -420,8 +422,9 @@ func ShareInput(conn *p2p.Conn, id int, owner bool, val *big.Int) (*Share, error
 
 // ---------- Peer (top-level) ----------
 
-// Peer(oti, id, conn, xInput, yInput) : each peer supplies only its own point.
-// - If id==0, (xInput,yInput) is P; if id==1, (xInput,yInput) is Q.
+// Peer implements a peer in the P256Add operation. Each peer supplies
+// only its own point.  - If id==0, (xInput,yInput) is P; if id==1,
+// (xInput,yInput) is Q.
 func Peer(oti ot.OT, id int, conn *p2p.Conn, xInput, yInput *big.Int) (xOut, yOut *big.Int, err error) {
 	if id != 0 && id != 1 {
 		return nil, nil, errors.New("id must be 0 or 1")

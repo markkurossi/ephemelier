@@ -167,9 +167,10 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, id int, n int, audi
 	return triples, nil
 }
 
-// CrossMultiplyBatch: batched version of CrossMultiplyViaOT for m triples.
-// Input: list of triples with A and B shares filled (local shares).
-// Output: slice of C shares (local contributions) length == len(triples).
+// CrossMultiplyBatch implements the batched version of
+// CrossMultiplyViaOT for m triples.  Input: list of triples with A
+// and B shares filled (local shares).  Output: slice of C shares
+// (local contributions) length == len(triples).
 func CrossMultiplyBatch(conn *p2p.Conn, oti ot.OT, id int, triples []*Triple) ([]*Share, error) {
 	m := len(triples)
 	if m == 0 {
