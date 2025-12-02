@@ -18,32 +18,30 @@ import (
 	"github.com/markkurossi/mpc/vole"
 )
 
-// GenerateBeaverTriplesOTBatch generates n triples using batched IKNP and batched bitwise OT.
-// Much faster than one-by-one CrossMultiplyViaOT.
-func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, id int, n int, auditRate float64) ([]*Triple, error) {
-	if id != 0 && id != 1 {
-		return nil, errors.New("id must be 0 or 1")
-	}
+// GenerateBeaverTriplesOTBatch generates n triples using batched IKNP
+// and batched bitwise OT.
+func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int, auditRate float64) ([]*Triple, error) {
 	if n <= 0 {
 		return nil, errors.New("n must be positive")
 	}
 
-	// init base-OT roles
-	if id == 0 {
+	// Init base-OT roles
+	switch role {
+	case Sender:
 		if err := oti.InitSender(conn); err != nil {
 			return nil, fmt.Errorf("InitSender: %w", err)
 		}
-	} else {
+
+	case Receiver:
 		if err := oti.InitReceiver(conn); err != nil {
 			return nil, fmt.Errorf("InitReceiver: %w", err)
 		}
+
+	default:
+		return nil, fmt.Errorf("invalid role: %d", role)
 	}
 
-	role := otext.SenderRole
-	if id == 1 {
-		role = otext.ReceiverRole
-	}
-	ext := otext.NewIKNPExt(oti, conn, role)
+	ext := otext.NewIKNPExt(oti, conn, role.OTExtRole())
 	if err := ext.Setup(rand.Reader); err != nil {
 		return nil, fmt.Errorf("IKNP Setup: %w", err)
 	}
@@ -60,7 +58,7 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, id int, n int, audi
 		m := end - base
 
 		// 1) Sample A shares via IKNP (batched)
-		if id == 0 {
+		if role == Sender {
 			// sender expands m wires
 			wires, err := ext.ExpandSend(m)
 			if err != nil {
@@ -83,7 +81,7 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, id int, n int, audi
 		}
 
 		// exchange complementary A shares
-		if id == 0 {
+		if role == Sender {
 			for i := 0; i < m; i++ {
 				if err := sendField(conn, triples[base+i].A.V); err != nil {
 					return nil, fmt.Errorf("send a0: %w", err)
@@ -106,7 +104,7 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, id int, n int, audi
 		}
 
 		// 2) Sample B shares via IKNP (batched)
-		if id == 0 {
+		if role == Sender {
 			wires, err := ext.ExpandSend(m)
 			if err != nil {
 				return nil, fmt.Errorf("ExpandSend B: %w", err)
@@ -128,7 +126,7 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, id int, n int, audi
 		}
 
 		// exchange complementary B shares
-		if id == 0 {
+		if role == Sender {
 			for i := 0; i < m; i++ {
 				if err := sendField(conn, triples[base+i].B.V); err != nil {
 					return nil, fmt.Errorf("send b0: %w", err)
@@ -151,7 +149,7 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, id int, n int, audi
 		}
 
 		// 3) Batch cross-multiply: compute all cShares for triples[base:base+m]
-		cShares, err := CrossMultiplyBatch(conn, oti, id, triples[base:base+m])
+		cShares, err := CrossMultiplyBatch(conn, oti, role, triples[base:base+m])
 		if err != nil {
 			return nil, fmt.Errorf("CrossMultiplyBatch failed: %w", err)
 		}
@@ -166,10 +164,11 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, id int, n int, audi
 	return triples, nil
 }
 
-// CrossMultiplyBatch: batched version of CrossMultiplyViaOT for m triples.
-// Input: list of triples with A and B shares filled (local shares).
-// Output: slice of C shares (local contributions) length == len(triples).
-func CrossMultiplyBatch(conn *p2p.Conn, oti ot.OT, id int, triples []*Triple) ([]*Share, error) {
+// CrossMultiplyBatch is a batched version of CrossMultiply with OT
+// for m triples. The triples is a list of triples with A and B shares
+// filled (local shares). The function returns a slice of C shares
+// (local contributions).
+func CrossMultiplyBatch(conn *p2p.Conn, oti ot.OT, role Role, triples []*Triple) ([]*Share, error) {
 	m := len(triples)
 	if m == 0 {
 		return nil, nil
@@ -232,14 +231,14 @@ func CrossMultiplyBatch(conn *p2p.Conn, oti ot.OT, id int, triples []*Triple) ([
 	}
 
 	// Direction 1: local is sender for dir1 iff id == 0
-	localIsSenderForDir1 := (id == 0)
+	localIsSenderForDir1 := (role == Sender)
 	term1, err := runDirection(localIsSenderForDir1)
 	if err != nil {
 		return nil, err
 	}
 
 	// Direction 2: roles swapped (local is sender for dir2 iff id == 1)
-	localIsSenderForDir2 := (id == 1)
+	localIsSenderForDir2 := (role == Receiver)
 	term2, err := runDirection(localIsSenderForDir2)
 	if err != nil {
 		return nil, err

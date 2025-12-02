@@ -12,7 +12,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/markkurossi/mpc/ot"
 	"github.com/markkurossi/mpc/p2p"
 )
 
@@ -74,10 +73,10 @@ func testAdd(t *testing.T, gx, gy, ex, ey, rx, ry *big.Int) {
 	var rex, rey *big.Int
 
 	wg.Go(func() {
-		rex, rey, eErr = Peer(ot.NewCO(rand.Reader), 1, eConn, ex, ey)
+		rex, rey, eErr = P256Add(1, eConn, ex, ey)
 	})
 
-	rgx, rgy, err := Peer(ot.NewCO(rand.Reader), 0, gConn, gx, gy)
+	rgx, rgy, err := P256Add(0, gConn, gx, gy)
 	if err != nil {
 		t.Fatalf("garbler failed: %v", err)
 	}
