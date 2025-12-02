@@ -40,8 +40,6 @@ func (role Role) OTExtRole() int {
 	return int(role)
 }
 
-// ---------- Helpers ----------
-
 func modReduce(x *big.Int) *big.Int {
 	z := new(big.Int).Mod(x, p256P)
 	if z.Sign() < 0 {
@@ -84,8 +82,7 @@ func recvField(conn *p2p.Conn) (*big.Int, error) {
 	return read32ToBig(b), nil
 }
 
-// ---------- Share & Triple ----------
-
+// Share implements a share value in Beaver triple.
 type Share struct {
 	V *big.Int
 }
@@ -104,6 +101,7 @@ func SubShare(a, b *Share) *Share {
 	return NewShare(z)
 }
 
+// Triple implements a Beaver triple.
 type Triple struct {
 	A *Share
 	B *Share
@@ -111,7 +109,9 @@ type Triple struct {
 }
 
 // openTwoShares opens two shares in one round-trip
-func openTwoShares(conn *p2p.Conn, role Role, s1, s2 *Share) (*big.Int, *big.Int, error) {
+func openTwoShares(conn *p2p.Conn, role Role, s1, s2 *Share) (
+	*big.Int, *big.Int, error) {
+
 	if role == Sender {
 		if err := sendField(conn, s1.V); err != nil {
 			return nil, nil, err
@@ -157,11 +157,11 @@ func openTwoShares(conn *p2p.Conn, role Role, s1, s2 *Share) (*big.Int, *big.Int
 	}
 }
 
-// ---------- Beaver multiplication (MulShare) ----------
-
 // MulShare computes a*b given shares and a Beaver triple.
 // Note: to avoid doubling d*e term, only one party (id==0) adds dv*ev.
-func MulShare(conn *p2p.Conn, role Role, a, b *Share, triple *Triple) (*Share, error) {
+func MulShare(conn *p2p.Conn, role Role, a, b *Share, triple *Triple) (
+	*Share, error) {
+
 	d := SubShare(a, triple.A)
 	e := SubShare(b, triple.B)
 
@@ -184,9 +184,9 @@ func MulShare(conn *p2p.Conn, role Role, a, b *Share, triple *Triple) (*Share, e
 	return NewShare(term), nil
 }
 
-// ---------- safeMul wrapper ----------
+func safeMul(conn *p2p.Conn, role Role, a, b *Share, triples []*Triple,
+	tripleIndex *int) (*Share, error) {
 
-func safeMul(conn *p2p.Conn, role Role, a, b *Share, triples []*Triple, tripleIndex *int) (*Share, error) {
 	if *tripleIndex >= len(triples) {
 		return nil, errors.New("not enough triples for multiplication")
 	}
@@ -199,11 +199,12 @@ func safeMul(conn *p2p.Conn, role Role, a, b *Share, triples []*Triple, tripleIn
 	return res, nil
 }
 
-// ---------- ExpShare / InvShare (production) ----------
+// ExpShare computes [x]^exponent (exponent is public) using
+// square-and-multiply.  It uses Beaver triples provided in 'triples'
+// and advances tripleIndex accordingly.
+func ExpShare(conn *p2p.Conn, role Role, x *Share, exponent *big.Int,
+	triples []*Triple, tripleIndex *int) (*Share, error) {
 
-// ExpShare computes [x]^exponent (exponent is public) using square-and-multiply.
-// It uses Beaver triples provided in 'triples' and advances tripleIndex accordingly.
-func ExpShare(conn *p2p.Conn, role Role, x *Share, exponent *big.Int, triples []*Triple, tripleIndex *int) (*Share, error) {
 	// Initialize [res] = 1 additive share (peer0 holds 1, peer1 holds 0).
 	var res *Share
 	if role == Sender {
@@ -243,14 +244,17 @@ func ExpShare(conn *p2p.Conn, role Role, x *Share, exponent *big.Int, triples []
 }
 
 // InvShare computes multiplicative inverse via Fermat: x^(p-2)
-func InvShare(conn *p2p.Conn, role Role, x *Share, triples []*Triple, tripleIndex *int) (*Share, error) {
+func InvShare(conn *p2p.Conn, role Role, x *Share, triples []*Triple,
+	tripleIndex *int) (*Share, error) {
+
 	exp := new(big.Int).Sub(p256P, big.NewInt(2))
 	return ExpShare(conn, role, x, exp, triples, tripleIndex)
 }
 
-// ---------- SPDZ point addition ----------
+// SPDZPointAdd implements point addition in SPDZ.
+func SPDZPointAdd(conn *p2p.Conn, role Role, x1, y1, x2, y2 *Share,
+	triples []*Triple, tripleIndex *int) (*Share, *Share, error) {
 
-func SPDZPointAdd(conn *p2p.Conn, role Role, x1, y1, x2, y2 *Share, triples []*Triple, tripleIndex *int) (*Share, *Share, error) {
 	// dx = x2 - x1 ; dy = y2 - y1
 	dx := SubShare(x2, x1)
 	dy := SubShare(y2, y1)
@@ -299,8 +303,6 @@ func SPDZPointAdd(conn *p2p.Conn, role Role, x1, y1, x2, y2 *Share, triples []*T
 
 	return x3, y3, nil
 }
-
-// ---------- Input sharing ----------
 
 // ShareInput shares the input point to the peer:
 //   - if owner==true => mask with random s and send o = val - s to peer;
