@@ -50,8 +50,9 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 
 	triples := make([]*Triple, n)
 
-	// We'll sample A and B in batches to limit memory use
-	const batchSize = 1024 // tuneable; set to e.g. 1024 or 2048 depending on memory
+	// We'll sample A and B in batches to limit memory use tuneable;
+	// set to e.g. 1024 or 2048 depending on memory
+	const batchSize = 1024
 	for base := 0; base < n; base += batchSize {
 		end := base + batchSize
 		if end > n {
@@ -156,7 +157,9 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 			return nil, fmt.Errorf("CrossMultiplyBatch failed: %w", err)
 		}
 		if len(cShares) != m {
-			return nil, fmt.Errorf("CrossMultiplyBatch returned %d shares want %d", len(cShares), m)
+			return nil,
+				fmt.Errorf("CrossMultiplyBatch returned %d shares want %d",
+					len(cShares), m)
 		}
 		for i := 0; i < m; i++ {
 			triples[base+i].C = cShares[i]
@@ -170,13 +173,16 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 // for m triples. The triples is a list of triples with A and B shares
 // filled (local shares). The function returns a slice of C shares
 // (local contributions).
-func CrossMultiplyBatch(conn *p2p.Conn, oti ot.OT, role Role, triples []*Triple) ([]*Share, error) {
+func CrossMultiplyBatch(conn *p2p.Conn, oti ot.OT, role Role,
+	triples []*Triple) ([]*Share, error) {
+
 	m := len(triples)
 	if m == 0 {
 		return nil, nil
 	}
 
-	// Helper that runs one VOLE direction and returns per-triple contributions (big.Int)
+	// Helper that runs one VOLE direction and returns per-triple
+	// contributions (big.Int)
 	runDirection := func(localIsSender bool) ([]*big.Int, error) {
 		// construct vole extension with the appropriate role
 		var role vole.Role
@@ -191,8 +197,8 @@ func CrossMultiplyBatch(conn *p2p.Conn, oti ot.OT, role Role, triples []*Triple)
 		}
 
 		// Build local input vector for this direction:
-		// - If local is sender, senderInputs = local A shares (triples[t].A.V)
-		// - If local is receiver, receiverInputs = local B shares (triples[t].B.V)
+		// - if sender, senderInputs = local A shares (triples[t].A.V)
+		// - if receiver, receiverInputs = local B shares (triples[t].B.V)
 		if localIsSender {
 			xs := make([]*big.Int, m)
 			for t := 0; t < m; t++ {
@@ -204,7 +210,9 @@ func CrossMultiplyBatch(conn *p2p.Conn, oti ot.OT, role Role, triples []*Triple)
 				return nil, fmt.Errorf("VOLE MulSender: %w", err)
 			}
 			if len(rs) != m {
-				return nil, fmt.Errorf("VOLE MulSender returned %d masks, want %d", len(rs), m)
+				return nil,
+					fmt.Errorf("VOLE MulSender returned %d masks, want %d",
+						len(rs), m)
 			}
 			// Sender's contribution for this direction is -r_i mod p
 			out := make([]*big.Int, m)
@@ -225,7 +233,9 @@ func CrossMultiplyBatch(conn *p2p.Conn, oti ot.OT, role Role, triples []*Triple)
 				return nil, fmt.Errorf("VOLE MulReceiver: %w", err)
 			}
 			if len(us) != m {
-				return nil, fmt.Errorf("VOLE MulReceiver returned %d values, want %d", len(us), m)
+				return nil,
+					fmt.Errorf("VOLE MulReceiver returned %d values, want %d",
+						len(us), m)
 			}
 			// Receiver's contribution for this direction is u_i
 			return us, nil
@@ -247,7 +257,9 @@ func CrossMultiplyBatch(conn *p2p.Conn, oti ot.OT, role Role, triples []*Triple)
 	}
 
 	// Combine per-triple contributions:
-	// final sum = localProd + term1 + term2  (each term already mod p and signed correctly)
+	//
+	//   final sum = localProd + term1 + term2 (each term already mod
+	//   p and signed correctly)
 	cShares := make([]*Share, m)
 	for t := 0; t < m; t++ {
 		sum := new(big.Int).SetInt64(0)
