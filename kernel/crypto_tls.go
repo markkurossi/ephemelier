@@ -197,12 +197,7 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 		peerSpdzFinalX := new(big.Int).SetBytes(data)
 		spdzFinal := add(spdzFinalX, peerSpdzFinalX)
 
-		// XXX call conn.ServerHandshakeServerHello which only sends
-		// the server hello.
-		//
-		// XXX end syscall here and return necessary components to MPC
-		// space: transcript, partial; continue the handshake from
-		// MPC.
+		// Debugging secrets.
 
 		finalX, finalY := curveAdd(partial.X, partial.Y,
 			new(big.Int).SetBytes(kexResult.PartialX),
@@ -219,6 +214,42 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 
 		if finalX.Cmp(spdzFinal) == 0 {
 			fmt.Println("--SPDZ result match-------------------------------")
+		}
+
+		if true {
+
+			// Write ServerHello and continue from the MCP space.
+			data, err := conn.MakeServerHello(pubkey)
+			if err != nil {
+				proc.tlsPeerErrf(err, "create ServerHello: %v", err)
+				return err
+			}
+			// XXX Update transcript here. MPCWrite simply writes.
+			err = conn.MPCWrite(tls.CTHandshake, data, nil)
+			if err != nil {
+				proc.tlsPeerErrf(err, "write ServerHello: %v", err)
+				return err
+			}
+
+			// Return TLS FD.
+			fd := NewTLSFD(conn, priv, cert)
+			sys.SetArg0(proc.AllocFD(fd))
+
+			// Return our share of the shared secret.
+			sys.argBuf = spdzFinalX.Bytes()
+
+			// Sync FD with evaluator.
+			err = proc.conn.SendUint32(int(sys.arg0))
+			if err == nil {
+				err = proc.conn.Flush()
+			}
+			if err != nil {
+				fd.Close()
+				proc.FreeFD(sys.arg0)
+				sys.arg0 = int32(mapError(err))
+			}
+
+			return nil
 		}
 
 		// Use X-coordinate as shared secret (standard ECDH practice).
@@ -365,6 +396,28 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 			return err
 		}
 
+		if true {
+			// Return TLS FD.
+			fd := NewTLSFD(nil, nil, nil)
+
+			// Get FD from garbler.
+			gfd, err := proc.conn.ReceiveUint32()
+			if err == nil {
+				sys.SetArg0(int32(gfd))
+
+				// Return our share of the shared secret.
+				sys.argBuf = spdzFinalX.Bytes()
+
+				err = proc.SetFD(sys.arg0, fd)
+			}
+			if err != nil {
+				fd.Close()
+				sys.SetArg0(int32(mapError(err)))
+			}
+
+			return nil
+		}
+
 	case tlsMsgError:
 		data, err := proc.conn.ReceiveData()
 		if err != nil {
@@ -395,6 +448,47 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 	}
 
 	return nil
+}
+
+func (proc *Process) tlsKex(sys *syscall) {
+	fd, ok := proc.fds[sys.arg0]
+	if !ok {
+		sys.SetArg0(int32(-EBADF))
+		return
+	}
+	tlsfd, ok := fd.Impl.(*FDTLS)
+	if !ok {
+		sys.SetArg0(int32(-ENOTSOCK))
+		return
+	}
+	if proc.role == RoleEvaluator {
+		sys.SetArg0(sys.arg1)
+		return
+	}
+
+	// XXX could we have argBuf to be written and loop with SysTlskex?
+
+	var data []byte
+	var err error
+
+	ht := tls.HandshakeType(sys.arg1)
+	switch ht {
+	case tls.HTEncryptedExtensions:
+		data, err = tlsfd.conn.MakeEncryptedExtensions()
+		if err != nil {
+			sys.SetArg0(int32(mapError(err)))
+			return
+		}
+
+	default:
+		fmt.Printf("SysTlskex: invalid handshake: %v\n", ht)
+		sys.SetArg0(int32(-EINVAL))
+		return
+	}
+
+	// XXX update transcript with data.
+	sys.SetArg0(int32(ht))
+	sys.argBuf = data
 }
 
 func (proc *Process) tlsPeerErrf(err error, format string, a ...interface{}) {

@@ -8,11 +8,14 @@
 package main
 
 import (
+	"crypto/elliptic/p256"
+	"crypto/tls"
 	"encoding/binary"
+	"encoding/hex"
 	"ephemelier/kernel"
 )
 
-func main(g kernel.G1B, e kernel.E1B) (
+func main(g kernel.G, e kernel.E) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
 	nonce, mem, ok := kernel.DecodeMem(g.mem, g.key, e.key)
@@ -21,11 +24,26 @@ func main(g kernel.G1B, e kernel.E1B) (
 	}
 	clientfd := binary.GetUint32(mem[4:])
 
-	if g.arg0 < 0 || g.arg0 == 42 {
+	if g.arg0 < 0 {
 		return nil, intern(StAccept), kernel.SysClose, int32(clientfd), nil, 0
 	}
 
-	// XXX TLS handshake done.
+	// TLS FD.
+	mem = binary.PutUint32(mem, 8, uint32(g.arg0))
 
-	return nil, 0, kernel.SysExit, 0, nil, 0
+	// Construct shared secret.
+	gShare := binary.GetUint(g.argBuf)
+	eShare := binary.GetUint(e.argBuf)
+
+	secret := uint256(gShare) + uint256(eShare)
+	secret = secret % p256.P
+
+	var buf [32]byte
+	buf = binary.PutUint(buf, 0, secret)
+
+	copy(mem[12:], buf)
+
+	return kernel.EncodeMem(nonce, mem, g.key, e.key),
+		intern(StTlsserverKex), kernel.SysTlskex, g.arg0,
+		nil, tls.HTEncryptedExtensions
 }

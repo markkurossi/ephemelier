@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/markkurossi/ephemelier/crypto/tls"
 	"github.com/markkurossi/ephemelier/eef"
 	"github.com/markkurossi/mpc"
 	"github.com/markkurossi/mpc/circuit"
@@ -728,6 +729,9 @@ func (proc *Process) syscall(sys *syscall) error {
 	case SysTlsserver:
 		proc.tlsServer(sys)
 
+	case SysTlskex:
+		proc.tlsKex(sys)
+
 	case SysGetrandom:
 		buf := make([]byte, sys.arg0)
 		n, err := rand.Read(buf)
@@ -912,6 +916,9 @@ func (proc *Process) ktraceCall(sys *syscall) {
 	case SysRead, SysTlsserver, SysTlsclient:
 		fmt.Printf("(%d, %d)", sys.arg0, sys.arg1)
 
+	case SysTlskex:
+		fmt.Printf("(%d, %s)", sys.arg0, tls.HandshakeType(sys.arg1))
+
 	case SysWrite:
 		fmt.Printf("(%d, %x, %d)", sys.arg0, sys.argBuf[:sys.arg1], sys.arg1)
 
@@ -938,7 +945,15 @@ func (proc *Process) ktraceRet(sys *syscall) {
 		fmt.Printf(" %s", Errno(-sys.arg0))
 	} else {
 		switch sys.call {
-		case SysRead, SysCreatemsg:
+		case SysRead, SysCreatemsg, SysTlsserver:
+			if len(sys.argBuf) > 0 {
+				fmt.Printf(", %x", sys.argBuf)
+			} else {
+				fmt.Printf(", nil")
+			}
+
+		case SysTlskex:
+			fmt.Printf("=%s", tls.HandshakeType(sys.arg0))
 			if len(sys.argBuf) > 0 {
 				fmt.Printf(", %x", sys.argBuf)
 			} else {

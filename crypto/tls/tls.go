@@ -388,32 +388,7 @@ func (conn *Conn) ServerHandshakeServerHello(sharedSecret, kex []byte) error {
 
 	// ServerHello
 
-	conn.sharedSecret = sharedSecret
-
-	keyShare := &KeyShareEntry{
-		Group:       GroupSecp256r1,
-		KeyExchange: kex,
-	}
-	req := &ServerHello{
-		LegacyVersion:   VersionTLS12,
-		LegacySessionID: conn.clientHello.LegacySessionID,
-		CipherSuite:     conn.cipherSuites[0],
-		Extensions: []Extension{
-			Extension{
-				Type: ETSupportedVersions,
-				Data: VersionTLS13.Bytes(),
-			},
-			Extension{
-				Type: ETKeyShare,
-				Data: keyShare.Bytes(),
-			},
-		},
-	}
-	_, err := rand.Read(req.Random[:])
-	if err != nil {
-		return conn.internalErrorf("failed to create random: %v", err)
-	}
-	data, err := Marshal(req)
+	data, err := conn.MakeServerHello(kex)
 	if err != nil {
 		return conn.internalErrorf("marshal failed: %v", err)
 	}
@@ -423,6 +398,8 @@ func (conn *Conn) ServerHandshakeServerHello(sharedSecret, kex []byte) error {
 	if err != nil {
 		return conn.internalErrorf("write failed: %v", err)
 	}
+
+	conn.sharedSecret = sharedSecret
 
 	err = conn.deriveHandshakeKeys(true)
 	if err != nil {
