@@ -15,6 +15,7 @@ import (
 	"math/big"
 	"os"
 
+	"github.com/markkurossi/ephemelier/crypto/spdz"
 	"github.com/markkurossi/ephemelier/crypto/tls"
 )
 
@@ -61,6 +62,11 @@ type TLSError struct {
 	Errno   uint32
 }
 
+var (
+	curve       = elliptic.P256()
+	curveParams = curve.Params()
+)
+
 func (proc *Process) tlsServer(sys *syscall) {
 	fd, ok := proc.fds[sys.arg0]
 	if !ok {
@@ -106,7 +112,6 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 		proc.tlsPeerErrf(err, "invalid client public key: %v", err)
 		return err
 	}
-	curve := elliptic.P256()
 
 	dhPeer, err := NewDHPeer("Garbler", curve)
 	if err != nil {
@@ -173,6 +178,25 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 		// Compute partial DH αᵢ·(β·G)
 		partial := dhPeer.ComputePartialDH(peerPublicKey)
 
+		// Compute shared secret αβ·G = Σ(αᵢ·(β·G)) with SPDZ. The
+		// function returns our arithmetic share of the secret.
+		spdzFinalX, spdzFinalY, err := spdz.P256Add(spdz.Sender, proc.conn,
+			partial.X, partial.Y)
+		if err != nil {
+			proc.tlsPeerErrf(err, "SPDZ P256Add failed: %v", err)
+			return err
+		}
+		_ = spdzFinalY
+		fmt.Printf("finalX: %v\n", spdzFinalX.Text(16))
+
+		// Debugging, read evaluator's share.
+		data, err = proc.conn.ReceiveData()
+		if err != nil {
+			return err
+		}
+		peerSpdzFinalX := new(big.Int).SetBytes(data)
+		spdzFinal := add(spdzFinalX, peerSpdzFinalX)
+
 		// XXX call conn.ServerHandshakeServerHello which only sends
 		// the server hello.
 		//
@@ -180,7 +204,6 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 		// space: transcript, partial; continue the handshake from
 		// MPC.
 
-		// Compute shared secret αβ·G = Σ(αᵢ·(β·G)). XXX moved to MPC.
 		finalX, finalY := curveAdd(partial.X, partial.Y,
 			new(big.Int).SetBytes(kexResult.PartialX),
 			new(big.Int).SetBytes(kexResult.PartialY))
@@ -192,6 +215,11 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 		fmt.Printf(" - e.Y: %x\n", kexResult.PartialY)
 		fmt.Printf(" =>  X: %x\n", finalX.Bytes())
 		fmt.Printf(" =>  Y: %x\n", finalY.Bytes())
+		fmt.Printf("SPDZ  : %v\n", spdzFinal.Text(16))
+
+		if finalX.Cmp(spdzFinal) == 0 {
+			fmt.Println("--SPDZ result match-------------------------------")
+		}
 
 		// Use X-coordinate as shared secret (standard ECDH practice).
 		sharedSecret := finalX.Bytes()
@@ -308,6 +336,27 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 			return err
 		}
 		err = proc.conn.SendData(data)
+		if err != nil {
+			return err
+		}
+		err = proc.conn.Flush()
+		if err != nil {
+			return err
+		}
+
+		// Compute shared secret αβ·G = Σ(αᵢ·(β·G)) with SPDZ. The
+		// function returns our arithmetic share of the secret.
+		spdzFinalX, spdzFinalY, err := spdz.P256Add(spdz.Receiver, proc.conn,
+			partial.X, partial.Y)
+		if err != nil {
+			proc.tlsPeerErrf(err, "SPDZ P256Add failed: %v", err)
+			return err
+		}
+		_ = spdzFinalY
+		fmt.Printf("finalX: %v\n", spdzFinalX.Text(16))
+
+		// Debugging, send our share to garbler.
+		err = proc.conn.SendData(spdzFinalX.Bytes())
 		if err != nil {
 			return err
 		}
@@ -460,4 +509,9 @@ var tlsAlertToErrno = map[tls.AlertDescription]Errno{
 	// User/application errors.
 	tls.AlertUserCanceled:          ECANCELED,       // Operation canceled
 	tls.AlertNoApplicationProtocol: EPROTONOSUPPORT, // Protocol not supported
+}
+
+func add(x, y *big.Int) *big.Int {
+	r := new(big.Int).Add(x, y)
+	return new(big.Int).Mod(r, curveParams.P)
 }
