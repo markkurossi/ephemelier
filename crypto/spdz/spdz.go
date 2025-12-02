@@ -110,39 +110,6 @@ type Triple struct {
 	C *Share
 }
 
-// ---------- Opening helpers ----------
-
-// openShare: asymmetric ordering to avoid deadlock
-func openShare(conn *p2p.Conn, id int, s *Share) (*big.Int, error) {
-	if id == 0 {
-		if err := sendField(conn, s.V); err != nil {
-			return nil, err
-		}
-		if err := conn.Flush(); err != nil {
-			return nil, err
-		}
-		peer, err := recvField(conn)
-		if err != nil {
-			return nil, err
-		}
-		sum := new(big.Int).Add(s.V, peer)
-		return modReduce(sum), nil
-	} else {
-		peer, err := recvField(conn)
-		if err != nil {
-			return nil, err
-		}
-		if err := sendField(conn, s.V); err != nil {
-			return nil, err
-		}
-		if err := conn.Flush(); err != nil {
-			return nil, err
-		}
-		sum := new(big.Int).Add(s.V, peer)
-		return modReduce(sum), nil
-	}
-}
-
 // openTwoShares opens two shares in one round-trip
 func openTwoShares(conn *p2p.Conn, role Role, s1, s2 *Share) (*big.Int, *big.Int, error) {
 	if role == Sender {
