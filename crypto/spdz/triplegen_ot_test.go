@@ -26,7 +26,6 @@ func rec2(x0, x1 *Share) *big.Int {
 
 func TestGenerateBeaverTriplesOTBatch(t *testing.T) {
 	const tripleCount = 30
-	const auditRate = 0.0 // set >0 to test auditing
 
 	// Pipe connection between both peers
 	c0, c1 := p2p.Pipe()
@@ -44,13 +43,13 @@ func TestGenerateBeaverTriplesOTBatch(t *testing.T) {
 	// Peer 0
 	go func() {
 		defer wg.Done()
-		triples0, err0 = GenerateBeaverTriplesOTBatch(c0, ot0, 0, tripleCount, auditRate)
+		triples0, err0 = GenerateBeaverTriplesOTBatch(c0, ot0, 0, tripleCount)
 	}()
 
 	// Peer 1
 	go func() {
 		defer wg.Done()
-		triples1, err1 = GenerateBeaverTriplesOTBatch(c1, ot1, 1, tripleCount, auditRate)
+		triples1, err1 = GenerateBeaverTriplesOTBatch(c1, ot1, 1, tripleCount)
 	}()
 
 	// Timeout watchdog

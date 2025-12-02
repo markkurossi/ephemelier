@@ -412,14 +412,15 @@ func P256Add(role Role, conn *p2p.Conn, xInput, yInput *big.Int) (
 	// Generate Beaver triples. This is a safe upper bound for
 	// inversion + intermediate multiplications
 	triplesNeeded := 1400
-	triples, err := GenerateBeaverTriplesOTBatch(conn, oti, role, triplesNeeded, 0)
+	triples, err := GenerateBeaverTriplesOTBatch(conn, oti, role, triplesNeeded)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Run SPDZ point-add
 	tripleIndex := 0
-	x3Share, y3Share, err := SPDZPointAdd(conn, role, x1Share, y1Share, x2Share, y2Share, triples, &tripleIndex)
+	x3Share, y3Share, err := SPDZPointAdd(conn, role, x1Share, y1Share,
+		x2Share, y2Share, triples, &tripleIndex)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -427,8 +428,9 @@ func P256Add(role Role, conn *p2p.Conn, xInput, yInput *big.Int) (
 	return modReduce(x3Share.V), modReduce(y3Share.V), nil
 }
 
-// ExpandLabelToField interprets the 16-byte Label as a 128-bit big.Int
-// and reduces it modulo p256P to produce a valid field element.
+// ExpandLabelToField interprets the 16-byte Label as a 128-bit
+// big.Int and reduces it modulo p256P to produce a valid field
+// element.
 func ExpandLabelToField(l ot.Label) *big.Int {
 	var d ot.LabelData
 	l.GetData(&d)

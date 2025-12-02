@@ -20,7 +20,9 @@ import (
 
 // GenerateBeaverTriplesOTBatch generates n triples using batched IKNP
 // and batched bitwise OT.
-func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int, auditRate float64) ([]*Triple, error) {
+func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
+	[]*Triple, error) {
+
 	if n <= 0 {
 		return nil, errors.New("n must be positive")
 	}
