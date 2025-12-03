@@ -18,7 +18,7 @@ import (
 )
 
 func (conn *Conn) keydbgf(format string, a ...interface{}) {
-	if true && conn.config.Debug {
+	if true || conn.config.Debug {
 		fmt.Printf(format, a...)
 	}
 }
@@ -57,21 +57,20 @@ func deriveSecret(secret []byte, label string, hash []byte) []byte {
 func (conn *Conn) deriveHandshakeKeys(server bool) error {
 	// TLS 1.3 Key Schedule: RFC-8446: 7.1. Key Schedule, page 91-
 	conn.keydbgf(" - Handshake:\n")
+	conn.keydbgf("   shared   : %x\n", conn.sharedSecret)
 
-	zeroHash := make([]byte, sha256.Size)
-	earlySecret := hkdf.Extract(sha256.New, zeroHash, zeroHash)
+	earlySecret := hkdf.ExtractTLS13(hkdf.ZeroHashTLS13, hkdf.ZeroHashTLS13)
 	conn.keydbgf("   early    : %x\n", earlySecret)
 
-	emptyHash := sha256.Sum256([]byte{})
-	derivedSecret := deriveSecret(earlySecret, "derived", emptyHash[:])
+	derivedSecret := deriveSecret(earlySecret, "derived", hkdf.EmptyHashTLS13)
 	conn.keydbgf("   derived  : %x\n", derivedSecret)
 
-	conn.handshakeSecret = hkdf.Extract(sha256.New, conn.sharedSecret,
-		derivedSecret)
+	conn.handshakeSecret = hkdf.ExtractTLS13(conn.sharedSecret, derivedSecret)
 	conn.keydbgf("   handshake: %x\n", conn.handshakeSecret)
 
 	// Derive handshake traffic secrets.
 	transcript := conn.transcript.Sum(nil)
+	conn.keydbgf("   transcrpt: %x\n", transcript)
 	conn.clientHSTr = deriveSecret(conn.handshakeSecret, "c hs traffic",
 		transcript)
 	conn.serverHSTr = deriveSecret(conn.handshakeSecret, "s hs traffic",
@@ -116,16 +115,14 @@ func (conn *Conn) deriveHandshakeKeys(server bool) error {
 }
 
 func (conn *Conn) deriveKeys(server bool, transcript []byte) error {
-	zeroHash := make([]byte, sha256.Size)
-	emptyHash := sha256.Sum256([]byte{})
-
 	// TLS 1.3 Key Schedule: RFC-8446: 7.1. Key Schedule, page 91-
 	conn.keydbgf(" - Traffic  :\n")
 
-	derivedSecret := deriveSecret(conn.handshakeSecret, "derived", emptyHash[:])
+	derivedSecret := deriveSecret(conn.handshakeSecret, "derived",
+		hkdf.EmptyHashTLS13)
 	conn.keydbgf("   derived  : %x\n", derivedSecret)
 
-	masterSecret := hkdf.Extract(sha256.New, zeroHash, derivedSecret)
+	masterSecret := hkdf.ExtractTLS13(hkdf.ZeroHashTLS13, derivedSecret)
 	conn.keydbgf("   master   : %x\n", masterSecret)
 
 	// Derive application traffic secrets.

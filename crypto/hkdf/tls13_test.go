@@ -7,6 +7,7 @@ package hkdf
 import (
 	"bytes"
 	"crypto/sha256"
+	"fmt"
 	"hash"
 	"testing"
 )
@@ -166,6 +167,11 @@ func TestHKDFTLS13(t *testing.T) {
 		out := make([]byte, len(tt.out))
 
 		ExpandTLS13(prk, tt.info, out)
+
+		fmt.Printf("test %d:\n", i)
+		fmt.Printf(" - key : %x\n", prk)
+		fmt.Printf(" - info: %x\n", tt.info)
+		fmt.Printf(" - out : %x\n", out)
 
 		if !bytes.Equal(out, tt.out) {
 			t.Errorf("test %d: incorrect output: have %v, need %v.",
