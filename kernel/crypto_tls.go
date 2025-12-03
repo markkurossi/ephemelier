@@ -19,7 +19,7 @@ import (
 	"github.com/markkurossi/ephemelier/crypto/tls"
 )
 
-const useMPC = true
+const useMPC = false
 
 type tlsMsg uint8
 

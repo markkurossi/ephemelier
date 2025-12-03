@@ -13,7 +13,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"fmt"
-	"io"
 
 	"github.com/markkurossi/ephemelier/crypto/hkdf"
 )
@@ -28,36 +27,25 @@ func (conn *Conn) keydbgf(format string, a ...interface{}) {
 func hkdfExpandLabel(secret []byte, label string, context []byte,
 	length int) []byte {
 
+	// struct {
+	//     uint16 length = Length;
+	//     opaque label<7..255> = "tls13 " + Label;
+	//     opaque context<0..255> = Context;
+	// } HkdfLabel;
+
+	tls13 := []byte("tls13 ")
 	var hkdfLabel []byte
-	if false {
-		hkdfLabel = make([]byte, 0, 2+1+len("tls13 ")+len(label)+1+len(context))
-		hkdfLabel = append(hkdfLabel, byte(length>>8), byte(length))
-		hkdfLabel = append(hkdfLabel, byte(len("tls13 ")+len(label)))
-		hkdfLabel = append(hkdfLabel, []byte("tls13 ")...)
-		hkdfLabel = append(hkdfLabel, []byte(label)...)
-		hkdfLabel = append(hkdfLabel, byte(len(context)))
-		hkdfLabel = append(hkdfLabel, context...)
-	} else {
-		// struct {
-		//     uint16 length = Length;
-		//     opaque label<7..255> = "tls13 " + Label;
-		//     opaque context<0..255> = Context;
-		// } HkdfLabel;
+	hkdfLabel = make([]byte, 0, 2+1+len(tls13)+len(label)+1+len(context))
+	hkdfLabel = append(hkdfLabel, byte(length>>8), byte(length))
+	hkdfLabel = append(hkdfLabel, byte(len(tls13)+len(label)))
+	hkdfLabel = append(hkdfLabel, tls13...)
+	hkdfLabel = append(hkdfLabel, []byte(label)...)
+	hkdfLabel = append(hkdfLabel, byte(len(context)))
+	hkdfLabel = append(hkdfLabel, context...)
 
-		tls13 := []byte("tls13 ")
-		hkdfLabel = make([]byte, 0, 2+1+len(tls13)+len(label)+1+len(context))
-		hkdfLabel = append(hkdfLabel, byte(length>>8), byte(length))
-		hkdfLabel = append(hkdfLabel, byte(len(tls13)+len(label)))
-		hkdfLabel = append(hkdfLabel, tls13...)
-		hkdfLabel = append(hkdfLabel, []byte(label)...)
-		hkdfLabel = append(hkdfLabel, byte(len(context)))
-		hkdfLabel = append(hkdfLabel, context...)
-	}
-
-	hash := sha256.New
-	expander := hkdf.Expand(hash, secret, hkdfLabel)
 	out := make([]byte, length)
-	io.ReadFull(expander, out)
+	hkdf.ExpandTLS13(secret, hkdfLabel, out)
+
 	return out
 }
 
