@@ -387,13 +387,11 @@ func (conn *Conn) ServerHandshake() ([]byte, error) {
 func (conn *Conn) ServerHandshakeServerHello(sharedSecret, kex []byte) error {
 
 	// ServerHello
-
 	data, err := conn.MakeServerHello(kex)
 	if err != nil {
-		return conn.internalErrorf("marshal failed: %v", err)
+		return conn.internalErrorf("make server_hello failed: %v", err)
 	}
 	conn.Debugf(" > ServerHello: %v bytes\n", len(data))
-
 	err = conn.writeHandshakeMsg(HTServerHello, data)
 	if err != nil {
 		return conn.internalErrorf("write failed: %v", err)
@@ -407,12 +405,9 @@ func (conn *Conn) ServerHandshakeServerHello(sharedSecret, kex []byte) error {
 	}
 
 	// EncryptedExtensions.
-	msg := &EncryptedExtensions{
-		Extensions: []Extension{},
-	}
-	data, err = Marshal(msg)
+	data, err = conn.MakeEncryptedExtensions()
 	if err != nil {
-		return conn.internalErrorf("marshal failed: %v", err)
+		return conn.internalErrorf("make encrypted_extensions failed: %v", err)
 	}
 	conn.Debugf(" > EncryptedExtensions: %v bytes\n", len(data))
 	err = conn.writeHandshakeMsg(HTEncryptedExtensions, data)
@@ -421,16 +416,9 @@ func (conn *Conn) ServerHandshakeServerHello(sharedSecret, kex []byte) error {
 	}
 
 	// Certificate.
-	msgCertificate := &Certificate{
-		CertificateList: []CertificateEntry{
-			CertificateEntry{
-				Data: conn.config.Certificate.Raw,
-			},
-		},
-	}
-	data, err = Marshal(msgCertificate)
+	data, err = conn.MakeCertificate()
 	if err != nil {
-		return conn.internalErrorf("marshal failed: %v", err)
+		return conn.internalErrorf("make certificate failed: %v", err)
 	}
 	conn.Debugf(" > Certificate: %v bytes\n", len(data))
 	err = conn.writeHandshakeMsg(HTCertificate, data)
@@ -439,19 +427,9 @@ func (conn *Conn) ServerHandshakeServerHello(sharedSecret, kex []byte) error {
 	}
 
 	// CertificateVerify.
-	hashFunc := crypto.SHA256
-	digest := conn.certificateVerify(hashFunc)
-	signature, err := conn.config.PrivateKey.Sign(rand.Reader, digest, hashFunc)
+	data, err = conn.MakeCertificateVerify()
 	if err != nil {
-		return conn.internalErrorf("signature failed: %v", err)
-	}
-	msgCertVerify := &CertificateVerify{
-		Algorithm: conn.signatureSchemes[0],
-		Signature: signature,
-	}
-	data, err = Marshal(msgCertVerify)
-	if err != nil {
-		return conn.internalErrorf("marshal failed: %v", err)
+		return conn.internalErrorf("make certificate_verify failed: %v", err)
 	}
 	conn.Debugf(" > CertificateVerify: %v bytes\n", len(data))
 	err = conn.writeHandshakeMsg(HTCertificateVerify, data)
@@ -460,15 +438,9 @@ func (conn *Conn) ServerHandshakeServerHello(sharedSecret, kex []byte) error {
 	}
 
 	// Finished.
-	verifyData := conn.finished(true)
-	var vd32 [32]byte
-	copy(vd32[0:], verifyData)
-	finished := &Finished{
-		VerifyData: vd32,
-	}
-	data, err = Marshal(finished)
+	data, err = conn.MakeFinished(true)
 	if err != nil {
-		return conn.internalErrorf("marshal failed: %v", err)
+		return conn.internalErrorf("make finished failed: %v", err)
 	}
 	conn.Debugf(" > Finished: %v bytes\n", len(data))
 	err = conn.writeHandshakeMsg(HTFinished, data)

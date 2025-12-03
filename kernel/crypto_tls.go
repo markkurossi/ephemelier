@@ -19,6 +19,8 @@ import (
 	"github.com/markkurossi/ephemelier/crypto/tls"
 )
 
+const useMPC = true
+
 type tlsMsg uint8
 
 const (
@@ -216,7 +218,7 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 			fmt.Println("--SPDZ result match-------------------------------")
 		}
 
-		if true {
+		if useMPC {
 
 			// Write ServerHello and continue from the MCP space.
 			data, err := conn.MakeServerHello(pubkey)
@@ -396,7 +398,7 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 			return err
 		}
 
-		if true {
+		if useMPC {
 			// Return TLS FD.
 			fd := NewTLSFD(nil, nil, nil)
 
@@ -475,6 +477,27 @@ func (proc *Process) tlsKex(sys *syscall) {
 	switch ht {
 	case tls.HTEncryptedExtensions:
 		data, err = tlsfd.conn.MakeEncryptedExtensions()
+		if err != nil {
+			sys.SetArg0(int32(mapError(err)))
+			return
+		}
+
+	case tls.HTCertificate:
+		data, err = tlsfd.conn.MakeCertificate()
+		if err != nil {
+			sys.SetArg0(int32(mapError(err)))
+			return
+		}
+
+	case tls.HTCertificateVerify:
+		data, err = tlsfd.conn.MakeCertificateVerify()
+		if err != nil {
+			sys.SetArg0(int32(mapError(err)))
+			return
+		}
+
+	case tls.HTFinished:
+		data, err = tlsfd.conn.MakeFinished(true)
 		if err != nil {
 			sys.SetArg0(int32(mapError(err)))
 			return

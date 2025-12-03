@@ -953,7 +953,7 @@ func (proc *Process) ktraceRet(sys *syscall) {
 			}
 
 		case SysTlskex:
-			fmt.Printf("=%s", tls.HandshakeType(sys.arg0))
+			fmt.Printf(" %s", tls.HandshakeType(sys.arg0))
 			if len(sys.argBuf) > 0 {
 				fmt.Printf(", %x", sys.argBuf)
 			} else {

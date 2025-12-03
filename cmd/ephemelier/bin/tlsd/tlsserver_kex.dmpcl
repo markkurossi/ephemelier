@@ -1,0 +1,47 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"crypto/elliptic/p256"
+	"crypto/tls"
+	"encoding/binary"
+	"encoding/hex"
+	"ephemelier/kernel"
+)
+
+func main(g kernel.G, e kernel.E) (
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+
+	nonce, mem, ok := kernel.DecodeMem(g.mem, g.key, e.key)
+	if !ok {
+		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
+	}
+	tlsfd := int32(binary.GetUint32(mem[8:]))
+
+	if g.arg0 < 0 {
+		return nil, intern(StAccept), kernel.SysClose, int32(tlsfd), nil, 0
+	}
+
+	var next int32
+	var state kernel.PC = intern(StTlsserverKex)
+
+	// g.arg0 is the handshake message type.
+	if g.arg0 == tls.HTEncryptedExtensions {
+		next = tls.HTCertificate
+	} else if g.arg0 == tls.HTCertificate {
+		next = tls.HTCertificateVerify
+	} else {
+		next = tls.HTFinished
+		state = intern(StTlsserverFinished)
+	}
+
+	cipher := []byte("This is very secret!")
+
+	return nil, state, kernel.SysTlskex, tlsfd, cipher, next
+}
