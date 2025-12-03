@@ -917,7 +917,8 @@ func (proc *Process) ktraceCall(sys *syscall) {
 		fmt.Printf("(%d, %d)", sys.arg0, sys.arg1)
 
 	case SysTlskex:
-		fmt.Printf("(%d, %s)", sys.arg0, tls.HandshakeType(sys.arg1))
+		fmt.Printf("(%d, %x, %s)", sys.arg0, sys.argBuf,
+			tls.HandshakeType(sys.arg1))
 
 	case SysWrite:
 		fmt.Printf("(%d, %x, %d)", sys.arg0, sys.argBuf[:sys.arg1], sys.arg1)

@@ -19,7 +19,7 @@ import (
 	"github.com/markkurossi/ephemelier/crypto/tls"
 )
 
-const useMPC = false
+const useMPC = true
 
 type tlsMsg uint8
 
@@ -226,8 +226,9 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 				proc.tlsPeerErrf(err, "create ServerHello: %v", err)
 				return err
 			}
-			// XXX Update transcript here. MPCWrite simply writes.
-			err = conn.MPCWrite(tls.CTHandshake, data, nil)
+			conn.WriteTranscript(data)
+
+			err = conn.WriteRecord(tls.CTHandshake, data)
 			if err != nil {
 				proc.tlsPeerErrf(err, "write ServerHello: %v", err)
 				return err
@@ -237,8 +238,9 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 			fd := NewTLSFD(conn, priv, cert)
 			sys.SetArg0(proc.AllocFD(fd))
 
-			// Return our share of the shared secret.
+			// Return our share of the shared secret | transcript.
 			sys.argBuf = spdzFinalX.Bytes()
+			sys.argBuf = append(sys.argBuf, conn.Transcript()...)
 
 			// Sync FD with evaluator.
 			err = proc.conn.SendUint32(int(sys.arg0))
@@ -468,7 +470,13 @@ func (proc *Process) tlsKex(sys *syscall) {
 		return
 	}
 
-	// XXX could we have argBuf to be written and loop with SysTlskex?
+	if len(sys.argBuf) > 0 {
+		err := tlsfd.conn.WriteRecord(tls.CTApplicationData, sys.argBuf)
+		if err != nil {
+			sys.SetArg0(int32(mapError(err)))
+			return
+		}
+	}
 
 	var data []byte
 	var err error
@@ -509,7 +517,8 @@ func (proc *Process) tlsKex(sys *syscall) {
 		return
 	}
 
-	// XXX update transcript with data.
+	tlsfd.conn.WriteTranscript(data)
+
 	sys.SetArg0(int32(ht))
 	sys.argBuf = data
 }

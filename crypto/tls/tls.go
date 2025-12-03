@@ -150,6 +150,14 @@ func (conn *Conn) readHandshakeMsg() (ContentType, []byte, error) {
 	}
 }
 
+func (conn *Conn) WriteTranscript(data []byte) {
+	conn.transcript.Write(data)
+}
+
+func (conn *Conn) Transcript() []byte {
+	return conn.transcript.Sum(nil)
+}
+
 func (conn *Conn) writeHandshakeMsg(ht HandshakeType, data []byte) error {
 	// Set TypeLen
 	typeLen := uint32(ht)<<24 | uint32(len(data)-4)

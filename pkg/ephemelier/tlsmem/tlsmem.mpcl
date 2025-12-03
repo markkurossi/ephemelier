@@ -1,0 +1,33 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package tlsmem
+
+const (
+	OfsHandshakeSecret = 12
+	OfsClientHSKey     = OfsHandshakeSecret + 32
+	OfsClientHSIV      = OfsClientHSKey + 16
+	OfsServerHSKey     = OfsClientHSIV + 12
+	OfsServerHSIV      = OfsServerHSKey + 16
+	OfsSeq             = OfsServerHSIV + 12
+	Size               = OfsSeq + 8
+)
+
+func PutHandshakeSecret(mem, value []byte) []byte {
+	copy(mem[OfsHandshakeSecret:], value)
+	return mem
+}
+
+func PutClientHSKey(mem, value []byte) []byte {
+	copy(mem[OfsClientHSKey:], value)
+	return mem
+}
+
+func PutClientHSIV(mem, value []byte) []byte {
+	copy(mem[OfsClientHSIV:], value)
+	return mem
+}

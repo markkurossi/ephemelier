@@ -13,6 +13,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"ephemelier/kernel"
+	"ephemelier/tlsmem"
 )
 
 func main(g kernel.G, e kernel.E) (
@@ -30,6 +31,19 @@ func main(g kernel.G, e kernel.E) (
 
 	var next int32
 	var state kernel.PC = intern(StTlsserverKex)
+	var cipher []byte
+
+	var key [16]byte
+	var iv [12]byte
+
+	copy(key, mem[tlsmem.OfsServerHSKey:])
+	copy(iv, mem[tlsmem.OfsServerHSIV:])
+
+	seq := binary.GetUint64(mem[tlsmem.OfsSeq:])
+
+	cipher = tls.Encrypt(key, iv, seq, tls.CTHandshake, g.argBuf)
+
+	mem = binary.PutUint64(mem, tlsmem.OfsSeq, seq+1)
 
 	// g.arg0 is the handshake message type.
 	if g.arg0 == tls.HTEncryptedExtensions {
@@ -41,7 +55,6 @@ func main(g kernel.G, e kernel.E) (
 		state = intern(StTlsserverFinished)
 	}
 
-	cipher := []byte("This is very secret!")
-
-	return nil, state, kernel.SysTlskex, tlsfd, cipher, next
+	return kernel.EncodeMem(nonce, mem, g.key, e.key),
+		state, kernel.SysTlskex, tlsfd, cipher, next
 }

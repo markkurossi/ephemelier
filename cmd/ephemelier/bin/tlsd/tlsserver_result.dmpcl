@@ -13,6 +13,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"ephemelier/kernel"
+	"ephemelier/tlsmem"
 )
 
 func main(g kernel.G, e kernel.E) (
@@ -32,16 +33,26 @@ func main(g kernel.G, e kernel.E) (
 	mem = binary.PutUint32(mem, 8, uint32(g.arg0))
 
 	// Construct shared secret.
-	gShare := binary.GetUint(g.argBuf)
+
+	gShare := binary.GetUint(g.argBuf[:32])
 	eShare := binary.GetUint(e.argBuf)
 
 	secret := uint256(gShare) + uint256(eShare)
 	secret = secret % p256.P
 
-	var buf [32]byte
-	buf = binary.PutUint(buf, 0, secret)
+	var sharedSecret [32]byte
+	sharedSecret = binary.PutUint(sharedSecret, 0, secret)
 
-	copy(mem[12:], buf)
+	// Derive handshake keys.
+	handshakeSecret, clientHSKey, clientHSIV, serverHSKey, serverHSIV :=
+		tls.DeriveHandshakeKeys(sharedSecret[:], g.argBuf[32:])
+
+	copy(mem[tlsmem.OfsHandshakeSecret:], handshakeSecret)
+	copy(mem[tlsmem.OfsClientHSKey:], clientHSKey)
+	copy(mem[tlsmem.OfsClientHSIV:], clientHSIV)
+	copy(mem[tlsmem.OfsServerHSKey:], serverHSKey)
+	copy(mem[tlsmem.OfsServerHSIV:], serverHSIV)
+	mem = binary.PutUint64(mem, tlsmem.OfsSeq, 0)
 
 	return kernel.EncodeMem(nonce, mem, g.key, e.key),
 		intern(StTlsserverKex), kernel.SysTlskex, g.arg0,

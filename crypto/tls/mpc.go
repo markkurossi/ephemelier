@@ -117,14 +117,3 @@ func (conn *Conn) MakeFinished(server bool) ([]byte, error) {
 	bo.PutUint32(data[0:4], typeLen)
 	return data, nil
 }
-
-func (conn *Conn) MPCWrite(ct ContentType, plain, cipher []byte) error {
-	if len(plain) > 0 {
-		conn.transcript.Write(plain)
-	}
-	if len(cipher) > 0 {
-		return conn.WriteRecord(ct, cipher)
-	}
-
-	return conn.WriteRecord(ct, plain)
-}
