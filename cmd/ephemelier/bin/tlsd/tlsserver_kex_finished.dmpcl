@@ -49,12 +49,8 @@ func main(g kernel.G, e kernel.E) (
 	copy(key, mem[tlsmem.OfsServerHSKey:])
 	copy(iv, mem[tlsmem.OfsServerHSIV:])
 
-	seq := binary.GetUint64(mem[tlsmem.OfsSeq:])
-
+	seq := uint64(3)
 	cipher := tls.Encrypt(key, iv, seq, tls.CTHandshake, finished)
 
-	mem = binary.PutUint64(mem, tlsmem.OfsSeq, seq+1)
-
-	return kernel.EncodeMem(nonce, mem, g.key, e.key),
-		state, kernel.SysTlskex, tlsfd, cipher, 0
+	return nil, state, kernel.SysTlskex, tlsfd, cipher, 0
 }

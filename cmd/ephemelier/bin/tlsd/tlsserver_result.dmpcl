@@ -58,7 +58,7 @@ func main(g kernel.G, e kernel.E) (
 	copy(mem[tlsmem.OfsServerHSKey:], serverHSKey)
 	copy(mem[tlsmem.OfsServerHSIV:], serverHSIV)
 	copy(mem[tlsmem.OfsFinishedKey:], finishedKey)
-	mem = binary.PutUint64(mem, tlsmem.OfsSeq, 0)
+	mem = binary.PutUint64(mem, tlsmem.OfsSeq, 4)
 
 	return kernel.EncodeMem(nonce, mem, g.key, e.key),
 		intern(StTlsserverKex), kernel.SysTlskex, g.arg0,

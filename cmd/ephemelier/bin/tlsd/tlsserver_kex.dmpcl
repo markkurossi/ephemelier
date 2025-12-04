@@ -32,14 +32,18 @@ func main(g kernel.G, e kernel.E) (
 	var next int32
 	var state kernel.PC = intern(StTlsserverKex)
 	var cipher []byte
+	var seq uint64
 
 	// g.arg0 is the handshake message type.
 	if g.arg0 == tls.HTEncryptedExtensions {
 		next = tls.HTCertificate
+		seq = 0
 	} else if g.arg0 == tls.HTCertificate {
 		next = tls.HTCertificateVerify
+		seq = 1
 	} else if g.arg0 == tls.HTCertificateVerify {
 		next = tls.HTFinished
+		seq = 2
 		state = intern(StTlsserverKexFinished)
 	} else {
 		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
@@ -51,12 +55,7 @@ func main(g kernel.G, e kernel.E) (
 	copy(key, mem[tlsmem.OfsServerHSKey:])
 	copy(iv, mem[tlsmem.OfsServerHSIV:])
 
-	seq := binary.GetUint64(mem[tlsmem.OfsSeq:])
-
 	cipher = tls.Encrypt(key, iv, seq, tls.CTHandshake, g.argBuf)
 
-	mem = binary.PutUint64(mem, tlsmem.OfsSeq, seq+1)
-
-	return kernel.EncodeMem(nonce, mem, g.key, e.key),
-		state, kernel.SysTlskex, tlsfd, cipher, next
+	return nil, state, kernel.SysTlskex, tlsfd, cipher, next
 }
