@@ -34,30 +34,15 @@ func main(g kernel.G, e kernel.E) (
 
 	copy(key, mem[tlsmem.OfsClientKey:])
 	copy(iv, mem[tlsmem.OfsClientIV:])
+	seq := binary.GetUint64(mem[tlsmem.OfsClientSeq:])
 
-	verifyData := g.argBuf[0:32]
-	cipher := g.argBuf[32:]
-
-	var seq uint64
-
-	ct, plain, ok := tls.Decrypt(key, iv, seq, cipher)
+	ct, plain, ok := tls.Decrypt(key, iv, seq, g.argBuf)
 	if !ok {
 		return nil, intern(StAccept), kernel.SysClose, tlsfd, nil, 0
 	}
 
-	// XXX must check that plain's verifyData matches our verifyData
-
-	clientKey, clientIV, serverKey, serverIV := tls.DeriveKeys(
-		mem[tlsmem.OfsHandshakeSecret:tlsmem.OfsClientKey],
-		verifyData)
-
-	copy(mem[tlsmem.OfsClientKey:], clientKey)
-	copy(mem[tlsmem.OfsClientIV:], clientIV)
-	copy(mem[tlsmem.OfsServerKey:], serverKey)
-	copy(mem[tlsmem.OfsServerIV:], serverIV)
-	mem = binary.PutUint64(mem, tlsmem.OfsClientSeq, 0)
-	mem = binary.PutUint64(mem, tlsmem.OfsServerSeq, 0)
+	mem = binary.PutUint64(mem, tlsmem.OfsClientSeq, seq+1)
 
 	return kernel.EncodeMem(nonce, mem, g.key, e.key),
-		intern(StHttpdStart), kernel.SysTlsstatus, tlsfd, nil, 1
+		intern(StHttpdWrite), kernel.SysWrite, 1, plain, len(plain)
 }

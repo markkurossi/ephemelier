@@ -1,0 +1,47 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"crypto/elliptic/p256"
+	"crypto/tls"
+	"encoding/binary"
+	"encoding/hex"
+	"ephemelier/kernel"
+	"ephemelier/tlsmem"
+)
+
+func main(g kernel.G, e kernel.E) (
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+
+	nonce, mem, ok := kernel.DecodeMem(g.mem, g.key, e.key)
+	if !ok {
+		return nil, 0, kernel.SysExit, kernel.EINVAL, nil, 0
+	}
+	tlsfd := int32(binary.GetUint32(mem[8:]))
+
+	if g.arg0 < 0 {
+		return nil, intern(StAccept), kernel.SysClose, tlsfd, nil, 0
+	}
+
+	msg := []byte("Hello, I'm Ephemelier!\n")
+
+	var key [16]byte
+	var iv [12]byte
+
+	copy(key, mem[tlsmem.OfsServerKey:])
+	copy(iv, mem[tlsmem.OfsServerIV:])
+	seq := binary.GetUint64(mem[tlsmem.OfsServerSeq:])
+
+	cipher := tls.Encrypt(key, iv, seq, tls.CTApplicationData, msg)
+
+	mem = binary.PutUint64(mem, tlsmem.OfsServerSeq, seq+1)
+
+	return kernel.EncodeMem(nonce, mem, g.key, e.key),
+		intern(StHttpdStart), kernel.SysWrite, tlsfd, cipher, len(cipher)
+}

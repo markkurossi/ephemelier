@@ -44,8 +44,8 @@ func main(g kernel.G, e kernel.E) (
 	var key [16]byte
 	var iv [12]byte
 
-	copy(key, mem[tlsmem.OfsServerHSKey:])
-	copy(iv, mem[tlsmem.OfsServerHSIV:])
+	copy(key, mem[tlsmem.OfsServerKey:])
+	copy(iv, mem[tlsmem.OfsServerIV:])
 
 	seq := uint64(3)
 	cipher := tls.Encrypt(key, iv, seq, tls.CTHandshake, finished)

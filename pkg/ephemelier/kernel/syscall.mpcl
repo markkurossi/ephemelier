@@ -35,8 +35,9 @@ const (
 	SysTlsserver = 14
 	SysTlsclient = 15
 	SysTlskex    = 16
-	SysYield     = 17
-	SysGetpid    = 18
+	SysTlsstatus = 17
+	SysYield     = 18
+	SysGetpid    = 19
 
 	SysGetport    = 100
 	SysCreateport = 101

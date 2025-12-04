@@ -1,0 +1,33 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"crypto/elliptic/p256"
+	"crypto/tls"
+	"encoding/binary"
+	"encoding/hex"
+	"ephemelier/kernel"
+	"ephemelier/tlsmem"
+)
+
+func main(g kernel.G, e kernel.E) (
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+
+	nonce, mem, ok := kernel.DecodeMem(g.mem, g.key, e.key)
+	if !ok {
+		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
+	}
+	tlsfd := int32(binary.GetUint32(mem[8:]))
+
+	if g.arg0 < 0 {
+		return nil, intern(StAccept), kernel.SysClose, int32(tlsfd), nil, 0
+	}
+
+	return nil, intern(StHttpdRead), kernel.SysRead, tlsfd, nil, 0xffff
+}

@@ -9,26 +9,12 @@ package tlsmem
 
 const (
 	OfsHandshakeSecret = 12
-	OfsClientHSKey     = OfsHandshakeSecret + 32
-	OfsClientHSIV      = OfsClientHSKey + 16
-	OfsServerHSKey     = OfsClientHSIV + 12
-	OfsServerHSIV      = OfsServerHSKey + 16
-	OfsFinishedKey     = OfsServerHSIV + 12
-	OfsSeq             = OfsFinishedKey + 32
-	Size               = OfsSeq + 8
+	OfsClientKey       = OfsHandshakeSecret + 32
+	OfsClientIV        = OfsClientKey + 16
+	OfsServerKey       = OfsClientIV + 12
+	OfsServerIV        = OfsServerKey + 16
+	OfsFinishedKey     = OfsServerIV + 12
+	OfsClientSeq       = OfsFinishedKey + 32
+	OfsServerSeq       = OfsClientSeq + 8
+	Size               = OfsServerSeq + 8
 )
-
-func PutHandshakeSecret(mem, value []byte) []byte {
-	copy(mem[OfsHandshakeSecret:], value)
-	return mem
-}
-
-func PutClientHSKey(mem, value []byte) []byte {
-	copy(mem[OfsClientHSKey:], value)
-	return mem
-}
-
-func PutClientHSIV(mem, value []byte) []byte {
-	copy(mem[OfsClientHSIV:], value)
-	return mem
-}

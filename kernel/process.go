@@ -732,6 +732,9 @@ func (proc *Process) syscall(sys *syscall) error {
 	case SysTlskex:
 		proc.tlsKex(sys)
 
+	case SysTlsstatus:
+		proc.tlsStatus(sys)
+
 	case SysGetrandom:
 		buf := make([]byte, sys.arg0)
 		n, err := rand.Read(buf)
@@ -921,7 +924,7 @@ func (proc *Process) ktraceCall(sys *syscall) {
 	proc.ktracePrefix()
 	fmt.Printf("CALL %s", sys.call)
 	switch sys.call {
-	case SysExit, SysClose, SysWait, SysCreatemsg, SysAccept:
+	case SysExit, SysClose, SysWait, SysCreatemsg, SysAccept, SysTlsstatus:
 		fmt.Printf("(%d)", sys.arg0)
 
 	case SysSpawn, SysDial, SysListen:

@@ -49,16 +49,17 @@ func main(g kernel.G, e kernel.E) (
 	sharedSecret = binary.PutUint(sharedSecret, 0, secret)
 
 	// Derive handshake keys.
-	handshakeSecret, clientHSKey, clientHSIV, serverHSKey, serverHSIV,
+	handshakeSecret, clientKey, clientIV, serverKey, serverIV,
 		finishedKey := tls.DeriveHandshakeKeys(sharedSecret[:], g.argBuf[32:])
 
 	copy(mem[tlsmem.OfsHandshakeSecret:], handshakeSecret)
-	copy(mem[tlsmem.OfsClientHSKey:], clientHSKey)
-	copy(mem[tlsmem.OfsClientHSIV:], clientHSIV)
-	copy(mem[tlsmem.OfsServerHSKey:], serverHSKey)
-	copy(mem[tlsmem.OfsServerHSIV:], serverHSIV)
+	copy(mem[tlsmem.OfsClientKey:], clientKey)
+	copy(mem[tlsmem.OfsClientIV:], clientIV)
+	copy(mem[tlsmem.OfsServerKey:], serverKey)
+	copy(mem[tlsmem.OfsServerIV:], serverIV)
 	copy(mem[tlsmem.OfsFinishedKey:], finishedKey)
-	mem = binary.PutUint64(mem, tlsmem.OfsSeq, 4)
+	mem = binary.PutUint64(mem, tlsmem.OfsClientSeq, 0)
+	mem = binary.PutUint64(mem, tlsmem.OfsServerSeq, 4)
 
 	return kernel.EncodeMem(nonce, mem, g.key, e.key),
 		intern(StTlsserverKex), kernel.SysTlskex, g.arg0,

@@ -542,6 +542,21 @@ func (proc *Process) tlsKex(sys *syscall) {
 	}
 }
 
+func (proc *Process) tlsStatus(sys *syscall) {
+	fd, ok := proc.fds[sys.arg0]
+	if !ok {
+		sys.SetArg0(int32(-EBADF))
+		return
+	}
+	tlsfd, ok := fd.Impl.(*FDTLS)
+	if !ok {
+		sys.SetArg0(int32(-ENOTSOCK))
+		return
+	}
+	tlsfd.handshakeDone = true
+	sys.SetArg0(0)
+}
+
 func (proc *Process) tlsPeerErrf(err error, format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
 	data, err := Marshal(&TLSError{
