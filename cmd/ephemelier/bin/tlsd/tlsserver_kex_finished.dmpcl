@@ -50,5 +50,11 @@ func main(g kernel.G, e kernel.E) (
 	seq := uint64(3)
 	cipher := tls.Encrypt(key, iv, seq, tls.CTHandshake, finished)
 
-	return nil, intern(StTlsserverDone), kernel.SysTlskex, tlsfd, cipher, 0
+	// The result is: byte(len(cipher)) | cipher | finished
+	result := make([]byte, 1+len(cipher)+len(finished))
+	result[0] = len(cipher)
+	copy(result[1:], cipher)
+	copy(result[1+len(cipher):], finished)
+
+	return nil, intern(StTlsserverDone), kernel.SysTlskex, tlsfd, result, 0
 }

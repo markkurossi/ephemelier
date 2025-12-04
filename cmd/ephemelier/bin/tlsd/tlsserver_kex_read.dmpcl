@@ -18,18 +18,18 @@ import (
 
 func main(g kernel.G, e kernel.E) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32,
-	[]byte, []byte) {
+	[]byte, []byte, []byte, []byte) {
 
 	nonce, mem, ok := kernel.DecodeMem(g.mem, g.key, e.key)
 	if !ok {
 		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0,
-			nil, nil
+			nil, nil, nil, nil
 	}
 	tlsfd := int32(binary.GetUint32(mem[8:]))
 
 	if g.arg0 < 0 {
 		return nil, intern(StAccept), kernel.SysClose, tlsfd, nil, 0,
-			nil, nil
+			nil, nil, nil, nil
 	}
 
 	var key [16]byte
@@ -46,9 +46,15 @@ func main(g kernel.G, e kernel.E) (
 	ct, plain, ok := tls.Decrypt(key, iv, seq, cipher)
 	if !ok {
 		return nil, intern(StAccept), kernel.SysClose, tlsfd, nil, 0,
-			nil, nil
+			nil, nil, nil, nil
 	}
 
+	// XXX must check that plain's verifyData matches our verifyData
+
+	clientKey, clientIV, serverKey, serverIV := tls.DeriveKeys(
+		mem[tlsmem.OfsHandshakeSecret:tlsmem.OfsClientHSKey],
+		verifyData)
+
 	return nil, 0, kernel.SysExit, 1, nil, 0,
-		verifyData, plain
+		clientKey, clientIV, serverKey, serverIV
 }

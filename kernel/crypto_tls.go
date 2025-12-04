@@ -470,18 +470,34 @@ func (proc *Process) tlsKex(sys *syscall) {
 		return
 	}
 
+	ht := tls.HandshakeType(sys.arg1)
+
 	if len(sys.argBuf) > 0 {
-		err := tlsfd.conn.WriteRecord(tls.CTApplicationData, sys.argBuf)
+		var appData []byte
+		if ht == 0 {
+			l := int(sys.argBuf[0])
+			if l >= len(sys.argBuf)-1 {
+				sys.SetArg0(int32(-EINVAL))
+				return
+			}
+			appData = sys.argBuf[1 : l+1]
+			tlsfd.conn.WriteTranscript(sys.argBuf[l+1:])
+		} else {
+			appData = sys.argBuf
+		}
+		err := tlsfd.conn.WriteRecord(tls.CTApplicationData, appData)
 		if err != nil {
 			sys.SetArg0(int32(mapError(err)))
 			return
 		}
 	}
 
+	// Return the message type as arg0.
+	sys.SetArg0(int32(ht))
+
 	var data []byte
 	var err error
 
-	ht := tls.HandshakeType(sys.arg1)
 	switch ht {
 	case tls.HTEncryptedExtensions:
 		data, err = tlsfd.conn.MakeEncryptedExtensions()
@@ -505,7 +521,11 @@ func (proc *Process) tlsKex(sys *syscall) {
 		}
 
 	case tls.HTFinished:
-		data = tlsfd.conn.Transcript()
+		// Set transcript digest directly to argBuf so we don't
+		// include it to the transcript. The next call with ct=0
+		// contains both the encrypted finished and its plaintext
+		// version so we can update the transcript.
+		sys.argBuf = tlsfd.conn.Transcript()
 
 	case 0:
 		// We just wrote our Finished.
@@ -518,10 +538,8 @@ func (proc *Process) tlsKex(sys *syscall) {
 
 	if len(data) > 0 {
 		tlsfd.conn.WriteTranscript(data)
+		sys.argBuf = data
 	}
-
-	sys.SetArg0(int32(ht))
-	sys.argBuf = data
 }
 
 func (proc *Process) tlsPeerErrf(err error, format string, a ...interface{}) {
