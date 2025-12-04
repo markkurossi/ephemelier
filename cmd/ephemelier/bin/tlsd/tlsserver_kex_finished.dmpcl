@@ -29,8 +29,6 @@ func main(g kernel.G, e kernel.E) (
 		return nil, intern(StAccept), kernel.SysClose, int32(tlsfd), nil, 0
 	}
 
-	var state kernel.PC = intern(StTlsserverDone)
-
 	// HTFinished
 
 	var finishedKey [32]byte
@@ -52,5 +50,5 @@ func main(g kernel.G, e kernel.E) (
 	seq := uint64(3)
 	cipher := tls.Encrypt(key, iv, seq, tls.CTHandshake, finished)
 
-	return nil, state, kernel.SysTlskex, tlsfd, cipher, 0
+	return nil, intern(StTlsserverDone), kernel.SysTlskex, tlsfd, cipher, 0
 }

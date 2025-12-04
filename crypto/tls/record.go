@@ -31,28 +31,12 @@ func (conn *Conn) ReadRecord() (ContentType, []byte, error) {
 	}
 
 	data := conn.rbuf[:length]
-	var err error
-
-	if ct == CTApplicationData {
-		if conn.readCipher == nil {
-			return CTInvalid, nil, conn.alert(AlertUnexpectedMessage)
-		}
-		ct, data, err = conn.readCipher.Decrypt(data)
-		if err != nil {
-			return CTInvalid, nil, conn.alert(AlertBadRecordMAC)
-		}
-	}
 
 	return ct, data, nil
 }
 
 // WriteRecord writes a record layer record.
 func (conn *Conn) WriteRecord(ct ContentType, data []byte) error {
-	if conn.writeCipher != nil {
-		data = conn.writeCipher.Encrypt(ct, data)
-		ct = CTApplicationData
-	}
-
 	var hdr [5]byte
 
 	hdr[0] = byte(ct)

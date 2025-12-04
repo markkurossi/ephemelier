@@ -8,8 +8,10 @@ package kernel
 
 import (
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/markkurossi/ephemelier/crypto/tls"
@@ -17,9 +19,10 @@ import (
 
 // FDTLS implements TLS client and server FDs.
 type FDTLS struct {
-	conn *tls.Conn
-	priv *ecdsa.PrivateKey
-	cert *x509.Certificate
+	conn          *tls.Conn
+	priv          *ecdsa.PrivateKey
+	cert          *x509.Certificate
+	handshakeDone bool
 }
 
 // NewTLSFD creates a new TLS FD. The arguments must be non-nil for
@@ -47,13 +50,28 @@ func (fd *FDTLS) Read(b []byte) int {
 	if fd.conn == nil {
 		return 0
 	}
-	n, err := fd.conn.Read(b)
+	ct, data, err := fd.conn.ReadRecord()
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return 0
 		}
 		return mapError(err)
 	}
+	need := len(data)
+	if !fd.handshakeDone {
+		need += sha256.Size
+	}
+
+	fmt.Printf("<< %s[%d/%d/%d]\n", ct, len(data), need, len(b))
+	if need > len(b) {
+		return -int(ERANGE)
+	}
+	var n int
+	if !fd.handshakeDone {
+		n = copy(b, fd.conn.Transcript())
+	}
+	n += copy(b[n:], data)
+
 	return n
 }
 
@@ -62,9 +80,9 @@ func (fd *FDTLS) Write(b []byte) int {
 	if fd.conn == nil {
 		return len(b)
 	}
-	n, err := fd.conn.Write(b)
+	err := fd.conn.WriteRecord(tls.CTApplicationData, b)
 	if err != nil {
 		return mapError(err)
 	}
-	return n
+	return len(b)
 }

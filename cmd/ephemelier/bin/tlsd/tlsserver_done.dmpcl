@@ -29,6 +29,5 @@ func main(g kernel.G, e kernel.E) (
 		return nil, intern(StAccept), kernel.SysClose, int32(tlsfd), nil, 0
 	}
 
-	// XXX read client messages.
-	return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
+	return nil, intern(StTlsserverKexRead), kernel.SysRead, tlsfd, nil, 0xffff
 }

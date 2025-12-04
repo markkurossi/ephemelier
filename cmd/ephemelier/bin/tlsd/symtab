@@ -12,7 +12,8 @@ const (
 	StAcceptResult         = 3
 	StListenResult         = 1
 	StTlsserverDone        = 6
-	StTlsserverKex         = 5
-	StTlsserverKexFinished = 7
+	StTlsserverKex         = 7
+	StTlsserverKexFinished = 8
+	StTlsserverKexRead     = 5
 	StTlsserverResult      = 2
 )
