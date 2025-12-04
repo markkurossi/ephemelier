@@ -12,6 +12,7 @@ import (
 	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/markkurossi/ephemelier/crypto/hkdf"
@@ -197,7 +198,9 @@ func (conn *Conn) finished(server bool) []byte {
 	}
 	finishedKey := hkdfExpandLabel(baseKey, "finished", nil, sha256.Size)
 	hash := hmac.New(sha256.New, finishedKey)
-	hash.Write(conn.transcript.Sum(nil))
+	digest := conn.transcript.Sum(nil)
+	fmt.Printf("FinishedDigest:\n%s", hex.Dump(digest))
+	hash.Write(digest)
 	return hash.Sum(nil)
 }
 

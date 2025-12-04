@@ -7,11 +7,12 @@ package main
 
 // Interned symbols.
 const (
-	Init                = 0
-	StAccept            = 4
-	StAcceptResult      = 3
-	StListenResult      = 1
-	StTlsserverFinished = 6
-	StTlsserverKex      = 5
-	StTlsserverResult   = 2
+	Init                   = 0
+	StAccept               = 4
+	StAcceptResult         = 3
+	StListenResult         = 1
+	StTlsserverDone        = 6
+	StTlsserverKex         = 5
+	StTlsserverKexFinished = 7
+	StTlsserverResult      = 2
 )

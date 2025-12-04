@@ -29,21 +29,19 @@ func main(g kernel.G, e kernel.E) (
 		return nil, intern(StAccept), kernel.SysClose, int32(tlsfd), nil, 0
 	}
 
-	var next int32
-	var state kernel.PC = intern(StTlsserverKex)
-	var cipher []byte
+	var state kernel.PC = intern(StTlsserverDone)
 
-	// g.arg0 is the handshake message type.
-	if g.arg0 == tls.HTEncryptedExtensions {
-		next = tls.HTCertificate
-	} else if g.arg0 == tls.HTCertificate {
-		next = tls.HTCertificateVerify
-	} else if g.arg0 == tls.HTCertificateVerify {
-		next = tls.HTFinished
-		state = intern(StTlsserverKexFinished)
-	} else {
-		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
-	}
+	// HTFinished
+
+	var finishedKey [32]byte
+	copy(finishedKey, mem[tlsmem.OfsFinishedKey:])
+
+	verifyData := hmac.SumSHA256(g.argBuf, finishedKey)
+
+	var finished [36]byte
+	copy(finished[4:], verifyData)
+	finished[0] = tls.HTFinished
+	finished[3] = 32
 
 	var key [16]byte
 	var iv [12]byte
@@ -53,10 +51,10 @@ func main(g kernel.G, e kernel.E) (
 
 	seq := binary.GetUint64(mem[tlsmem.OfsSeq:])
 
-	cipher = tls.Encrypt(key, iv, seq, tls.CTHandshake, g.argBuf)
+	cipher := tls.Encrypt(key, iv, seq, tls.CTHandshake, finished)
 
 	mem = binary.PutUint64(mem, tlsmem.OfsSeq, seq+1)
 
 	return kernel.EncodeMem(nonce, mem, g.key, e.key),
-		state, kernel.SysTlskex, tlsfd, cipher, next
+		state, kernel.SysTlskex, tlsfd, cipher, 0
 }

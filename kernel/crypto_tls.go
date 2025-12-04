@@ -505,11 +505,10 @@ func (proc *Process) tlsKex(sys *syscall) {
 		}
 
 	case tls.HTFinished:
-		data, err = tlsfd.conn.MakeFinished(true)
-		if err != nil {
-			sys.SetArg0(int32(mapError(err)))
-			return
-		}
+		data = tlsfd.conn.Transcript()
+
+	case 0:
+		// We just wrote our Finished.
 
 	default:
 		fmt.Printf("SysTlskex: invalid handshake: %v\n", ht)
@@ -517,7 +516,9 @@ func (proc *Process) tlsKex(sys *syscall) {
 		return
 	}
 
-	tlsfd.conn.WriteTranscript(data)
+	if len(data) > 0 {
+		tlsfd.conn.WriteTranscript(data)
+	}
 
 	sys.SetArg0(int32(ht))
 	sys.argBuf = data

@@ -13,7 +13,8 @@ const (
 	OfsClientHSIV      = OfsClientHSKey + 16
 	OfsServerHSKey     = OfsClientHSIV + 12
 	OfsServerHSIV      = OfsServerHSKey + 16
-	OfsSeq             = OfsServerHSIV + 12
+	OfsFinishedKey     = OfsServerHSIV + 12
+	OfsSeq             = OfsFinishedKey + 32
 	Size               = OfsSeq + 8
 )
 
