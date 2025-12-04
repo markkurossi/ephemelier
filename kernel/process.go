@@ -328,7 +328,7 @@ run:
 		proc.ktraceStats(stats)
 
 		// Decode syscall.
-		err = decodeSyscall(sys, mpc.Results(result, outputs))
+		err = proc.decodeSyscall(sys, mpc.Results(result, outputs))
 		if err != nil {
 			return err
 		}
@@ -525,7 +525,7 @@ run:
 		proc.ktraceStats(stats)
 
 		// Decode syscall.
-		err := decodeSyscall(sys, mpc.Results(result, outputs))
+		err := proc.decodeSyscall(sys, mpc.Results(result, outputs))
 		if err != nil {
 			return err
 		}
@@ -815,7 +815,7 @@ func (sys *syscall) SetArg0(arg0 int32) {
 	sys.arg1 = 0
 }
 
-func decodeSyscall(sys *syscall, values []interface{}) error {
+func (proc *Process) decodeSyscall(sys *syscall, values []interface{}) error {
 	var ok bool
 
 	if len(values) < 4 {
@@ -871,6 +871,20 @@ func decodeSyscall(sys *syscall, values []interface{}) error {
 		}
 	} else {
 		sys.arg1 = 0
+	}
+
+	if proc.kern.params.Trace {
+		// Print any additional debug values.
+		for i := 6; i < len(values); i++ {
+			proc.ktracePrefix()
+			switch v := values[i].(type) {
+			case []byte:
+				fmt.Printf("DBG  %x", v)
+			default:
+				fmt.Printf("DBG  %v", v)
+			}
+			fmt.Println()
+		}
 	}
 
 	return nil
