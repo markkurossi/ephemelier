@@ -37,8 +37,13 @@ func main(g kernel.G, e kernel.E) (
 	gShare := binary.GetUint(g.argBuf[:32])
 	eShare := binary.GetUint(e.argBuf)
 
-	secret := uint256(gShare) + uint256(eShare)
-	secret = secret % p256.P
+	sum := uint257(gShare) + uint257(eShare)
+	var secret uint256
+	if sum > uint257(p256.P) {
+		secret = uint256(sum - uint257(p256.P))
+	} else {
+		secret = uint256(sum)
+	}
 
 	var sharedSecret [32]byte
 	sharedSecret = binary.PutUint(sharedSecret, 0, secret)
