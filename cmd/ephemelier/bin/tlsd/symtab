@@ -11,6 +11,7 @@ const (
 	StAccept               = 4
 	StAcceptResult         = 3
 	StHttpdRead            = 10
+	StHttpdReadResult      = 12
 	StHttpdStart           = 7
 	StHttpdWrite           = 11
 	StListenResult         = 1

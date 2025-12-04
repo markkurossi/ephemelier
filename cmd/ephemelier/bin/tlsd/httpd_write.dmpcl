@@ -29,7 +29,8 @@ func main(g kernel.G, e kernel.E) (
 		return nil, intern(StAccept), kernel.SysClose, tlsfd, nil, 0
 	}
 
-	msg := []byte("Hello, I'm Ephemelier!\n")
+	//msg := []byte("Hello, I'm Ephemelier!\n")
+	msg := []byte("HTTP/1.1 200 OK\n\n<html><body><h1>Hello, I'm Ephemelier!</h1></body></html>\n")
 
 	var key [16]byte
 	var iv [12]byte
