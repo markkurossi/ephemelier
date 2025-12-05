@@ -39,6 +39,21 @@ func main(g kernel.G, e kernel.E) (
 
 	mem = binary.PutUint64(mem, tlsmem.OfsClientSeq, seq+1)
 
+	var reply []byte
+	if bytes.HasPrefix(plain, []byte("GET / ")) {
+		reply = []byte("HTTP/1.1 200 OK\n\n<html><body><h1>Hello, I'm Ephemelier!</h1></body></html>\n")
+	} else {
+		reply = []byte("Hello, I'm Ephemelier!\n")
+	}
+
+	copy(key, mem[tlsmem.OfsServerKey:])
+	copy(iv, mem[tlsmem.OfsServerIV:])
+	seq = binary.GetUint64(mem[tlsmem.OfsServerSeq:])
+
+	cipher := tls.Encrypt(key, iv, seq, tls.CTApplicationData, reply)
+
+	mem = binary.PutUint64(mem, tlsmem.OfsServerSeq, seq+1)
+
 	return kernel.EncodeMem(nonce, mem, g.key, e.key),
-		intern(StHttpdWrite), kernel.SysWrite, 1, plain, len(plain)
+		intern(StHttpdStart), kernel.SysWrite, tlsfd, cipher, len(cipher)
 }

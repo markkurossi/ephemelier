@@ -10,14 +10,13 @@ const (
 	Init                   = 0
 	StAccept               = 4
 	StAcceptResult         = 3
-	StHttpdRead            = 10
-	StHttpdReadResult      = 12
-	StHttpdStart           = 7
-	StHttpdWrite           = 11
+	StHttpdRead            = 7
+	StHttpdReadResult      = 6
+	StHttpdStart           = 5
 	StListenResult         = 1
-	StTlsserverDone        = 6
-	StTlsserverKex         = 8
-	StTlsserverKexFinished = 9
-	StTlsserverKexRead     = 5
+	StTlsserverDone        = 9
+	StTlsserverKex         = 10
+	StTlsserverKexFinished = 11
+	StTlsserverKexRead     = 8
 	StTlsserverResult      = 2
 )
