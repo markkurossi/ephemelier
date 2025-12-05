@@ -19,8 +19,6 @@ import (
 	"github.com/markkurossi/ephemelier/crypto/tls"
 )
 
-const useMPC = true
-
 type tlsMsg uint8
 
 const (
@@ -218,57 +216,39 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 			fmt.Println("--SPDZ result match-------------------------------")
 		}
 
-		if useMPC {
-
-			// Write ServerHello and continue from the MCP space.
-			data, err := conn.MakeServerHello(pubkey)
-			if err != nil {
-				proc.tlsPeerErrf(err, "create ServerHello: %v", err)
-				return err
-			}
-			conn.WriteTranscript(data)
-
-			err = conn.WriteRecord(tls.CTHandshake, data)
-			if err != nil {
-				proc.tlsPeerErrf(err, "write ServerHello: %v", err)
-				return err
-			}
-
-			// Return TLS FD.
-			fd := NewTLSFD(conn, priv, cert)
-			sys.SetArg0(proc.AllocFD(fd))
-
-			// Return our share of the shared secret | transcript.
-			sys.argBuf = spdzFinalX.Bytes()
-			sys.argBuf = append(sys.argBuf, conn.Transcript()...)
-
-			// Sync FD with evaluator.
-			err = proc.conn.SendUint32(int(sys.arg0))
-			if err == nil {
-				err = proc.conn.Flush()
-			}
-			if err != nil {
-				fd.Close()
-				proc.FreeFD(sys.arg0)
-				sys.arg0 = int32(mapError(err))
-			}
-
-			return nil
-		}
-
-		// Use X-coordinate as shared secret (standard ECDH practice).
-		sharedSecret := finalX.Bytes()
-
-		// Pad to 32 bytes if necessary
-		if len(sharedSecret) < 32 {
-			padded := make([]byte, 32)
-			copy(padded[32-len(sharedSecret):], sharedSecret)
-			sharedSecret = padded
-		}
-		err = conn.ServerHandshakeServerHello(sharedSecret, pubkey)
+		// Write ServerHello and continue from the MCP space.
+		data, err := conn.MakeServerHello(pubkey)
 		if err != nil {
+			proc.tlsPeerErrf(err, "create ServerHello: %v", err)
 			return err
 		}
+		conn.WriteTranscript(data)
+
+		err = conn.WriteRecord(tls.CTHandshake, data)
+		if err != nil {
+			proc.tlsPeerErrf(err, "write ServerHello: %v", err)
+			return err
+		}
+
+		// Return TLS FD.
+		fd := NewTLSFD(conn, priv, cert)
+		sys.SetArg0(proc.AllocFD(fd))
+
+		// Return our share of the shared secret | transcript.
+		sys.argBuf = spdzFinalX.Bytes()
+		sys.argBuf = append(sys.argBuf, conn.Transcript()...)
+
+		// Sync FD with evaluator.
+		err = proc.conn.SendUint32(int(sys.arg0))
+		if err == nil {
+			err = proc.conn.Flush()
+		}
+		if err != nil {
+			fd.Close()
+			proc.FreeFD(sys.arg0)
+			sys.arg0 = int32(mapError(err))
+		}
+		return nil
 
 	case tlsMsgError:
 		data, err = proc.conn.ReceiveData()
@@ -283,37 +263,10 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 		proc.debugf("peer error: %v\n", string(msgError.Message))
 		sys.SetArg0(-int32(msgError.Errno))
 		return nil
+
+	default:
+		return fmt.Errorf("unknown message %d from evaluator", b)
 	}
-
-	var buf [4096]byte
-
-	n, err := conn.Read(buf[:])
-	if err != nil {
-		return err
-	}
-	fmt.Printf("read: %s\n", buf[:n])
-
-	_, err = conn.Write([]byte("Hello, world!\n"))
-	if err != nil {
-		return err
-	}
-
-	// Return TLS FD.
-	fd := NewTLSFD(conn, priv, cert)
-	sys.SetArg0(proc.AllocFD(fd))
-
-	// Sync FD with evaluator.
-	err = proc.conn.SendUint32(int(sys.arg0))
-	if err == nil {
-		err = proc.conn.Flush()
-	}
-	if err != nil {
-		fd.Close()
-		proc.FreeFD(sys.arg0)
-		sys.arg0 = int32(mapError(err))
-	}
-
-	return nil
 }
 
 func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
@@ -400,27 +353,25 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 			return err
 		}
 
-		if useMPC {
-			// Return TLS FD.
-			fd := NewTLSFD(nil, nil, nil)
+		// Return TLS FD.
+		fd := NewTLSFD(nil, nil, nil)
 
-			// Get FD from garbler.
-			gfd, err := proc.conn.ReceiveUint32()
-			if err == nil {
-				sys.SetArg0(int32(gfd))
+		// Get FD from garbler.
+		gfd, err := proc.conn.ReceiveUint32()
+		if err == nil {
+			sys.SetArg0(int32(gfd))
 
-				// Return our share of the shared secret.
-				sys.argBuf = spdzFinalX.Bytes()
+			// Return our share of the shared secret.
+			sys.argBuf = spdzFinalX.Bytes()
 
-				err = proc.SetFD(sys.arg0, fd)
-			}
-			if err != nil {
-				fd.Close()
-				sys.SetArg0(int32(mapError(err)))
-			}
-
-			return nil
+			err = proc.SetFD(sys.arg0, fd)
 		}
+		if err != nil {
+			fd.Close()
+			sys.SetArg0(int32(mapError(err)))
+		}
+
+		return nil
 
 	case tlsMsgError:
 		data, err := proc.conn.ReceiveData()
@@ -435,23 +386,10 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 		proc.debugf("peer error: %v\n", string(msgError.Message))
 		sys.SetArg0(-int32(msgError.Errno))
 		return nil
-	}
 
-	// Return TLS FD.
-	fd := NewTLSFD(nil, nil, nil)
-
-	// Get FD from garbler.
-	gfd, err := proc.conn.ReceiveUint32()
-	if err == nil {
-		sys.SetArg0(int32(gfd))
-		err = proc.SetFD(sys.arg0, fd)
+	default:
+		return fmt.Errorf("unknown message %d from garbler", b)
 	}
-	if err != nil {
-		fd.Close()
-		sys.SetArg0(int32(mapError(err)))
-	}
-
-	return nil
 }
 
 func (proc *Process) tlsKex(sys *syscall) {
