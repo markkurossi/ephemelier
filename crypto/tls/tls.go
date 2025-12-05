@@ -152,7 +152,7 @@ func (conn *Conn) readHandshakeMsg() (ContentType, []byte, error) {
 }
 
 func (conn *Conn) WriteTranscript(data []byte) {
-	fmt.Printf("WriteTranscript:\n%s", hex.Dump(data))
+	conn.keydbgf("WriteTranscript:\n%s", hex.Dump(data))
 	conn.transcript.Write(data)
 }
 

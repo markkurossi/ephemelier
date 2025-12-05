@@ -19,7 +19,7 @@ import (
 )
 
 func (conn *Conn) keydbgf(format string, a ...interface{}) {
-	if true || conn.config.Debug {
+	if true && conn.config.Debug {
 		fmt.Printf(format, a...)
 	}
 }

@@ -9,11 +9,13 @@ package kernel
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
 	"math/big"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -921,6 +923,8 @@ func (proc *Process) ktraceCall(sys *syscall) {
 	if !proc.kern.params.Trace {
 		return
 	}
+	const dataLimit = 16
+
 	proc.ktracePrefix()
 	fmt.Printf("CALL %s", sys.call)
 	switch sys.call {
@@ -934,11 +938,23 @@ func (proc *Process) ktraceCall(sys *syscall) {
 		fmt.Printf("(%d, %d)", sys.arg0, sys.arg1)
 
 	case SysTlskex:
-		fmt.Printf("(%d, %x, %s)", sys.arg0, sys.argBuf,
-			tls.HandshakeType(sys.arg1))
+		ht := tls.HandshakeType(sys.arg1)
+		fmt.Printf("(%d, ", sys.arg0)
+		if len(sys.argBuf) <= dataLimit {
+			fmt.Printf("%x, %s)", sys.argBuf, ht)
+		} else {
+			fmt.Printf("%x..., %d)\n%s", sys.argBuf[:dataLimit], ht,
+				hexDump(sys.argBuf))
+		}
 
 	case SysWrite:
-		fmt.Printf("(%d, %x, %d)", sys.arg0, sys.argBuf[:sys.arg1], sys.arg1)
+		fmt.Printf("(%d, ", sys.arg0)
+		if sys.arg1 <= dataLimit {
+			fmt.Printf("%x, %d)", sys.argBuf[:sys.arg1], sys.arg1)
+		} else {
+			fmt.Printf("%x..., %d)\n%s", sys.argBuf[:dataLimit], sys.arg1,
+				hexDump(sys.argBuf))
+		}
 
 	case SysYield:
 		fmt.Printf("(%d)", sys.pc)
@@ -965,7 +981,8 @@ func (proc *Process) ktraceRet(sys *syscall) {
 		switch sys.call {
 		case SysRead, SysCreatemsg, SysTlsserver:
 			if len(sys.argBuf) > 0 {
-				fmt.Printf(", %x", sys.argBuf)
+				fmt.Printf(", %d bytes:\n%s", len(sys.argBuf),
+					hexDump(sys.argBuf))
 			} else {
 				fmt.Printf(", nil")
 			}
@@ -973,7 +990,8 @@ func (proc *Process) ktraceRet(sys *syscall) {
 		case SysTlskex:
 			fmt.Printf(" %s", tls.HandshakeType(sys.arg0))
 			if len(sys.argBuf) > 0 {
-				fmt.Printf(", %x", sys.argBuf)
+				fmt.Printf(", %d bytes:\n%s", len(sys.argBuf),
+					hexDump(sys.argBuf))
 			} else {
 				fmt.Printf(", nil")
 			}
@@ -982,4 +1000,31 @@ func (proc *Process) ktraceRet(sys *syscall) {
 		}
 	}
 	fmt.Println()
+}
+
+func hexDump(data []byte) string {
+	dump := hex.Dump(data)
+	lines := strings.Split(dump, "\n")
+	for idx, line := range lines {
+		var n string
+		for i := 1; i < len(line); i++ {
+			if line[i] == '0' && i+1 < len(line) && line[i+1] != ' ' {
+				n = n + " "
+			} else {
+				n += line[i:]
+				break
+			}
+		}
+		lines[idx] = n
+	}
+	if len(lines) > 1 && len(lines[len(lines)-1]) == 0 {
+		lines = lines[:len(lines)-1]
+	}
+	var separator = "         --------------------------------------------------------------------"
+	var result []string
+	result = append(result, separator)
+	result = append(result, lines...)
+	result = append(result, separator)
+
+	return strings.Join(result, "\n")
 }
