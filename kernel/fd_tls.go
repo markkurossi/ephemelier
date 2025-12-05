@@ -62,8 +62,8 @@ func (fd *FDTLS) Read(b []byte) int {
 		need += sha256.Size
 	}
 
-	fmt.Printf("<< %s[%d/%d/%d]\n", ct, len(data), need, len(b))
 	if need > len(b) {
+		fmt.Printf("<< %s[%d/%d/%d]\n", ct, len(data), need, len(b))
 		return -int(ERANGE)
 	}
 	var n int

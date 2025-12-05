@@ -53,6 +53,7 @@ import (
 	"io"
 	"io/fs"
 	"net"
+	"strings"
 
 	"github.com/markkurossi/ephemelier/crypto/tls"
 )
@@ -409,8 +410,11 @@ func mapError(err error) int {
 			fmt.Printf(" - Addr  : %v\n", netOpError.Addr)
 			fmt.Printf(" - Err   : %v\n", netOpError.Err)
 		}
+		opError := netOpError.Error()
 		if errors.Is(netOpError.Err, net.ErrClosed) {
 			return int(-EBADF)
+		} else if strings.Contains(opError, "connection reset by peer") {
+			return int(-ECONNRESET)
 		}
 	}
 

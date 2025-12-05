@@ -981,8 +981,7 @@ func (proc *Process) ktraceRet(sys *syscall) {
 		switch sys.call {
 		case SysRead, SysCreatemsg, SysTlsserver:
 			if len(sys.argBuf) > 0 {
-				fmt.Printf(", %d bytes:\n%s", len(sys.argBuf),
-					hexDump(sys.argBuf))
+				fmt.Printf("\n%s", hexDump(sys.argBuf))
 			} else {
 				fmt.Printf(", nil")
 			}
@@ -990,7 +989,7 @@ func (proc *Process) ktraceRet(sys *syscall) {
 		case SysTlskex:
 			fmt.Printf(" %s", tls.HandshakeType(sys.arg0))
 			if len(sys.argBuf) > 0 {
-				fmt.Printf(", %d bytes:\n%s", len(sys.argBuf),
+				fmt.Printf(", %d bytes\n%s", len(sys.argBuf),
 					hexDump(sys.argBuf))
 			} else {
 				fmt.Printf(", nil")
@@ -1020,7 +1019,7 @@ func hexDump(data []byte) string {
 	if len(lines) > 1 && len(lines[len(lines)-1]) == 0 {
 		lines = lines[:len(lines)-1]
 	}
-	var separator = "         --------------------------------------------------------------------"
+	var separator = "    -------------------------------------------------------------------------"
 	var result []string
 	result = append(result, separator)
 	result = append(result, lines...)
