@@ -417,6 +417,11 @@ func (proc *Process) tlsKex(sys *syscall) {
 	if len(sys.argBuf) > 0 {
 		var appData []byte
 		if ht == 0 {
+			// Handshake type 0 indicates the end of key exchange. The
+			// argBuf contais both the encrypted and plaintext
+			// Finished messages:
+			//
+			//  byte(len(cipher)) | cipher | finished
 			l := int(sys.argBuf[0])
 			if l >= len(sys.argBuf)-1 {
 				sys.SetArg0(int32(-EINVAL))
@@ -465,12 +470,13 @@ func (proc *Process) tlsKex(sys *syscall) {
 	case tls.HTFinished:
 		// Set transcript digest directly to argBuf so we don't
 		// include it to the transcript. The next call with ct=0
-		// contains both the encrypted finished and its plaintext
-		// version so we can update the transcript.
+		// contains both the encrypted and plaintext Finished messages
+		// so we can update the transcript.
 		sys.argBuf = tlsfd.conn.Transcript()
 
 	case 0:
-		// We just wrote our Finished.
+		// End of key exchange. We just updated the transcript and
+		// sent our Finished above.
 
 	default:
 		fmt.Printf("SysTlskex: invalid handshake: %v\n", ht)
@@ -613,6 +619,7 @@ var tlsAlertToErrno = map[tls.AlertDescription]Errno{
 	tls.AlertNoApplicationProtocol: EPROTONOSUPPORT, // Protocol not supported
 }
 
+// Add computes x+y mod P-256 Prime.
 func add(x, y *big.Int) *big.Int {
 	r := new(big.Int).Add(x, y)
 	return new(big.Int).Mod(r, curveParams.P)
