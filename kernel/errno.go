@@ -415,6 +415,8 @@ func mapError(err error) int {
 			return int(-EBADF)
 		} else if strings.Contains(opError, "connection reset by peer") {
 			return int(-ECONNRESET)
+		} else if strings.Contains(opError, "broken pipe") {
+			return int(-EPIPE)
 		}
 	}
 
