@@ -9,109 +9,11 @@ package kernel
 import (
 	"crypto/elliptic"
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"math/big"
 
 	"github.com/markkurossi/ephemelier/crypto/tls"
 )
-
-func decodePublicKey(data []byte) (*Point, error) {
-	if len(data) != 65 || data[0] != 0x04 {
-		return nil, tls.AlertDecodeError
-	}
-	x := new(big.Int).SetBytes(data[1:33])
-	y := new(big.Int).SetBytes(data[33:65])
-
-	return &Point{
-		X: x,
-		Y: y,
-	}, nil
-}
-
-func (proc *Process) mpcDH(peerPub []byte) ([]byte, []byte, error) {
-	// Decode peer's public key.
-	peerPublicKey, err := decodePublicKey(peerPub)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	const numShares = 2
-	dhPeers := make([]*DHPeer, numShares)
-	curve := elliptic.P256()
-
-	// Step 1.1: Each server Pᵢ samples αᵢ and computes αᵢ·G
-	for i := 0; i < numShares; i++ {
-		dhPeer, err := NewDHPeer(fmt.Sprintf("DHPeer%d", i), curve)
-		if err != nil {
-			return nil, nil, err
-		}
-		dhPeers[i] = dhPeer
-	}
-
-	// Step 1.2: P1 (forwarding server) computes α·G = Σ(αᵢ·G) - our
-	// public key.
-	pubkeyX := big.NewInt(0)
-	pubkeyY := big.NewInt(0)
-
-	for _, peer := range dhPeers {
-		pubkeyX, pubkeyY = curve.Add(pubkeyX, pubkeyY,
-			peer.Pubkey.X, peer.Pubkey.Y)
-	}
-
-	// Encode public key into uncompressed SEC 1 format.
-
-	pubkey := make([]byte, 65)
-	pubkey[0] = 0x04
-
-	xBytes := pubkeyX.Bytes()
-	copy(pubkey[1+32-len(xBytes):], xBytes)
-
-	yBytes := pubkeyY.Bytes()
-	copy(pubkey[1+64-len(yBytes):], yBytes)
-
-	// Step 2: Each party Pᵢ computes αᵢ·(β·G)
-
-	partialResults := make([]*Point, len(dhPeers))
-
-	proc.debugf("Partial DH Computations:\n")
-	for i, peer := range dhPeers {
-		partial := peer.ComputePartialDH(peerPublicKey)
-		partialResults[i] = partial
-		proc.debugf(" • %s computes αᵢ·(β·G): (%s..., %s...)\n",
-			peer.Name,
-			hex.EncodeToString(partial.X.Bytes())[:16],
-			hex.EncodeToString(partial.Y.Bytes())[:16])
-	}
-
-	// MPC engine computes αβ·G = Σ(αᵢ·(β·G))
-
-	proc.debugf("SMPC Engine Combining Results:\n")
-	finalX := big.NewInt(0)
-	finalY := big.NewInt(0)
-
-	for i, partial := range partialResults {
-		finalX, finalY = curveAdd(finalX, finalY, partial.X, partial.Y)
-		proc.debugf(" • Added contribution from DHPeer%d\n", i)
-	}
-
-	// Use X-coordinate as shared secret (standard ECDH practice)
-	sharedSecret := finalX.Bytes()
-
-	// Pad to 32 bytes if necessary
-	if len(sharedSecret) < 32 {
-		padded := make([]byte, 32)
-		copy(padded[32-len(sharedSecret):], sharedSecret)
-		sharedSecret = padded
-	}
-
-	return sharedSecret, pubkey, nil
-}
-
-// Point represents an elliptic curve point.
-type Point struct {
-	X, Y *big.Int
-}
 
 // DHPeer represents a MPC DH peer with its share of the private key.
 type DHPeer struct {
@@ -155,4 +57,24 @@ func (p *DHPeer) ComputePartialDH(peerPublicKey *Point) *Point {
 		X: partialX,
 		Y: partialY,
 	}
+}
+
+// DecodePublicKey decodes the serialized P-256 public key. The public
+// key must be encoded in the SEC 1 uncompressed point format.
+func DecodePublicKey(data []byte) (*Point, error) {
+	if len(data) != 65 || data[0] != 0x04 {
+		return nil, tls.AlertDecodeError
+	}
+	x := new(big.Int).SetBytes(data[1:33])
+	y := new(big.Int).SetBytes(data[33:65])
+
+	return &Point{
+		X: x,
+		Y: y,
+	}, nil
+}
+
+// Point represents an elliptic curve point.
+type Point struct {
+	X, Y *big.Int
 }

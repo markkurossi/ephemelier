@@ -107,7 +107,7 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 		proc.tlsPeerErrf(err, "handshake failed: %v", err)
 		return err
 	}
-	peerPublicKey, err := decodePublicKey(clientKex)
+	peerPublicKey, err := DecodePublicKey(clientKex)
 	if err != nil {
 		proc.tlsPeerErrf(err, "invalid client public key: %v", err)
 		return err
@@ -289,12 +289,11 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 			proc.tlsPeerErrf(err, "failed to unmarshal message: %v", err)
 			return err
 		}
-		peerPublicKey, err := decodePublicKey(msg.KeyShare)
+		peerPublicKey, err := DecodePublicKey(msg.KeyShare)
 		if err != nil {
 			proc.tlsPeerErrf(err, "invalid client public key: %v", err)
 			return err
 		}
-		curve := elliptic.P256()
 		dhPeer, err = NewDHPeer("Evaluator", curve)
 		if err != nil {
 			proc.tlsPeerErrf(err, "failed to create DH peer: %v", err)
