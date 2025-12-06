@@ -48,8 +48,8 @@ const (
 const (
 	SysGetport Syscall = iota + 100
 	SysCreateport
-	SysSendport
-	SysRecvport
+	SysSendfd
+	SysRecvfd
 	SysCreatemsg
 )
 
@@ -76,7 +76,7 @@ var syscallNames = map[Syscall]string{
 
 	SysGetport:    "getport",
 	SysCreateport: "createport",
-	SysSendport:   "sendport",
-	SysRecvport:   "recvport",
+	SysSendfd:     "sendfd",
+	SysRecvfd:     "recvfd",
 	SysCreatemsg:  "createmsg",
 }

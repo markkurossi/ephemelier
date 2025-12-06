@@ -82,7 +82,6 @@ type FDPort struct {
 	port   *Port
 	server bool
 	closed bool
-	peeked []byte
 	read   chan []byte
 	write  chan []byte
 }
@@ -112,20 +111,17 @@ func (fd *FDPort) Read(b []byte) int {
 		return copy(b, fd.port.key)
 	}
 
-	var ok bool
-	if fd.peeked == nil {
-		fd.peeked, ok = <-fd.read
-		if !ok {
-			return 0
-		}
+	peeked, ok := <-fd.read
+	if !ok {
+		return 0
 	}
-	msgSize := KeySize + len(fd.peeked)
+	msgSize := KeySize + len(peeked)
 	if msgSize > len(b) {
 		return int(-ERANGE)
 	}
 	n := copy(b, fd.port.key)
-	n += copy(b[KeySize:], fd.peeked)
-	fd.peeked = nil
+	n += copy(b[KeySize:], peeked)
+
 	return n
 }
 

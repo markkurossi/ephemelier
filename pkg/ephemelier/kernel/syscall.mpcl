@@ -41,8 +41,8 @@ const (
 
 	SysGetport    = 100
 	SysCreateport = 101
-	SysSendport   = 102
-	SysRecvport   = 103
+	SysSendfd     = 102
+	SysRecvfd     = 103
 	SysCreatemsg  = 104
 )
 
