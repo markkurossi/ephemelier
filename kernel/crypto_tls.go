@@ -19,6 +19,16 @@ import (
 	"github.com/markkurossi/ephemelier/crypto/tls"
 )
 
+// The debugMPC flag enables MPC protocol debugging. When enabled, the
+// evaluator peer sends its secret shares to the garbler peer,
+// allowing the garbler to reconstruct the full key and verify MPC
+// operations locally.
+//
+// SECURITY WARNING: This MUST NEVER be enabled in production. Sharing
+// secret shares with the garbler completely breaks the MPC security
+// model by allowing a single party to learn the complete secret.
+const debugMPC = false
+
 type tlsMsg uint8
 
 const (
@@ -86,7 +96,6 @@ func (proc *Process) tlsServer(sys *syscall) {
 	}
 	if err != nil {
 		sys.SetArg0(int32(mapError(err)))
-		return
 	}
 }
 
@@ -165,15 +174,7 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 			new(big.Int).SetBytes(kexResult.PubkeyY))
 
 		// Encode public key into uncompressed SEC 1 format.
-
-		pubkey := make([]byte, 65)
-		pubkey[0] = 0x04
-
-		xBytes := pubkeyX.Bytes()
-		copy(pubkey[1+32-len(xBytes):], xBytes)
-
-		yBytes := pubkeyY.Bytes()
-		copy(pubkey[1+64-len(yBytes):], yBytes)
+		pubkey := EncodePublicKey(pubkeyX, pubkeyY)
 
 		// Compute partial DH αᵢ·(β·G)
 		partial := dhPeer.ComputePartialDH(peerPublicKey)
@@ -187,33 +188,35 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 			return err
 		}
 		_ = spdzFinalY
-		fmt.Printf("finalX: %v\n", spdzFinalX.Text(16))
+		proc.debugf("spdzFinalX: %v\n", spdzFinalX.Text(16))
 
-		// Debugging, read evaluator's share.
-		data, err = proc.conn.ReceiveData()
-		if err != nil {
-			return err
-		}
-		peerSpdzFinalX := new(big.Int).SetBytes(data)
-		spdzFinal := add(spdzFinalX, peerSpdzFinalX)
+		if debugMPC {
+			// Debugging, read evaluator's share.
+			data, err = proc.conn.ReceiveData()
+			if err != nil {
+				return err
+			}
+			peerSpdzFinalX := new(big.Int).SetBytes(data)
+			spdzFinal := add(spdzFinalX, peerSpdzFinalX)
 
-		// Debugging secrets.
+			// Debugging secrets.
 
-		finalX, finalY := curveAdd(partial.X, partial.Y,
-			new(big.Int).SetBytes(kexResult.PartialX),
-			new(big.Int).SetBytes(kexResult.PartialY))
+			finalX, finalY := curve.Add(partial.X, partial.Y,
+				new(big.Int).SetBytes(kexResult.PartialX),
+				new(big.Int).SetBytes(kexResult.PartialY))
 
-		fmt.Printf("curveAdd:\n")
-		fmt.Printf(" - g.X: %x\n", partial.X.Bytes())
-		fmt.Printf(" - g.Y: %x\n", partial.Y.Bytes())
-		fmt.Printf(" - e.X: %x\n", kexResult.PartialX)
-		fmt.Printf(" - e.Y: %x\n", kexResult.PartialY)
-		fmt.Printf(" =>  X: %x\n", finalX.Bytes())
-		fmt.Printf(" =>  Y: %x\n", finalY.Bytes())
-		fmt.Printf("SPDZ  : %v\n", spdzFinal.Text(16))
+			fmt.Printf("curveAdd:\n")
+			fmt.Printf(" - g.X: %x\n", partial.X.Bytes())
+			fmt.Printf(" - g.Y: %x\n", partial.Y.Bytes())
+			fmt.Printf(" - e.X: %x\n", kexResult.PartialX)
+			fmt.Printf(" - e.Y: %x\n", kexResult.PartialY)
+			fmt.Printf(" =>  X: %x\n", finalX.Bytes())
+			fmt.Printf(" =>  Y: %x\n", finalY.Bytes())
+			fmt.Printf("SPDZ  : %v\n", spdzFinal.Text(16))
 
-		if finalX.Cmp(spdzFinal) == 0 {
-			fmt.Println("--SPDZ result match-------------------------------")
+			if finalX.Cmp(spdzFinal) == 0 {
+				fmt.Println("SPDZ result matches curveAdd result")
+			}
 		}
 
 		// Write ServerHello and continue from the MCP space.
@@ -303,17 +306,17 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 		// Compute partial Diffie-Hellman.
 		partial := dhPeer.ComputePartialDH(peerPublicKey)
 
-		// XXX return only dhPeer.Pubkey.{X,Y} in TLSKEXResult.
-		//
-		// XXX end syscall here and return partial to MPC
-		// space. Continue the handshake from MPC.
-
-		data, err = Marshal(&TLSKEXResult{
-			PubkeyX:  dhPeer.Pubkey.X.Bytes(),
-			PubkeyY:  dhPeer.Pubkey.Y.Bytes(),
-			PartialX: partial.X.Bytes(),
-			PartialY: partial.Y.Bytes(),
-		})
+		// Return our public key share.
+		kexResult := &TLSKEXResult{
+			PubkeyX: dhPeer.Pubkey.X.Bytes(),
+			PubkeyY: dhPeer.Pubkey.Y.Bytes(),
+		}
+		if debugMPC {
+			// Return private key share only when debugging MPC.
+			kexResult.PartialX = partial.X.Bytes()
+			kexResult.PartialY = partial.Y.Bytes()
+		}
+		data, err = Marshal(kexResult)
 		if err != nil {
 			proc.tlsPeerErrf(err, "failed to marshal message: %v", err)
 			return err
@@ -340,16 +343,18 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 			return err
 		}
 		_ = spdzFinalY
-		fmt.Printf("finalX: %v\n", spdzFinalX.Text(16))
+		proc.debugf("spdzFinalX: %v\n", spdzFinalX.Text(16))
 
-		// Debugging, send our share to garbler.
-		err = proc.conn.SendData(spdzFinalX.Bytes())
-		if err != nil {
-			return err
-		}
-		err = proc.conn.Flush()
-		if err != nil {
-			return err
+		if debugMPC {
+			// Debugging, send our share to garbler.
+			err = proc.conn.SendData(spdzFinalX.Bytes())
+			if err != nil {
+				return err
+			}
+			err = proc.conn.Flush()
+			if err != nil {
+				return err
+			}
 		}
 
 		// Return TLS FD.

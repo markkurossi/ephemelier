@@ -896,7 +896,7 @@ func (proc *Process) decodeSyscall(sys *syscall, values []interface{}) error {
 }
 
 func (proc *Process) debugf(format string, a ...interface{}) {
-	if !proc.kern.params.Diagnostics && false {
+	if !proc.kern.params.Diagnostics {
 		return
 	}
 	fmt.Printf("%s: ", proc.prog.Name)

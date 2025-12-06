@@ -59,6 +59,21 @@ func (p *DHPeer) ComputePartialDH(peerPublicKey *Point) *Point {
 	}
 }
 
+// EncodePublicKey encodes the public key x,y into the SEC 1
+// uncompressed point format.
+func EncodePublicKey(x, y *big.Int) []byte {
+	pubkey := make([]byte, 65)
+	pubkey[0] = 0x04
+
+	xBytes := x.Bytes()
+	copy(pubkey[1+32-len(xBytes):], xBytes)
+
+	yBytes := y.Bytes()
+	copy(pubkey[1+64-len(yBytes):], yBytes)
+
+	return pubkey
+}
+
 // DecodePublicKey decodes the serialized P-256 public key. The public
 // key must be encoded in the SEC 1 uncompressed point format.
 func DecodePublicKey(data []byte) (*Point, error) {
