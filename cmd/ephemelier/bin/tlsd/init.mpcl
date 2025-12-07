@@ -24,5 +24,5 @@ func main(g kernel.G1B, e kernel.PeerInit) (
 	// Parent, listen for connections.
 	addr := []byte("tcp::8443")
 
-	return nil, intern(StListenResult), kernel.SysListen, 0, addr, len(addr)
+	return nil, intern(StMainListenResult), kernel.SysListen, 0, addr, len(addr)
 }

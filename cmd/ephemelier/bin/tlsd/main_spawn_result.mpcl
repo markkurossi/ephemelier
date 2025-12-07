@@ -21,5 +21,5 @@ func main(g, e kernel.PeerResult) ([]byte, kernel.PC, kernel.Syscall, int32) {
 	}
 
 	// Get port to child.
-	return nil, intern(StGetportResult), kernel.SysGetport, g.arg0
+	return nil, intern(StMainGetportResult), kernel.SysGetport, g.arg0
 }
