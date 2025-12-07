@@ -9,21 +9,21 @@ package main
 const (
 	Init                   = 3
 	StAccept               = 9
-	StAcceptResult         = 8
+	StAcceptResult         = 7
 	StChildGetportResult   = 1
 	StChildMain            = 4
 	StChildRecvfdResult    = 0
 	StGetportResult        = 6
-	StHttpdEnd             = 18
-	StHttpdRead            = 13
+	StHttpdEnd             = 11
+	StHttpdRead            = 14
 	StHttpdReadResult      = 12
-	StHttpdStart           = 11
+	StHttpdStart           = 13
 	StListenResult         = 5
 	StSendfdResult         = 10
-	StSpawnResult          = 7
-	StTlsserverDone        = 15
+	StSpawnResult          = 8
+	StTlsserverDone        = 18
 	StTlsserverKex         = 16
 	StTlsserverKexFinished = 17
-	StTlsserverKexRead     = 14
+	StTlsserverKexRead     = 15
 	StTlsserverResult      = 2
 )

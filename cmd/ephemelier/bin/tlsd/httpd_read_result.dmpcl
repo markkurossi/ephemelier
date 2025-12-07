@@ -39,6 +39,8 @@ func main(g kernel.G, e kernel.E) (
 
 	mem = binary.PutUint64(mem, tlsmem.OfsClientSeq, seq+1)
 
+	// XXX favicon... or just print the request
+
 	var reply []byte
 	if bytes.HasPrefix(plain, []byte("GET / ")) {
 		reply = []byte("HTTP/1.1 200 OK\n\n<html><body><h1>Hello, I'm Ephemelier!</h1></body></html>\n")

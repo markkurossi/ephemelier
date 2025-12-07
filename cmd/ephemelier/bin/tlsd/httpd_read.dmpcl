@@ -25,7 +25,7 @@ func main(g kernel.G, e kernel.E) (
 	}
 	tlsfd := int32(binary.GetUint32(mem[8:]))
 
-	if g.arg0 < 0 {
+	if g.arg0 <= 0 {
 		return nil, intern(StHttpdEnd), kernel.SysClose, tlsfd, nil, 0
 	}
 	return nil, intern(StHttpdReadResult), kernel.SysYield, 1, nil, 0
