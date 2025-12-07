@@ -47,3 +47,10 @@ Connection closed by foreign host.
  - [x] Shell with command launch & wait
  - [ ] Circuit stats in streaming mode (INFO)
  - [ ] Optimize input setting (direct vs. via strings)
+
+# Benchmark
+
+| HTTPD          | Time    | Relative |
+| :------------  | ------: | -------: |
+| 1st roundtrip  | 14.203s |    1.000 |
+| Optimized main | 12.514s |    0.881 |
