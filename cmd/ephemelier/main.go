@@ -69,7 +69,8 @@ func main() {
 
 	var wg sync.WaitGroup
 	for _, arg := range flag.Args() {
-		proc, err := kern.Spawn(arg, stdin.Copy(), stdout.Copy(), stderr.Copy())
+		proc, err := kern.Spawn(arg, nil, stdin.Copy(), stdout.Copy(),
+			stderr.Copy())
 		if err != nil {
 			log.Print(err)
 			continue
@@ -108,7 +109,7 @@ func console(wg *sync.WaitGroup) error {
 		}
 		log.Printf("New console connection from %s", conn.RemoteAddr())
 		fd := kernel.NewSocketFD(conn)
-		proc, err := kern.Spawn("bin/sh", fd, fd.Copy(), fd.Copy())
+		proc, err := kern.Spawn("bin/sh", nil, fd, fd.Copy(), fd.Copy())
 		if err != nil {
 			return err
 		}

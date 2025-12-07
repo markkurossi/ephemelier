@@ -34,7 +34,7 @@ func main(g kernel.G, e kernel.E) (
 
 	ct, plain, ok := tls.Decrypt(key, iv, seq, g.argBuf)
 	if !ok {
-		return nil, intern(StAccept), kernel.SysClose, tlsfd, nil, 0
+		return nil, intern(StHttpdEnd), kernel.SysClose, tlsfd, nil, 0
 	}
 
 	mem = binary.PutUint64(mem, tlsmem.OfsClientSeq, seq+1)

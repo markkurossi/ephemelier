@@ -12,7 +12,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"net"
 	"strings"
@@ -35,6 +34,7 @@ type Process struct {
 	c           *sync.Cond
 	kern        *Kernel
 	role        Role
+	args        []string
 	pid         PID
 	conn        *p2p.Conn
 	oti         ot.OT
@@ -188,7 +188,8 @@ func (proc *Process) Run() (err error) {
 		err = proc.runEvaluator()
 	}
 	if err != nil {
-		log.Printf("process error: %v", err)
+		proc.ktracePrefix()
+		fmt.Printf("process error: %v\n", err)
 	}
 	// Close all FDs.
 	for _, fd := range proc.fds {
@@ -342,9 +343,7 @@ run:
 			break run
 
 		case SysSpawn, SysDial, SysListen:
-			sys.arg0 = 0
-			sys.argBuf = nil
-			sys.arg1 = 0
+			sys.SetArg0(0)
 
 		case SysAccept:
 			fd := NewSocketFD(NewConnDevNull())
@@ -362,35 +361,34 @@ run:
 
 		case SysGetport:
 			if sys.arg0 <= 0 {
-				sys.arg0 = int32(-EINVAL)
-			} else {
-				pid := PID(sys.arg0)
-				epid := pid.E()
-				port, err := proc.kern.GetProcessPort(epid)
-				if err != nil {
-					sys.arg0 = int32(-EINVAL)
-				} else {
-					var fd *FD
-					if pid == proc.pid {
-						fd = port.NewServerFD()
-					} else {
-						fd = port.NewClientFD()
-					}
+				sys.SetArg0(int32(-EINVAL))
+				return nil
+			}
 
-					// Get FD from garbler.
-					gfd, err := proc.conn.ReceiveUint32()
-					if err == nil {
-						sys.arg0 = int32(gfd)
-						err = proc.SetFD(sys.arg0, fd)
-					}
-					if err != nil {
-						fd.Close()
-						sys.arg0 = int32(-EFAULT)
-					}
+			pid := PID(sys.arg0)
+			epid := pid.E()
+			port, err := proc.kern.GetProcessPort(epid)
+			if err != nil {
+				sys.SetArg0(int32(-EINVAL))
+			} else {
+				var fd *FD
+				if pid == proc.pid {
+					fd = port.NewServerFD()
+				} else {
+					fd = port.NewClientFD()
+				}
+
+				// Get FD from garbler.
+				gfd, err := proc.conn.ReceiveUint32()
+				if err == nil {
+					sys.SetArg0(int32(gfd))
+					err = proc.SetFD(sys.arg0, fd)
+				}
+				if err != nil {
+					fd.Close()
+					sys.SetArg0(int32(-EFAULT))
 				}
 			}
-			sys.argBuf = nil
-			sys.arg1 = 0
 
 		default:
 			err = proc.syscall(sys)
@@ -421,6 +419,10 @@ func (proc *Process) runGarbler() error {
 
 	// Init gets pid in arg0.
 	sys.arg0 = int32(proc.pid)
+
+	// Program arguments.
+	// XXX format arguments to sys.argBuf.
+	sys.arg1 = int32(len(proc.args))
 
 run:
 	for {
@@ -543,12 +545,18 @@ run:
 			break run
 
 		case SysSpawn:
-			cmd := "bin/" + string(sys.argBuf[:sys.arg1])
+			args := strings.Split(string(sys.argBuf[:sys.arg1]), "\n")
+			if len(args) == 0 {
+				sys.SetArg0(int32(-EINVAL))
+				return nil
+			}
+			cmd := "bin/" + args[0]
+			args = args[1:]
 
 			sys.argBuf = nil
 			sys.arg1 = 0
 
-			child, err := proc.kern.Spawn(cmd, proc.fds[0].Copy(),
+			child, err := proc.kern.Spawn(cmd, args, proc.fds[0].Copy(),
 				proc.fds[1].Copy(), proc.fds[2].Copy())
 			if err != nil {
 				sys.arg0 = int32(-ENOENT)
@@ -623,36 +631,35 @@ run:
 
 		case SysGetport:
 			if sys.arg0 <= 0 {
-				sys.arg0 = int32(-EINVAL)
-			} else {
-				pid := PID(sys.arg0)
-				gpid := pid.G()
-				port, err := proc.kern.GetProcessPort(gpid)
-				if err != nil {
-					sys.arg0 = int32(-EINVAL)
-				} else {
-					var fd *FD
-					if pid == proc.pid {
-						fd = port.NewServerFD()
-					} else {
-						fd = port.NewClientFD()
-					}
-					sys.arg0 = proc.AllocFD(fd)
-
-					// Sync FD with evaluator.
-					err = proc.conn.SendUint32(int(sys.arg0))
-					if err == nil {
-						err = proc.conn.Flush()
-					}
-					if err != nil {
-						fd.Close()
-						proc.FreeFD(sys.arg0)
-						sys.arg0 = int32(-EFAULT)
-					}
-				}
+				sys.SetArg0(int32(-EINVAL))
+				return nil
 			}
-			sys.argBuf = nil
-			sys.arg1 = 0
+
+			pid := PID(sys.arg0)
+			gpid := pid.G()
+			port, err := proc.kern.GetProcessPort(gpid)
+			if err != nil {
+				sys.SetArg0(int32(-EINVAL))
+				return nil
+			}
+			var fd *FD
+			if pid == proc.pid {
+				fd = port.NewServerFD()
+			} else {
+				fd = port.NewClientFD()
+			}
+			sys.SetArg0(proc.AllocFD(fd))
+
+			// Sync FD with evaluator.
+			err = proc.conn.SendUint32(int(sys.arg0))
+			if err == nil {
+				err = proc.conn.Flush()
+			}
+			if err != nil {
+				fd.Close()
+				proc.FreeFD(sys.arg0)
+				sys.SetArg0(int32(-EFAULT))
+			}
 
 		default:
 			err = proc.syscall(sys)
@@ -703,12 +710,11 @@ func (proc *Process) syscall(sys *syscall) error {
 	case SysClose:
 		fd, ok := proc.fds[sys.arg0]
 		if !ok {
-			sys.arg0 = int32(-EBADF)
+			sys.SetArg0(int32(-EBADF))
 		} else {
-			sys.arg0 = int32(fd.Close())
+			sys.SetArg0(int32(fd.Close()))
+			proc.FreeFD(sys.arg0)
 		}
-		sys.argBuf = nil
-		sys.arg1 = 0
 
 	case SysWait:
 		var pid PartyID
@@ -756,6 +762,69 @@ func (proc *Process) syscall(sys *syscall) error {
 		sys.arg0 = int32(proc.pid)
 		sys.argBuf = nil
 		sys.arg1 = 0
+
+	case SysSendfd:
+		fd, ok := proc.fds[sys.arg0]
+		if !ok {
+			sys.SetArg0(int32(-EBADF))
+			return nil
+		}
+		portfd, ok := fd.Impl.(*FDPort)
+		if !ok {
+			sys.SetArg0(int32(-EINVAL))
+			return nil
+		}
+		sendfd, ok := proc.fds[sys.arg1]
+		if !ok {
+			sys.SetArg0(int32(-EINVAL))
+			return nil
+		}
+		sys.SetArg0(int32(portfd.SendFD(sendfd)))
+		proc.FreeFD(sys.arg1)
+
+	case SysRecvfd:
+		fd, ok := proc.fds[sys.arg0]
+		if !ok {
+			sys.arg0 = int32(-EBADF)
+			return nil
+		}
+		portfd, ok := fd.Impl.(*FDPort)
+		if !ok {
+			sys.SetArg0(int32(-EINVAL))
+			return nil
+		}
+		recvfd, errno := portfd.RecvFD()
+		if errno != 0 {
+			sys.SetArg0(int32(errno))
+			return nil
+		}
+
+		var err error
+
+		if proc.role == RoleGarbler {
+			sys.SetArg0(proc.AllocFD(recvfd))
+
+			// Sync FD with evaluator.
+			err = proc.conn.SendUint32(int(sys.arg0))
+			if err == nil {
+				err = proc.conn.Flush()
+			}
+			if err != nil {
+				proc.FreeFD(sys.arg0)
+			}
+		} else {
+			// Get FD from garbler.
+			var gfd int
+			gfd, err = proc.conn.ReceiveUint32()
+			if err == nil {
+				sys.SetArg0(int32(gfd))
+				err = proc.SetFD(sys.arg0, recvfd)
+			}
+		}
+		if err != nil {
+			recvfd.Close()
+			sys.SetArg0(int32(-EFAULT))
+		}
 
 	case SysCreatemsg:
 		sys.argBuf = nil
@@ -928,13 +997,14 @@ func (proc *Process) ktraceCall(sys *syscall) {
 	proc.ktracePrefix()
 	fmt.Printf("CALL %s", sys.call)
 	switch sys.call {
-	case SysExit, SysClose, SysWait, SysCreatemsg, SysAccept, SysTlsstatus:
+	case SysExit, SysClose, SysWait, SysCreatemsg, SysAccept,
+		SysTlsstatus, SysRecvfd:
 		fmt.Printf("(%d)", sys.arg0)
 
 	case SysSpawn, SysDial, SysListen:
 		fmt.Printf("(%s)", sys.argBuf[:sys.arg1])
 
-	case SysRead, SysTlsserver, SysTlsclient:
+	case SysRead, SysTlsserver, SysTlsclient, SysSendfd:
 		fmt.Printf("(%d, %d)", sys.arg0, sys.arg1)
 
 	case SysTlskex:

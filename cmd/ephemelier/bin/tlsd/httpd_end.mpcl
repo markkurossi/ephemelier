@@ -1,0 +1,21 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"crypto/elliptic/p256"
+	"crypto/tls"
+	"encoding/binary"
+	"encoding/hex"
+	"ephemelier/kernel"
+	"ephemelier/tlsmem"
+)
+
+func main(g, e kernel.PeerResult) ([]byte, kernel.PC, kernel.Syscall, int32) {
+	return nil, 0, kernel.SysExit, 0
+}

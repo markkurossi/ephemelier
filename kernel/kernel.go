@@ -123,7 +123,7 @@ func (kern *Kernel) Evaluator(stdin, stdout, stderr *FD) error {
 		}
 		log.Printf("New MPC connection from %s", conn.RemoteAddr())
 
-		proc, err := kern.CreateProcess(p2p.NewConn(conn), RoleEvaluator,
+		proc, err := kern.CreateProcess(p2p.NewConn(conn), RoleEvaluator, nil,
 			stdin.Copy(), stdout.Copy(), stderr.Copy())
 		if err != nil {
 			return err
@@ -132,9 +132,9 @@ func (kern *Kernel) Evaluator(stdin, stdout, stderr *FD) error {
 	}
 }
 
-// Spawn creates a new process for the file and stdio FDs.
-func (kern *Kernel) Spawn(file string, stdin, stdout, stderr *FD) (
-	*Process, error) {
+// Spawn creates a new process for the file, arguments, and stdio FDs.
+func (kern *Kernel) Spawn(file string, args []string,
+	stdin, stdout, stderr *FD) (*Process, error) {
 
 	prog, err := eef.NewProgram(file)
 	if err != nil {
@@ -146,7 +146,7 @@ func (kern *Kernel) Spawn(file string, stdin, stdout, stderr *FD) (
 	if err != nil {
 		return nil, err
 	}
-	proc, err := kern.CreateProcess(p2p.NewConn(mpc), RoleGarbler,
+	proc, err := kern.CreateProcess(p2p.NewConn(mpc), RoleGarbler, args,
 		stdin, stdout, stderr)
 	if err != nil {
 		mpc.Close()
@@ -188,7 +188,7 @@ func (kern *Kernel) Spawn(file string, stdin, stdout, stderr *FD) (
 }
 
 // CreateProcess creates a new process.
-func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
+func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role, args []string,
 	stdin, stdout, stderr *FD) (*Process, error) {
 
 	rand := kern.params.MPCConfig.GetRandom()
@@ -202,6 +202,7 @@ func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role,
 	proc := &Process{
 		kern:    kern,
 		role:    role,
+		args:    args,
 		conn:    conn,
 		oti:     ot.NewCO(rand),
 		iostats: p2p.NewIOStats(),

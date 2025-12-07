@@ -92,6 +92,6 @@ func TestPortEvaluator(t *testing.T) {
 
 	msg := portfd.CreateMsg()
 	if len(msg) != KeySize {
-		t.Errorf("invalid evaluator msg: %x", msg)
+		t.Errorf("invalid evaluator msg: %x: %v != %v", msg, len(msg), KeySize)
 	}
 }

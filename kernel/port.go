@@ -18,8 +18,14 @@ type Port struct {
 	key     []byte
 	nonceHi uint32
 	nonceLo uint64
-	server  chan []byte
-	client  chan []byte
+	role    Role
+	server  chan msg
+	client  chan msg
+}
+
+type msg struct {
+	data []byte
+	fd   *FD
 }
 
 // NewPort creates a new port for the role.
@@ -30,12 +36,12 @@ func NewPort(role Role) (*Port, error) {
 		return nil, err
 	}
 	port := &Port{
-		key: key[:],
+		key:  key[:],
+		role: role,
 	}
-	if role == RoleGarbler {
-		port.server = make(chan []byte)
-		port.client = make(chan []byte)
-	}
+	port.server = make(chan msg)
+	port.client = make(chan msg)
+
 	return port, nil
 }
 
@@ -81,74 +87,97 @@ func (p *Port) NewClientFD() *FD {
 type FDPort struct {
 	port   *Port
 	server bool
-	closed bool
-	read   chan []byte
-	write  chan []byte
+	read   chan msg
+	write  chan msg
 }
 
 // Close implements FD.Close.
 func (fd *FDPort) Close() int {
-	if fd.closed {
+	if fd.write == nil {
 		return int(-EBADF)
 	}
-	if fd.write != nil {
-		close(fd.write)
-	}
-	fd.closed = true
+	close(fd.write)
+	fd.write = nil
 	return 0
 }
 
 // Read implements FD.Read.
 func (fd *FDPort) Read(b []byte) int {
-	if fd.closed {
+	if fd.read == nil {
 		return 0
 	}
-	if fd.read == nil {
-		// Evaluator
-		if len(b) < len(fd.port.key) {
-			return int(-ERANGE)
-		}
-		return copy(b, fd.port.key)
-	}
 
-	peeked, ok := <-fd.read
+	msg, ok := <-fd.read
 	if !ok {
 		return 0
 	}
-	msgSize := KeySize + len(peeked)
+	if msg.fd != nil {
+		msg.fd.Close()
+		return int(-ENOMSG)
+	}
+	msgSize := KeySize + len(msg.data)
 	if msgSize > len(b) {
 		return int(-ERANGE)
 	}
 	n := copy(b, fd.port.key)
-	n += copy(b[KeySize:], peeked)
+	n += copy(b[KeySize:], msg.data)
 
 	return n
 }
 
 // Write implements FD.Write.
 func (fd *FDPort) Write(b []byte) int {
-	if fd.closed {
+	if fd.write == nil {
 		return int(-EBADF)
 	}
 	n := len(b)
-	if fd.write != nil {
-		fd.write <- b
+	if fd.port.role == RoleEvaluator {
+		b = nil
+	}
+	fd.write <- msg{
+		data: b,
 	}
 
 	return n
+}
+
+func (fd *FDPort) RecvFD() (*FD, int) {
+	if fd.read == nil {
+		return nil, int(-EBADF)
+	}
+
+	msg, ok := <-fd.read
+	if !ok {
+		return nil, int(-EBADF)
+	}
+	if msg.fd == nil {
+		return nil, int(-ENOMSG)
+	}
+
+	return msg.fd, 0
+}
+
+func (fd *FDPort) SendFD(v *FD) int {
+	if fd.write == nil {
+		return int(-EBADF)
+	}
+	fd.write <- msg{
+		fd: v,
+	}
+	return 0
 }
 
 // CreateMsg creates a message header for the port. The header is
 // keyshare|nonce for RoleGarbler and keyshare for RoleEvaluator.
 func (fd *FDPort) CreateMsg() []byte {
 	l := KeySize
-	if fd.write != nil {
+	if fd.port.role == RoleGarbler {
 		l += NonceSize
 	}
 	buf := make([]byte, l)
 	n := copy(buf, fd.port.key[:])
 
-	if fd.write != nil {
+	if fd.port.role == RoleGarbler {
 		fd.port.Nonce(buf[n:])
 		if fd.server {
 			buf[n] |= 0b10000000

@@ -1,0 +1,27 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"ephemelier/kernel"
+)
+
+func main(g kernel.G, e kernel.E) ([]byte, kernel.PC, kernel.Syscall, int32) {
+
+	nonce, mem, ok := kernel.DecodeMem(g.mem, g.key, e.key)
+	if !ok {
+		return nil, 0, kernel.SysExit, -kernel.EINVAL
+	}
+	fd := binary.GetUint32(mem[4:])
+
+	if g.arg0 < 0 {
+		return nil, intern(StAccept), kernel.SysClose, int32(fd)
+	}
+
+	return nil, intern(StAccept), kernel.SysYield, 0
+}
