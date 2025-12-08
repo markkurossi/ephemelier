@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"runtime/pprof"
 	"sync"
 
 	"github.com/markkurossi/ephemelier/kernel"
@@ -36,9 +37,24 @@ func main() {
 	fConsole := flag.Bool("console", false, "start console")
 	ktrace := flag.Bool("ktrace", false, "kernel trace")
 	ktraceHex := flag.Bool("x", false, "hexdump ktrace data fields")
+	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to `file`")
+	memprofile := flag.String("memprofile", "",
+		"write memory profile to `file`")
 	flag.Parse()
 
 	log.SetFlags(0)
+
+	if len(*cpuprofile) > 0 {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
 
 	kern = kernel.New(&kernel.Params{
 		Trace:       *ktrace,
@@ -95,6 +111,17 @@ func main() {
 
 	// Wait for all programs to terminate.
 	wg.Wait()
+
+	if len(*memprofile) > 0 {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal("could not create memory profile: ", err)
+		}
+		defer f.Close()
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Fatal("could not write memory profile: ", err)
+		}
+	}
 }
 
 func console(wg *sync.WaitGroup) error {
