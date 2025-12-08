@@ -12,11 +12,9 @@ import (
 	"ephemelier/tlsmem"
 )
 
-func main(g kernel.G1B, e kernel.PeerInit) (
-	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
-
+func main(g, e kernel.PeerInit) ([]byte, kernel.PC, kernel.Syscall, int32) {
 	if g.arg0 < 0 {
-		return nil, 0, kernel.SysExit, 1, nil, 0
+		return nil, 0, kernel.SysExit, 1
 	}
 
 	var nonce [12]byte
@@ -25,5 +23,5 @@ func main(g kernel.G1B, e kernel.PeerInit) (
 	mem = binary.PutUint32(mem, tlsmem.OfsFD, uint32(g.arg0))
 
 	return kernel.EncodeMem(nonce, mem, g.key, e.key),
-		intern(StTlsserverResult), kernel.SysTlsserver, int32(g.arg0), nil, 0
+		intern(StTlsserverResult), kernel.SysTlsserver, int32(g.arg0)
 }
