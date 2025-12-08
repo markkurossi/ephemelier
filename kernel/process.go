@@ -996,6 +996,7 @@ func (proc *Process) ktraceHex(data []byte) {
 	lines := strings.Split(dump, "\n")
 
 	var separator = "    -------------------------------------------------------------------------"
+	fmt.Println()
 	fmt.Println(separator)
 
 	for idx, line := range lines {
@@ -1040,7 +1041,7 @@ func (proc *Process) ktraceCall(sys *syscall) {
 		if len(sys.argBuf) <= dataLimit {
 			fmt.Printf("%x, %s)", sys.argBuf, ht)
 		} else {
-			fmt.Printf("%x..., %d)\n", sys.argBuf[:dataLimit], ht)
+			fmt.Printf("%x..., %d)", sys.argBuf[:dataLimit], ht)
 			proc.ktraceHex(sys.argBuf)
 		}
 
@@ -1049,7 +1050,7 @@ func (proc *Process) ktraceCall(sys *syscall) {
 		if sys.arg1 <= dataLimit {
 			fmt.Printf("%x, %d)", sys.argBuf[:sys.arg1], sys.arg1)
 		} else {
-			fmt.Printf("%x..., %d)\n", sys.argBuf[:dataLimit], sys.arg1)
+			fmt.Printf("%x..., %d)", sys.argBuf[:dataLimit], sys.arg1)
 			proc.ktraceHex(sys.argBuf)
 		}
 
@@ -1078,7 +1079,6 @@ func (proc *Process) ktraceRet(sys *syscall) {
 		switch sys.call {
 		case SysRead, SysCreatemsg, SysTlsserver:
 			if len(sys.argBuf) > 0 {
-				fmt.Println()
 				proc.ktraceHex(sys.argBuf)
 			} else {
 				fmt.Printf(", nil")
@@ -1087,7 +1087,7 @@ func (proc *Process) ktraceRet(sys *syscall) {
 		case SysTlskex:
 			fmt.Printf(" %s", tls.HandshakeType(sys.arg0))
 			if len(sys.argBuf) > 0 {
-				fmt.Printf(", %d bytes\n", len(sys.argBuf))
+				fmt.Printf(", %d bytes", len(sys.argBuf))
 				proc.ktraceHex(sys.argBuf)
 			} else {
 				fmt.Printf(", nil")
