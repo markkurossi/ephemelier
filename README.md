@@ -48,9 +48,14 @@ Connection closed by foreign host.
  - [ ] Circuit stats in streaming mode (INFO)
  - [ ] Optimize input setting (direct vs. via strings)
 
-# Benchmark
+# Benchmarks
 
 | HTTPD          | Time    | Relative |
 | :------------  | ------: | -------: |
 | 1st roundtrip  | 14.203s |    1.000 |
 | Optimized main | 12.514s |    0.881 |
+
+| Fibo           | Time    | Relative |
+| :------------  | ------: | -------: |
+| Baseline       | 2.736s  | 1.000    |
+| Semihonest mem | 0.814s  | 0.298    |

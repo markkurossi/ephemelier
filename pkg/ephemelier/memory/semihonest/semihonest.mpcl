@@ -1,0 +1,72 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package semihonest
+
+import (
+	"crypto/cipher/ctr"
+	"encoding/binary"
+)
+
+const (
+	NonceSize = 12
+	KeySize   = 16
+)
+
+type G1B struct {
+	arg0   int32
+	key    [KeySize]byte
+	mem    [NonceSize + 16]byte
+	argBuf [0]byte
+	arg1   int32
+}
+
+func Encode(nonce, mem, gkey, ekey []byte) []byte {
+	var key [kernel.KeySize]byte
+	for i := 0; i < kernel.KeySize; i++ {
+		key[i] = gkey[i] ^ ekey[i]
+	}
+
+	counter := binary.GetUint(nonce)
+	counter += len(mem) / KeySize
+	if len(mem)%KeySize != 0 {
+		counter++
+	}
+
+	var ctrNonce [ctr.NonceSize]byte
+
+	diff := ctr.NonceSize - NonceSize
+
+	// We only store len(nonce) bytes of nonce.
+	ctrNonce = binary.PutUint(ctrNonce, diff, counter)
+
+	var memory [NonceSize + len(mem)]byte
+	copy(memory, ctrNonce[diff:])
+
+	cipher := ctr.XORAES128(key, ctrNonce, mem)
+	copy(memory[NonceSize:], cipher)
+
+	return memory
+}
+
+func Decode(cipher, gkey, ekey []byte) ([]byte, []byte, bool) {
+	var key [kernel.KeySize]byte
+	for i := 0; i < kernel.KeySize; i++ {
+		key[i] = gkey[i] ^ ekey[i]
+	}
+
+	var ctrNonce [ctr.NonceSize]byte
+
+	nonce := cipher[:NonceSize]
+	diff := ctr.NonceSize - NonceSize
+
+	copy(ctrNonce[diff:], nonce)
+
+	mem := ctr.XORAES128(key, ctrNonce, cipher[NonceSize:])
+
+	return nonce, mem, true
+}

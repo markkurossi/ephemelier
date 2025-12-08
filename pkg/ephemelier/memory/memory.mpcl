@@ -1,0 +1,43 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package memory
+
+const (
+	KeySize = 16
+)
+
+// PeerResult implements syscall interface with result argument for
+// garbler and evaluator.
+type PeerResult struct {
+	arg0 int32
+}
+
+// PeerInit implements syscall interface for program initialization.
+type PeerInit struct {
+	arg0 int32
+	key  [KeySize]byte
+}
+
+type G struct {
+	arg0   int32
+	key    [KeySize]byte
+	mem    []byte
+	argBuf []byte
+	arg1   int32
+}
+
+type E struct {
+	arg0   int32
+	key    [KeySize]byte
+	argBuf []byte
+}
+
+type E1B struct {
+	arg0 int32
+	key  [KeySize]byte
+}
