@@ -14,17 +14,17 @@ const (
 	StChildRecvfdResult    = 0
 	StHttpdEnd             = 12
 	StHttpdRead            = 15
-	StHttpdReadResult      = 14
-	StHttpdStart           = 13
+	StHttpdReadResult      = 13
+	StHttpdStart           = 14
 	StMainAccept           = 10
-	StMainAcceptResult     = 7
+	StMainAcceptResult     = 6
 	StMainGetportResult    = 11
 	StMainListenResult     = 5
 	StMainSendfdResult     = 9
-	StMainSpawnResult      = 6
-	StTlsserverDone        = 17
-	StTlsserverKex         = 18
-	StTlsserverKexFinished = 19
+	StMainSpawnResult      = 7
+	StTlsserverDone        = 19
+	StTlsserverKex         = 17
+	StTlsserverKexFinished = 18
 	StTlsserverKexRead     = 16
 	StTlsserverResult      = 2
 )

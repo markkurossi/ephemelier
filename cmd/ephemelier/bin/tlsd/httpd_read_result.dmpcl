@@ -23,7 +23,7 @@ func main(g kernel.G, e kernel.E) (
 	if !ok {
 		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
 	}
-	tlsfd := int32(binary.GetUint32(mem[8:]))
+	tlsfd := int32(binary.GetUint32(mem[tlsmem.OfsFD:]))
 
 	var key [16]byte
 	var iv [12]byte

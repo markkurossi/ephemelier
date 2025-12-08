@@ -8,7 +8,8 @@
 package tlsmem
 
 const (
-	OfsHandshakeSecret = 12
+	OfsFD              = 0
+	OfsHandshakeSecret = OfsFD + 4
 	OfsClientKey       = OfsHandshakeSecret + 32
 	OfsClientIV        = OfsClientKey + 16
 	OfsServerKey       = OfsClientIV + 12

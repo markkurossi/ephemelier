@@ -22,8 +22,7 @@ func main(g kernel.G1B, e kernel.PeerInit) (
 	var nonce [12]byte
 	var mem [tlsmem.Size]byte
 
-	// XXX 0-4 is unused
-	mem = binary.PutUint32(mem, 4, uint32(g.arg0))
+	mem = binary.PutUint32(mem, tlsmem.OfsFD, uint32(g.arg0))
 
 	return kernel.EncodeMem(nonce, mem, g.key, e.key),
 		intern(StTlsserverResult), kernel.SysTlsserver, int32(g.arg0), nil, 0

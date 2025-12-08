@@ -29,8 +29,10 @@ func main(g kernel.G, e kernel.E) (
 		return nil, intern(StAccept), kernel.SysClose, int32(clientfd), nil, 0
 	}
 
-	// TLS FD.
-	mem = binary.PutUint32(mem, 8, uint32(g.arg0))
+	// TLS FD. The TLS connection wraps socket so we can reuse its
+	// memory slot; if we close the TLS connection, the underlaying
+	// socket is also closed.
+	mem = binary.PutUint32(mem, tlsmem.OfsFD, uint32(g.arg0))
 
 	// Construct shared secret.
 
