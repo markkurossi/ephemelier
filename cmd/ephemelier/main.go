@@ -35,12 +35,14 @@ func main() {
 	fDiagnostics := flag.Bool("d", false, "diagnostics output")
 	fConsole := flag.Bool("console", false, "start console")
 	ktrace := flag.Bool("ktrace", false, "kernel trace")
+	ktraceHex := flag.Bool("x", false, "hexdump ktrace data fields")
 	flag.Parse()
 
 	log.SetFlags(0)
 
 	kern = kernel.New(&kernel.Params{
 		Trace:       *ktrace,
+		TraceHex:    *ktraceHex,
 		Verbose:     *fVerbose,
 		Diagnostics: *fDiagnostics,
 		Port:        mpcPort,

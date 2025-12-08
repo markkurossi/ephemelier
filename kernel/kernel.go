@@ -76,6 +76,7 @@ const (
 // Params define kernel parameters.
 type Params struct {
 	Trace       bool
+	TraceHex    bool
 	Verbose     bool
 	Diagnostics bool
 	Port        string
