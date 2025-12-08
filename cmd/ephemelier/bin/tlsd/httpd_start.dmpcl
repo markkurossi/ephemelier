@@ -13,13 +13,15 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"ephemelier/kernel"
+	"ephemelier/memory"
+	"ephemelier/memory/semihonest"
 	"ephemelier/tlsmem"
 )
 
-func main(g kernel.G, e kernel.E) (
+func main(g memory.G, e memory.E) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
-	nonce, mem, ok := kernel.DecodeMem(g.mem, g.key, e.key)
+	nonce, mem, ok := semihonest.Decode(g.mem, g.key, e.key)
 	if !ok {
 		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
 	}

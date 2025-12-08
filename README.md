@@ -52,8 +52,9 @@ Connection closed by foreign host.
 
 | HTTPD          | Time    | Relative |
 | :------------  | ------: | -------: |
-| 1st roundtrip  | 14.203s |    1.000 |
-| Optimized main | 12.514s |    0.881 |
+| 1st roundtrip  | 14.203s | 1.000    |
+| Optimized main | 12.514s | 0.881    |
+| Semihonest mem | 7.183s  | 0.506    |
 
 | Fibo           | Time    | Relative |
 | :------------  | ------: | -------: |

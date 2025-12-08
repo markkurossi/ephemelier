@@ -13,9 +13,10 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"ephemelier/kernel"
+	"ephemelier/memory"
 	"ephemelier/tlsmem"
 )
 
-func main(g, e kernel.PeerResult) ([]byte, kernel.PC, kernel.Syscall, int32) {
+func main(g, e memory.PeerResult) ([]byte, kernel.PC, kernel.Syscall, int32) {
 	return nil, 0, kernel.SysExit, 0
 }
