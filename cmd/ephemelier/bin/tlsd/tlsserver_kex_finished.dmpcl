@@ -19,17 +19,17 @@ import (
 )
 
 func main(g memory.G, e memory.E) (
-	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte) {
+
+	if g.arg0 < 0 {
+		return nil, intern(StTlsserverClose), kernel.SysYield, 0, nil
+	}
 
 	nonce, mem, ok := semihonest.Decode(g.mem, g.key, e.key)
 	if !ok {
-		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
+		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil
 	}
 	tlsfd := int32(binary.GetUint32(mem[tlsmem.OfsFD:]))
-
-	if g.arg0 < 0 {
-		return nil, intern(StHttpdEnd), kernel.SysClose, int32(tlsfd), nil, 0
-	}
 
 	// HTFinished
 
@@ -58,5 +58,5 @@ func main(g memory.G, e memory.E) (
 	copy(result[1:], cipher)
 	copy(result[1+len(cipher):], finished)
 
-	return nil, intern(StTlsserverDone), kernel.SysTlskex, tlsfd, result, 0
+	return nil, intern(StTlsserverDone), kernel.SysTlskex, tlsfd, result
 }

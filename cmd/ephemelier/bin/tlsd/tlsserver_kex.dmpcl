@@ -21,15 +21,15 @@ import (
 func main(g memory.G, e memory.E) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
+	if g.arg0 < 0 {
+		return nil, intern(StTlsserverClose), kernel.SysYield, 0, nil, 0
+	}
+
 	nonce, mem, ok := semihonest.Decode(g.mem, g.key, e.key)
 	if !ok {
 		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
 	}
 	tlsfd := int32(binary.GetUint32(mem[tlsmem.OfsFD:]))
-
-	if g.arg0 < 0 {
-		return nil, intern(StHttpdEnd), kernel.SysClose, int32(tlsfd), nil, 0
-	}
 
 	var next int32
 	var state kernel.PC = intern(StTlsserverKex)

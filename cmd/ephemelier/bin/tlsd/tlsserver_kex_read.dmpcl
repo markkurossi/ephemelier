@@ -19,20 +19,17 @@ import (
 )
 
 func main(g memory.G, e memory.E) (
-	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32,
-	byte, []byte) {
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+
+	if g.arg0 < 0 {
+		return nil, intern(StTlsserverClose), kernel.SysYield, 0, nil, 0
+	}
 
 	nonce, mem, ok := semihonest.Decode(g.mem, g.key, e.key)
 	if !ok {
-		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0,
-			0, nil
+		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
 	}
 	tlsfd := int32(binary.GetUint32(mem[tlsmem.OfsFD:]))
-
-	if g.arg0 < 0 {
-		return nil, intern(StHttpdEnd), kernel.SysClose, tlsfd, nil, 0,
-			0, nil
-	}
 
 	var key [16]byte
 	var iv [12]byte
@@ -47,8 +44,7 @@ func main(g memory.G, e memory.E) (
 
 	ct, plain, ok := tls.Decrypt(key, iv, seq, cipher)
 	if !ok {
-		return nil, intern(StHttpdEnd), kernel.SysClose, tlsfd, nil, 0,
-			0, nil
+		return nil, intern(StHttpdEnd), kernel.SysClose, tlsfd, nil, 0
 	}
 
 	// XXX must check that plain's verifyData matches our verifyData
@@ -65,6 +61,5 @@ func main(g memory.G, e memory.E) (
 	mem = binary.PutUint64(mem, tlsmem.OfsServerSeq, 0)
 
 	return semihonest.Encode(nonce, mem, g.key, e.key),
-		intern(StHttpdStart), kernel.SysTlsstatus, tlsfd, nil, 1,
-		ct, plain
+		intern(StHttpdStart), kernel.SysTlsstatus, tlsfd, nil, 1
 }
