@@ -17,7 +17,7 @@ func main(g kernel.G1B, e kernel.E1B) (
 	fd := int32(binary.GetUint32(g.mem[4:]))
 
 	if g.arg0 < 0 {
-		return nil, intern(StAccept), kernel.SysClose, int32(fd), nil, 0
+		return nil, intern(StMainAccept), kernel.SysClose, int32(fd), nil, 0
 	}
 
 	return nil, intern(StMainSendfdResult), kernel.SysSendfd, g.arg0, nil, fd

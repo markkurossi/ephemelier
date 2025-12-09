@@ -28,7 +28,7 @@ func main(g memory.G, e memory.E) (
 	clientfd := binary.GetUint32(mem[4:])
 
 	if g.arg0 < 0 {
-		return nil, intern(StAccept), kernel.SysClose, int32(clientfd), nil, 0
+		return nil, intern(StHttpdEnd), kernel.SysClose, int32(clientfd), nil, 0
 	}
 
 	// TLS FD. The TLS connection wraps socket so we can reuse its

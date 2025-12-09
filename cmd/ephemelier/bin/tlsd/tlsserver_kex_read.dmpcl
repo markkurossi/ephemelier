@@ -30,7 +30,7 @@ func main(g memory.G, e memory.E) (
 	tlsfd := int32(binary.GetUint32(mem[tlsmem.OfsFD:]))
 
 	if g.arg0 < 0 {
-		return nil, intern(StAccept), kernel.SysClose, tlsfd, nil, 0,
+		return nil, intern(StHttpdEnd), kernel.SysClose, tlsfd, nil, 0,
 			0, nil
 	}
 
@@ -47,7 +47,7 @@ func main(g memory.G, e memory.E) (
 
 	ct, plain, ok := tls.Decrypt(key, iv, seq, cipher)
 	if !ok {
-		return nil, intern(StAccept), kernel.SysClose, tlsfd, nil, 0,
+		return nil, intern(StHttpdEnd), kernel.SysClose, tlsfd, nil, 0,
 			0, nil
 	}
 
