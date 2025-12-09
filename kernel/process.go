@@ -779,8 +779,8 @@ func (proc *Process) syscall(sys *syscall) error {
 			sys.SetArg0(int32(-EINVAL))
 			return nil
 		}
-		sys.SetArg0(int32(portfd.SendFD(sendfd)))
 		proc.FreeFD(sys.arg1)
+		sys.SetArg0(int32(portfd.SendFD(sendfd)))
 
 	case SysRecvfd:
 		fd, ok := proc.fds[sys.arg0]
