@@ -16,6 +16,7 @@ import (
 	"ephemelier/memory"
 	"ephemelier/memory/semihonest"
 	"ephemelier/tlsmem"
+	"strconv"
 )
 
 func main(g memory.G, e memory.E) (
@@ -44,8 +45,18 @@ func main(g memory.G, e memory.E) (
 	// XXX favicon... or just print the request
 
 	var reply []byte
-	if bytes.HasPrefix(plain, []byte("GET / ")) {
-		reply = []byte("HTTP/1.1 200 OK\n\n<html><body><h1>Hello, I'm Ephemelier!</h1></body></html>\n")
+	if bytes.HasPrefix(plain, []byte("GET /")) {
+		body := []byte("<html><body><h1>Hello, I'm Ephemelier!</h1></body></html>\n")
+		hdr := []byte("HTTP/1.1 200 OK\nContent-Length: ")
+		l := []byte(strconv.Itoa(len(body)))
+		sep := []byte("\n\n")
+
+		reply = make([]byte, len(hdr)+len(l)+len(sep)+len(body))
+		n := copy(reply, hdr)
+		n += copy(reply[n:], l)
+		n += copy(reply[n:], sep)
+		copy(reply[n:], body)
+
 	} else {
 		reply = []byte("Hello, I'm Ephemelier!\n")
 	}
