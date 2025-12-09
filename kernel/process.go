@@ -1030,7 +1030,7 @@ func (proc *Process) ktraceCall(sys *syscall) {
 		fmt.Printf("(%d)", sys.arg0)
 
 	case SysSpawn, SysDial, SysListen:
-		fmt.Printf("(%s)", sys.argBuf[:sys.arg1])
+		fmt.Printf("(%q)", string(sys.argBuf[:sys.arg1]))
 
 	case SysRead, SysTlsserver, SysTlsclient, SysSendfd:
 		fmt.Printf("(%d, %d)", sys.arg0, sys.arg1)
@@ -1072,12 +1072,16 @@ func (proc *Process) ktraceRet(sys *syscall) {
 		return
 	}
 	proc.ktracePrefix()
-	fmt.Printf("RET  %s %d", sys.call, sys.arg0)
+	fmt.Printf("RET  %s ", sys.call)
 	if sys.arg0 < 0 {
-		fmt.Printf(" %s", Errno(-sys.arg0))
+		fmt.Printf("%d %s", sys.arg0, Errno(-sys.arg0))
 	} else {
 		switch sys.call {
+		case SysSpawn:
+			fmt.Printf("%s", PID(sys.arg0))
+
 		case SysRead, SysCreatemsg, SysTlsserver:
+			fmt.Printf("%d", sys.arg0)
 			if len(sys.argBuf) > 0 {
 				proc.ktraceHex(sys.argBuf)
 			} else {
@@ -1085,7 +1089,7 @@ func (proc *Process) ktraceRet(sys *syscall) {
 			}
 
 		case SysTlskex:
-			fmt.Printf(" %s", tls.HandshakeType(sys.arg0))
+			fmt.Printf("%d %s", sys.arg0, tls.HandshakeType(sys.arg0))
 			if len(sys.argBuf) > 0 {
 				fmt.Printf(", %d bytes", len(sys.argBuf))
 				proc.ktraceHex(sys.argBuf)
@@ -1094,6 +1098,7 @@ func (proc *Process) ktraceRet(sys *syscall) {
 			}
 
 		default:
+			fmt.Printf("%d", sys.arg0)
 		}
 	}
 	fmt.Println()
