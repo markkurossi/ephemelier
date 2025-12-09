@@ -89,7 +89,7 @@ type Stats struct {
 }
 
 func (stats Stats) String() string {
-	return fmt.Sprintf("g=%v,xor=%v,nxor=%v,d=%v",
+	return fmt.Sprintf("g=%v xor=%v nxor=%v d=%v",
 		stats.NumGates, stats.NumXOR, stats.NumNonXOR, stats.MPCD)
 }
 
