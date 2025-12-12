@@ -54,7 +54,8 @@ func main(g memory.G, e memory.E) (
 
 	// Derive handshake keys.
 	handshakeSecret, clientKey, clientIV, serverKey, serverIV,
-		finishedKey := tls.DeriveHandshakeKeys(sharedSecret[:], g.argBuf[32:])
+		finishedKey := tls.DeriveHandshakeKeys(sharedSecret[:], g.argBuf[32:],
+		tlsmem.KeySize)
 
 	copy(mem[tlsmem.OfsHandshakeSecret:], handshakeSecret)
 	copy(mem[tlsmem.OfsClientKey:], clientKey)

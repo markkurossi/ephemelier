@@ -8,12 +8,15 @@
 package tlsmem
 
 const (
+	// 16 for AES128-GCM, 32 for ChaCha20Poly1305.
+	KeySize = 16
+
 	OfsFD              = 0
 	OfsHandshakeSecret = OfsFD + 4
 	OfsClientKey       = OfsHandshakeSecret + 32
-	OfsClientIV        = OfsClientKey + 16
+	OfsClientIV        = OfsClientKey + KeySize
 	OfsServerKey       = OfsClientIV + 12
-	OfsServerIV        = OfsServerKey + 16
+	OfsServerIV        = OfsServerKey + KeySize
 	OfsFinishedKey     = OfsServerIV + 12
 	OfsClientSeq       = OfsFinishedKey + 32
 	OfsServerSeq       = OfsClientSeq + 8

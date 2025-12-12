@@ -28,7 +28,7 @@ func main(g memory.G, e memory.E) (
 	}
 	tlsfd := int32(binary.GetUint32(mem[tlsmem.OfsFD:]))
 
-	var key [16]byte
+	var key [tlsmem.KeySize]byte
 	var iv [12]byte
 
 	copy(key, mem[tlsmem.OfsClientKey:])
