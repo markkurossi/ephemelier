@@ -22,7 +22,7 @@ func EncodeMsg(g, e, data []byte) []byte {
 	var msg [kernel.NonceSize + len(data) + kernel.TagSize]byte
 	copy(msg, nonce)
 
-	cipher := gcm.EncryptAES128(key, nonce, data, nil)
+	cipher := gcm.SealAES128(key, nonce, data, nil)
 	copy(msg[kernel.NonceSize:], cipher)
 
 	return msg
@@ -35,6 +35,5 @@ func DecodeMsg(g, e []byte) ([]byte, bool) {
 	}
 	nonce := g[kernel.KeySize : kernel.KeySize+kernel.NonceSize]
 
-	return gcm.DecryptAES128(key, nonce, g[kernel.KeySize+kernel.NonceSize:],
-		nil)
+	return gcm.OpenAES128(key, nonce, g[kernel.KeySize+kernel.NonceSize:], nil)
 }

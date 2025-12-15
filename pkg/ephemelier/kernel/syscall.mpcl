@@ -104,7 +104,7 @@ func EncodeMem(nonce, mem, gkey, ekey []byte) []byte {
 	var memory [len(nonce) + len(mem) + 16]byte
 	copy(memory, nonce)
 
-	cipher := gcm.EncryptAES128(key, nonce, mem, nil)
+	cipher := gcm.SealAES128(key, nonce, mem, nil)
 	copy(memory[len(nonce):], cipher)
 
 	return memory
@@ -117,6 +117,6 @@ func DecodeMem(cipher, gkey, ekey []byte) ([]byte, []byte, bool) {
 	}
 
 	nonce := cipher[:NonceSize]
-	mem, ok := gcm.DecryptAES128(key, nonce, cipher[NonceSize:], nil)
+	mem, ok := gcm.OpenAES128(key, nonce, cipher[NonceSize:], nil)
 	return nonce, mem, ok
 }
