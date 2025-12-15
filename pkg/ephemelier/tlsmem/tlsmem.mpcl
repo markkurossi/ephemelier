@@ -7,9 +7,14 @@
 
 package tlsmem
 
+import (
+	"crypto/chacha20"
+)
+
 const (
 	// 16 for AES128-GCM, 32 for ChaCha20Poly1305.
-	KeySize = 16
+	KeySize = chacha20.KeySize
+	//KeySize = 16
 
 	OfsFD              = 0
 	OfsHandshakeSecret = OfsFD + 4

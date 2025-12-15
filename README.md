@@ -39,6 +39,18 @@ esh $ exit
 Connection closed by foreign host.
 ```
 
+# HTTPS Server
+
+## TLS cipher suites
+
+The cipher suite is hardcoded to TLS_CHACHA20_POLY1305_SHA256. To
+change it to TLS_AES_128_GCM_SHA256, edit:
+
+ - `mpc/pkg/crypto/tls/cipher.mpcl` to use `gcm.{Seal,Open}AES128`
+   instead of `chacha20poly1305.{Seal,Open}`
+ - configure cipher suite in `crypto/tls/tls.go`
+ - configure cipher key size in `pkg/ephemelier/tlsmem/tlsmem.mpcl`
+
 ## TODO
 
  - [ ] MPC compiler: -timestamp-dynamic option for the -circ mode to
@@ -50,11 +62,13 @@ Connection closed by foreign host.
 
 # Benchmarks
 
-| HTTPD          | Time    | Relative |
-| :------------  | ------: | -------: |
-| 1st roundtrip  | 14.203s | 1.000    |
-| Optimized main | 12.514s | 0.881    |
-| Semihonest mem | 7.183s  | 0.506    |
+| HTTPD                 | Time    | Relative |
+| :------------         | ------: | -------: |
+| 1st roundtrip         | 14.203s | 1.000    |
+| Optimized main        | 12.514s | 0.881    |
+| Semihonest mem        | 7.183s  | 0.506    |
+| ChaCha20Poly1305      | 6.393s  | 0.450    |
+| ChaCha20 native block | 5.152s  | 0.363    |
 
 | Fibo           | Time    | Relative |
 | :------------  | ------: | -------: |

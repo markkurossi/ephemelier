@@ -23,9 +23,9 @@ follows:
 This implementation will implement:
 
  - `TLS_AES_128_GCM_SHA256`
+ - `TLS_CHACHA20_POLY1305_SHA256`
  - `ecdsa_secp256r1_sha256`
  - `secp256r1`
-
 
 Distributed ECDH with Additive Sharing
 Additive (n-out-of-n) Secret Sharing for Distributed ECDH
@@ -38,4 +38,10 @@ Additive (n-out-of-n) Secret Sharing for Distributed ECDH
 
 ```shell
 apps/openssl s_client -connect localhost:8443 -debug -msg
+```
+
+``` shell
+openssl s_client -connect localhost:8443 -debug -msg -tlsextdebug
+-servername ephemelier.com -CAfile
+~/go/src/github.com/markkurossi/ephemelier/cmd/ephemelier/ephemelier-cert.pem
 ```
