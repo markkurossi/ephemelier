@@ -8,7 +8,6 @@
 package main
 
 import (
-	"crypto/elliptic/p256"
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
