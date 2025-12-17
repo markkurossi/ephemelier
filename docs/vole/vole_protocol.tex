@@ -1,0 +1,18 @@
+
+\section{VOLE-from-OT Protocol Documentation}
+
+\subsection{Introduction}
+This document provides a research-grade description of the OT-based VOLE protocol. It combines IKNP OT extension, PRG expansion, and linear masking.
+
+\subsection{Problem Definition}
+Sender inputs $a_i \in \mathbb{F}_p$, receiver inputs $x_i \in \mathbb{F}_p$. Outputs are correlated as $u_i = a_i x_i + r_i \pmod p$.
+
+\subsection{Protocol Overview}
+Use IKNP to derive seeds $L_i^0, L_i^1$ and $L_i^{x_i}$. Expand with a PRG to $r_i, t_i, y_i$. Sender computes $u_i = r_i + a_i (t_i - r_i)$.
+
+\subsection{Correctness}
+If $x_i = 0$, receiver gets $r_i$; if $1$, gets $t_i$. Hence $u_i = a_i x_i + r_i$.
+
+\subsection{Security}
+Semi-honest security follows from PRG pseudorandomness and OT privacy.
+
