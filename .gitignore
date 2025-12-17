@@ -36,8 +36,9 @@ go.work.sum
 ,*
 *~
 
-cmd/ephemelier/ephemelier
 cmd/ca/ca
+cmd/ephemelier/ephemelier
+cmd/tlsclient/tlsclient
 
 docs/additive-ss/additive-ss
 docs/spdz/spdz
