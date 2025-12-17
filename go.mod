@@ -6,6 +6,7 @@ require (
 	github.com/bytemare/dkg v0.0.0-20241007182121-23ea4d549880
 	github.com/bytemare/frost v0.0.0-20241019112700-8c6db5b04145
 	github.com/markkurossi/mpc v0.0.0-20251016101200-468005fe4cce
+	golang.org/x/crypto v0.45.0
 )
 
 require (
@@ -19,9 +20,8 @@ require (
 	github.com/gtank/ristretto255 v0.2.0 // indirect
 	github.com/markkurossi/crypto v0.0.0-20240520115340-daed3f9a1082 // indirect
 	github.com/markkurossi/tabulate v0.0.0-20251126123558-a08056f6160f // indirect
-	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
-	golang.org/x/text v0.31.0 // indirect
+	golang.org/x/text v0.32.0 // indirect
 )
 
 replace github.com/markkurossi/mpc => ../mpc
