@@ -40,6 +40,4 @@ cmd/ephemelier/ephemelier
 cmd/ca/ca
 
 docs/additive-ss/additive-ss
-docs/spdz-mascot/spdz-mascot
-docs/spdz-mascot-iknp/spdz-mascot-iknp
 docs/spdz/spdz
