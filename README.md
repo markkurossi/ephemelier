@@ -53,12 +53,16 @@ change it to TLS_AES_128_GCM_SHA256, edit:
 
 ## TODO
 
+ - [ ] FROST [RFC 9591](https://www.rfc-editor.org/rfc/rfc9591.txt)
+ - [ ] Circuit stats in streaming mode (INFO)
+ - [ ] Optimize input setting (direct vs. via strings)
+ - [ ] Review `mpc/otext`
+ - [ ] Review `mpc/vole`
+ - [ ] Review [SPDZ Implementation](crypto/spdz/)
+ - [ ] Implement [Ephemelier State Machine Compiler](cmd/esmc/)
  - [ ] MPC compiler: -timestamp-dynamic option for the -circ mode to
        create timestamp file only if main's arguments have unspecified
        types
- - [x] Shell with command launch & wait
- - [ ] Circuit stats in streaming mode (INFO)
- - [ ] Optimize input setting (direct vs. via strings)
 
 # Benchmarks
 
