@@ -63,6 +63,7 @@ change it to TLS_AES_128_GCM_SHA256, edit:
  - [ ] MPC compiler: -timestamp-dynamic option for the -circ mode to
        create timestamp file only if main's arguments have unspecified
        types
+ - [ ] WASM as an intermediate language?
 
 # Benchmarks
 
