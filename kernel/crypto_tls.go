@@ -551,14 +551,9 @@ func LoadKeyAndCert(keyPath, certPath string) (
 	if keyBlock == nil {
 		return nil, nil, fmt.Errorf("failed to decode private key PEM")
 	}
-	parsedKey, err := x509.ParsePKCS8PrivateKey(keyBlock.Bytes)
+	privateKey, err := x509.ParseECPrivateKey(keyBlock.Bytes)
 	if err != nil {
 		return nil, nil, err
-	}
-	privateKey, ok := parsedKey.(*ecdsa.PrivateKey)
-	if !ok {
-		return nil, nil, fmt.Errorf("private key is not ECDSA, got %T",
-			parsedKey)
 	}
 
 	// Verify that the private key matches the certificate's public key.
