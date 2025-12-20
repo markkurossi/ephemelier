@@ -158,6 +158,10 @@ func (proc *Process) ktraceExit() {
 		proc.rusage.Stime)
 
 	proc.ktracePrefix()
+	fmt.Printf("RUSG c=%v, s=%v, g=%v\n", proc.rusage.CompTime,
+		proc.rusage.StreamTime, proc.rusage.GarbleTime)
+
+	proc.ktracePrefix()
 	fmt.Printf("RUSG g=%v, xor=%v, nxor=%v\n", proc.rusage.NumGates,
 		proc.rusage.NumXOR, proc.rusage.NumNonXOR)
 }

@@ -80,18 +80,24 @@ func (st ProcState) String() string {
 
 // RUsage provides process resource usage information.
 type RUsage struct {
-	Utime     time.Duration
-	Stime     time.Duration
-	NumGates  uint64
-	NumWires  uint64
-	NumXOR    uint64
-	NumNonXOR uint64
+	Utime      time.Duration
+	Stime      time.Duration
+	CompTime   time.Duration
+	StreamTime time.Duration
+	GarbleTime time.Duration
+	NumGates   uint64
+	NumWires   uint64
+	NumXOR     uint64
+	NumNonXOR  uint64
 }
 
 // Add adds the argument RUsage data to this RUsage instance.
 func (rusage *RUsage) Add(o RUsage) {
 	rusage.Utime += o.Utime
 	rusage.Stime += o.Stime
+	rusage.CompTime += o.CompTime
+	rusage.StreamTime += o.StreamTime
+	rusage.GarbleTime += o.GarbleTime
 	rusage.NumGates += o.NumGates
 	rusage.NumWires += o.NumWires
 	rusage.NumXOR += o.NumXOR
@@ -511,12 +517,14 @@ run:
 			if err != nil {
 				return err
 			}
+			start := time.Now()
 			result, err = circuit.Garbler(proc.kern.params.MPCConfig,
 				proc.conn, proc.oti, state.Circ, input, proc.verbose())
 			if err != nil {
 				return err
 			}
 			outputs = state.Circ.Outputs
+			rusage.GarbleTime = time.Since(start)
 
 			if proc.diagnostics() {
 				mpc.PrintResults(result, state.Circ.Outputs, 0)
@@ -535,15 +543,23 @@ run:
 			}
 			inputSizes[1] = sizes
 
-			outputs, result, err = compiler.New(proc.mpclcParams).Stream(
-				proc.conn, proc.oti, state.Name, bytes.NewReader(state.DMPCL),
-				inputs, inputSizes)
+			cc := compiler.New(proc.mpclcParams)
+
+			outputs, result, err = cc.Stream(proc.conn, proc.oti, state.Name,
+				bytes.NewReader(state.DMPCL), inputs, inputSizes)
 			if err != nil {
 				return err
 			}
 			if proc.diagnostics() {
 				mpc.PrintResults(result, outputs, 0)
 			}
+
+			rusage.CompTime = cc.StreamStats.Compile
+			rusage.StreamTime = cc.StreamStats.Stream
+			rusage.GarbleTime = cc.StreamStats.Garble
+			rusage.NumGates = cc.StreamStats.Circuits.Count()
+			rusage.NumXOR = cc.StreamStats.Circuits.NumXOR()
+			rusage.NumNonXOR = cc.StreamStats.Circuits.NumNonXOR()
 		}
 
 		// Program fragment statistics.
