@@ -58,11 +58,12 @@ func (proc *Process) ktraceHex(data []byte) {
 	fmt.Print(separator)
 }
 
+const dataLimit = 16
+
 func (proc *Process) ktraceCall(sys *syscall) {
 	if !proc.kern.params.Trace {
 		return
 	}
-	const dataLimit = 16
 
 	proc.ktracePrefix()
 	fmt.Printf("CALL %s", sys.call)
@@ -146,6 +147,15 @@ func (proc *Process) ktraceRet(sys *syscall) {
 				proc.ktraceHex(sys.argBuf)
 			} else {
 				fmt.Printf(", nil")
+			}
+
+		case SysYield, SysNext:
+			fmt.Printf("%d, ", sys.arg0)
+			if len(sys.argBuf) <= dataLimit {
+				fmt.Printf("%x, %d", sys.argBuf, sys.arg1)
+			} else {
+				fmt.Printf("%x..., %d", sys.argBuf[:dataLimit], sys.arg1)
+				proc.ktraceHex(sys.argBuf)
 			}
 
 		default:
