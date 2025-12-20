@@ -797,9 +797,15 @@ func (proc *Process) syscall(sys *syscall) error {
 		}
 		sys.arg1 = 0
 
+	case SysContinue:
+		// Clear values.
+		sys.SetArg0(0)
+
 	case SysYield:
-		// The decodeSyscall has cleared or preserved the values
-		// according to the arg0 flag.
+		// The decodeSyscall has preserved the old values.
+
+	case SysNext:
+		// Use the new values provided for the syscall.
 
 	case SysGetpid:
 		sys.arg0 = int32(proc.pid)
@@ -963,8 +969,8 @@ func (proc *Process) decodeSyscall(sys *syscall, values []interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid arg0: %T", values[3])
 	}
-	if sys.call == SysYield && arg0 == 1 {
-		// Yield with preserve values. We are done.
+	if sys.call == SysYield {
+		// Yield with preserved values. We are done.
 		return nil
 	}
 	sys.arg0 = arg0

@@ -40,7 +40,9 @@ const (
 	SysTlsclient
 	SysTlskex
 	SysTlsstatus
+	SysContinue
 	SysYield
+	SysNext
 	SysGetpid
 )
 
@@ -71,7 +73,9 @@ var syscallNames = map[Syscall]string{
 	SysTlsclient: "tlsclient",
 	SysTlskex:    "tlskex",
 	SysTlsstatus: "tlsstatus",
+	SysContinue:  "continue",
 	SysYield:     "yield",
+	SysNext:      "next",
 	SysGetpid:    "getpid",
 
 	SysGetport:    "getport",

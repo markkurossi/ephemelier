@@ -21,5 +21,5 @@ func main(g kernel.G1B, e kernel.E1B) (
 
 	mem := binary.PutUint32(g.mem, 0, uint32(g.arg0))
 
-	return mem, intern(StMainAccept), kernel.SysYield, 0
+	return mem, intern(StMainAccept), kernel.SysContinue, 0
 }

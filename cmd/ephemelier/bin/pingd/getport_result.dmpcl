@@ -23,5 +23,5 @@ func main(g kernel.G, e kernel.E) ([]byte, kernel.PC, kernel.Syscall, int32) {
 	mem = binary.PutUint32(mem, 4, uint32(g.arg0))
 
 	return kernel.EncodeMem(nonce, mem, g.key, e.key), intern(StReceive),
-		kernel.SysYield, 0
+		kernel.SysContinue, 0
 }

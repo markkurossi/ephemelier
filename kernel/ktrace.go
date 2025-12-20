@@ -96,8 +96,17 @@ func (proc *Process) ktraceCall(sys *syscall) {
 			proc.ktraceHex(sys.argBuf)
 		}
 
-	case SysYield:
+	case SysContinue, SysYield:
 		fmt.Printf("(%d)", sys.pc)
+
+	case SysNext:
+		fmt.Printf("(%d, %d, ", sys.pc, sys.arg0)
+		if len(sys.argBuf) <= dataLimit {
+			fmt.Printf("%x, %v)", sys.argBuf, sys.arg1)
+		} else {
+			fmt.Printf("%x..., %d)", sys.argBuf[:dataLimit], sys.arg1)
+			proc.ktraceHex(sys.argBuf)
+		}
 
 	case SysGetport:
 		if sys.arg1 > 0 {

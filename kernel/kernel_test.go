@@ -12,13 +12,13 @@ import (
 
 func TestSyscall(t *testing.T) {
 	if SysExit != 1 {
-		t.Errorf("SysExit=%v, expected 1", SysExit)
+		t.Errorf("SysExit=%v, expected 1", int(SysExit))
 	}
-	if SysGetpid != 19 {
-		t.Errorf("SysGetpid=%v, expected 19", SysGetpid)
+	if SysGetpid != 21 {
+		t.Errorf("SysGetpid=%v, expected 21", int(SysGetpid))
 	}
 	if SysGetport != 100 {
-		t.Errorf("SysGetport=%v, expected 100", SysGetport)
+		t.Errorf("SysGetport=%v, expected 100", int(SysGetport))
 	}
 }
 

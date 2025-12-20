@@ -29,5 +29,5 @@ func main(g memory.G, e memory.E) (
 	if g.arg0 <= 0 {
 		return nil, intern(StHttpdEnd), kernel.SysClose, tlsfd, nil, 0
 	}
-	return nil, intern(StHttpdReadResult), kernel.SysYield, 1, nil, 0
+	return nil, intern(StHttpdReadResult), kernel.SysYield, 0, nil, 0
 }

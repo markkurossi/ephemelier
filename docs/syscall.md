@@ -5,7 +5,9 @@
  - exit(arg0:exitValue) => process terminates
  - spawn(argBuf:name, arg1:nameLen) => pid
  - wait(arg0:pid) => exitValue
- - yield(arg0:preserveFlag) => 0 / preserved values
+ - continue() => 0, nil, 0                         ; continue with zero values
+ - yield() => arg0, argBuf, arg1                   ; continue with old values
+ - next(arg0, argBuf, arg1) => arg0, argBuf, arg1  ; continue with new values
  - getpid() => pid
 
 ## File Descriptors and I/O
@@ -25,6 +27,8 @@
  - getrandom(arg0:size) => size, data
  - tlsserver(arg0:fd, arg1:serverKey) => fd
  - tlsclient(arg0:fd, [arg1:clientKey]) => fd
+ - tlskex XXX
+ - tlsstatus XXX
  - createkey(arg0:typeSize, argBuf:name, arg1:nameSize) => fd
  - sign(arg0:fd, argBuf:data, arg1:size) => size, signature
 

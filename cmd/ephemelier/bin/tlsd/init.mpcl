@@ -18,7 +18,7 @@ func main(g kernel.G1B, e kernel.PeerInit) (
 
 	if g.arg1 > 0 {
 		// Child.
-		return nil, intern(StChildMain), kernel.SysYield, 1, nil, 0
+		return nil, intern(StChildMain), kernel.SysYield, 0, nil, 0
 	}
 
 	// Parent, listen for connections.

@@ -20,10 +20,10 @@ func main(g kernel.G, e kernel.E) (
 		return nil, 0, kernel.SysExit, 1, nil, 0
 	}
 	if g.arg0 == 0 || (g.arg0 == 1 && g.argBuf[0] == 0x4) {
-		return nil, intern(StEnd), kernel.SysYield, 0, nil, 0
+		return nil, intern(StEnd), kernel.SysContinue, 0, nil, 0
 	}
 	if bytes.HasPrefix(g.argBuf, []byte("exit")) {
-		return nil, intern(StEnd), kernel.SysYield, 0, nil, 0
+		return nil, intern(StEnd), kernel.SysContinue, 0, nil, 0
 	}
 
 	for i := 0; i < len(g.argBuf); i++ {

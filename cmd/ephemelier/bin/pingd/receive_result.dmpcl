@@ -23,5 +23,5 @@ func main(g kernel.G, e kernel.E) (
 		return nil, 0, kernel.SysExit, 0
 	}
 
-	return nil, intern(StDecodeMsg), kernel.SysYield, 1
+	return nil, intern(StDecodeMsg), kernel.SysYield, 0
 }

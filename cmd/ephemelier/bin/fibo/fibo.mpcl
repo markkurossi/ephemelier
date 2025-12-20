@@ -41,5 +41,6 @@ func main(g semihonest.G1B, e memory.E1B) (
 		next = intern(StFibo)
 	}
 
-	return semihonest.Encode(nonce, mem, g.key, e.key), next, kernel.SysYield, 0
+	return semihonest.Encode(nonce, mem, g.key, e.key), next,
+		kernel.SysContinue, 0
 }

@@ -20,5 +20,5 @@ func main(g kernel.G1B, e kernel.E1B) (
 		return nil, intern(StMainAccept), kernel.SysClose, int32(fd)
 	}
 
-	return nil, intern(StMainAccept), kernel.SysYield, 0
+	return nil, intern(StMainAccept), kernel.SysContinue, 0
 }
