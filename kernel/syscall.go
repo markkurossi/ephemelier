@@ -38,7 +38,7 @@ const (
 	SysGetrandom
 	SysTlsserver
 	SysTlsclient
-	SysTlskex
+	SysTlshs
 	SysTlsstatus
 	SysContinue
 	SysYield
@@ -71,7 +71,7 @@ var syscallNames = map[Syscall]string{
 	SysGetrandom: "getrandom",
 	SysTlsserver: "tlsserver",
 	SysTlsclient: "tlsclient",
-	SysTlskex:    "tlskex",
+	SysTlshs:     "tlshs",
 	SysTlsstatus: "tlsstatus",
 	SysContinue:  "continue",
 	SysYield:     "yield",

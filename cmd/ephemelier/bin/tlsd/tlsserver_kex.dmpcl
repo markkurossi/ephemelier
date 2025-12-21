@@ -58,5 +58,5 @@ func main(g memory.G, e memory.E) (
 
 	cipher = tls.Encrypt(key, iv, seq, tls.CTHandshake, g.argBuf)
 
-	return nil, state, kernel.SysTlskex, tlsfd, cipher, next
+	return nil, state, kernel.SysTlshs, tlsfd, cipher, next
 }

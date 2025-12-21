@@ -27,8 +27,8 @@
  - getrandom(arg0:size) => size, data
  - tlsserver(arg0:fd, arg1:serverKey) => fd
  - tlsclient(arg0:fd, [arg1:clientKey]) => fd
- - tlskex XXX
- - tlsstatus XXX
+ - tlshs(arg0:fd, argBuf:payload, arg1:HSType) => HSType, Data
+ - tlsstatus(arg0:fd, arg1:status) => errno
  - createkey(arg0:typeSize, argBuf:name, arg1:nameSize) => fd
  - sign(arg0:fd, argBuf:data, arg1:size) => size, signature
 

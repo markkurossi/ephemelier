@@ -396,7 +396,7 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 	}
 }
 
-func (proc *Process) tlsKex(sys *syscall) {
+func (proc *Process) tlsHandshake(sys *syscall) {
 	fd, ok := proc.fds[sys.arg0]
 	if !ok {
 		sys.SetArg0(int32(-EBADF))
@@ -479,7 +479,7 @@ func (proc *Process) tlsKex(sys *syscall) {
 		// sent our Finished above.
 
 	default:
-		fmt.Printf("SysTlskex: invalid handshake: %v\n", ht)
+		fmt.Printf("SysTlshs: invalid handshake: %v\n", ht)
 		sys.SetArg0(int32(-EINVAL))
 		return
 	}

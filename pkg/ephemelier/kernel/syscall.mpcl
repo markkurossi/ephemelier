@@ -34,7 +34,7 @@ const (
 	SysGetrandom = 13
 	SysTlsserver = 14
 	SysTlsclient = 15
-	SysTlskex    = 16
+	SysTlshs     = 16
 	SysTlsstatus = 17
 	SysContinue  = 18
 	SysYield     = 19

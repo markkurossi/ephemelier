@@ -67,6 +67,6 @@ func main(g memory.G, e memory.E) (
 	mem = binary.PutUint64(mem, tlsmem.OfsServerSeq, 4)
 
 	return semihonest.Encode(nonce, mem, g.key, e.key),
-		intern(StTlsserverKex), kernel.SysTlskex, g.arg0,
+		intern(StTlsserverKex), kernel.SysTlshs, g.arg0,
 		nil, tls.HTEncryptedExtensions
 }

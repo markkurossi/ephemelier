@@ -78,7 +78,7 @@ func (proc *Process) ktraceCall(sys *syscall) {
 	case SysRead, SysTlsserver, SysTlsclient, SysSendfd:
 		fmt.Printf("(%d, %d)", sys.arg0, sys.arg1)
 
-	case SysTlskex:
+	case SysTlshs:
 		ht := tls.HandshakeType(sys.arg1)
 		fmt.Printf("(%d, ", sys.arg0)
 		if len(sys.argBuf) <= dataLimit {
@@ -140,7 +140,7 @@ func (proc *Process) ktraceRet(sys *syscall) {
 				fmt.Printf(", nil")
 			}
 
-		case SysTlskex:
+		case SysTlshs:
 			fmt.Printf("%d %s", sys.arg0, tls.HandshakeType(sys.arg0))
 			if len(sys.argBuf) > 0 {
 				fmt.Printf(", %d bytes", len(sys.argBuf))

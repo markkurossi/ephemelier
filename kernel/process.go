@@ -780,8 +780,8 @@ func (proc *Process) syscall(sys *syscall) error {
 	case SysTlsserver:
 		proc.tlsServer(sys)
 
-	case SysTlskex:
-		proc.tlsKex(sys)
+	case SysTlshs:
+		proc.tlsHandshake(sys)
 
 	case SysTlsstatus:
 		proc.tlsStatus(sys)

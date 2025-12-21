@@ -57,5 +57,5 @@ func main(g memory.G, e memory.E) (
 	copy(result[1:], cipher)
 	copy(result[1+len(cipher):], finished)
 
-	return nil, intern(StTlsserverDone), kernel.SysTlskex, tlsfd, result
+	return nil, intern(StTlsserverDone), kernel.SysTlshs, tlsfd, result
 }
