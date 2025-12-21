@@ -54,7 +54,7 @@ change it to TLS_AES_128_GCM_SHA256, edit:
 ## TODO
 
  - [ ] FROST [RFC 9591](https://www.rfc-editor.org/rfc/rfc9591.txt)
- - [ ] Circuit stats in streaming mode (INFO)
+ - [x] Circuit stats in streaming mode (INFO)
  - [ ] Optimize input setting (direct vs. via strings)
  - [ ] Review `mpc/otext`
  - [ ] Review `mpc/vole`
