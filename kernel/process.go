@@ -196,7 +196,6 @@ func (proc *Process) Run() (err error) {
 
 	proc.SetState(SRUN)
 
-	fmt.Printf("Process.Run\n")
 	switch proc.role {
 	case RoleGarbler:
 		err = proc.runGarbler()
