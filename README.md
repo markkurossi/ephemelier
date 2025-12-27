@@ -55,7 +55,7 @@ change it to TLS_AES_128_GCM_SHA256, edit:
 
  - [ ] FROST [RFC 9591](https://www.rfc-editor.org/rfc/rfc9591.txt)
  - [x] Circuit stats in streaming mode (INFO)
- - [ ] Optimize input setting (direct vs. via strings)
+ - [x] Optimize input setting (direct vs. via strings)
  - [ ] Review `mpc/otext`
  - [ ] Review `mpc/vole`
  - [ ] Review [SPDZ Implementation](crypto/spdz/)
@@ -75,7 +75,8 @@ change it to TLS_AES_128_GCM_SHA256, edit:
 | ChaCha20Poly1305      | 6.393s  | 0.450    |
 | ChaCha20 native block | 5.152s  | 0.363    |
 
-| Fibo           | Time    | Relative |
-| :------------  | ------: | -------: |
-| Baseline       | 2.736s  | 1.000    |
-| Semihonest mem | 0.814s  | 0.298    |
+| Fibo            | Time    | Relative |
+| :------------   | ------: | -------: |
+| Baseline        | 2.736s  | 1.000    |
+| Semihonest mem  | 0.814s  | 0.298    |
+| Optimized input | 0.796s  | 0.291    |

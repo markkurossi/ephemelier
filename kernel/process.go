@@ -249,11 +249,6 @@ func (proc *Process) runEvaluator() error {
 		return err
 	}
 
-	// if circ.NumParties() != 2 {
-	// 	return fmt.Errorf("invalid circuit for 2-party MPC: %d parties",
-	// 		circ.NumParties())
-	// }
-
 	// Run program.
 	state := prog.Init
 	sys := new(syscall)
@@ -265,7 +260,9 @@ func (proc *Process) runEvaluator() error {
 run:
 	for {
 		var numInputs int
-		var inputs []string
+		var input *big.Int
+
+		inputs := make([]interface{}, 3)
 
 		if state.Circ != nil {
 			numInputs = state.Circ.Inputs[1].Len()
@@ -275,20 +272,16 @@ run:
 		}
 
 		// The first input is always sys.arg0
-		inputs = append(inputs, fmt.Sprintf("%d", sys.arg0))
+		inputs[0] = sys.arg0
 
 		// Key share.
 		if numInputs > 1 {
-			inputs = append(inputs, fmt.Sprintf("0x%x", proc.key))
+			inputs[1] = proc.key
 		}
 
 		// Argument buffer.
 		if numInputs > 2 {
-			if len(sys.argBuf) == 0 {
-				inputs = append(inputs, "0")
-			} else {
-				inputs = append(inputs, fmt.Sprintf("0x%x", sys.argBuf))
-			}
+			inputs[2] = sys.argBuf
 		}
 
 		var outputs circuit.IO
@@ -299,15 +292,12 @@ run:
 		last = now
 
 		var rusage RUsage
+		var err error
 
 		if state.Circ != nil {
 			// Pre-compiled circuit.
 			proc.circuitStats(&rusage, state.Circ)
-			if proc.diagnostics() {
-				state.Circ.PrintInputs(circuit.IDEvaluator, inputs)
-			}
-
-			input, err := state.Circ.Inputs[1].Parse(inputs)
+			input, err = state.Circ.Inputs[1].Set(input, inputs[:numInputs])
 			if err != nil {
 				return err
 			}
@@ -323,7 +313,7 @@ run:
 			}
 		} else {
 			// Streaming MPCL.
-			sizes, err := circuit.InputSizes(inputs)
+			sizes, err := circuit.Sizes(inputs[:numInputs])
 			if err != nil {
 				return err
 			}
@@ -336,7 +326,7 @@ run:
 				return err
 			}
 			outputs, result, err = circuit.StreamEvaluator(proc.conn,
-				proc.oti, inputs, proc.verbose())
+				proc.oti, nil, inputs, proc.verbose())
 			if err != nil {
 				return err
 			}
@@ -452,7 +442,9 @@ func (proc *Process) runGarbler() error {
 run:
 	for {
 		var numInputs int
-		var inputs []string
+		var input *big.Int
+
+		inputs := make([]interface{}, 5)
 
 		if state.Circ != nil {
 			numInputs = state.Circ.Inputs[0].Len()
@@ -462,34 +454,26 @@ run:
 		}
 
 		// The first input is always sys.arg0.
-		inputs = append(inputs, fmt.Sprintf("%d", sys.arg0))
+		inputs[0] = sys.arg0
 
 		// Key share.
 		if numInputs > 1 {
-			inputs = append(inputs, fmt.Sprintf("0x%x", proc.key))
+			inputs[1] = proc.key
 		}
 
 		// Program memory.
 		if numInputs > 2 {
-			if len(proc.mem) == 0 {
-				inputs = append(inputs, "0")
-			} else {
-				inputs = append(inputs, fmt.Sprintf("0x%x", proc.mem))
-			}
+			inputs[2] = proc.mem
 		}
 
 		// Argument buffer.
 		if numInputs > 3 {
-			if len(sys.argBuf) == 0 {
-				inputs = append(inputs, "0")
-			} else {
-				inputs = append(inputs, fmt.Sprintf("0x%x", sys.argBuf))
-			}
+			inputs[3] = sys.argBuf
 		}
 
 		// Optional sys.arg1.
 		if numInputs > 4 {
-			inputs = append(inputs, fmt.Sprintf("%d", sys.arg1))
+			inputs[4] = sys.arg1
 		}
 
 		// Clear statistics so we get correct info for this code
@@ -505,15 +489,12 @@ run:
 		last = now
 
 		var rusage RUsage
+		var err error
 
 		if state.Circ != nil {
 			// Pre-compiled circuit.
 			proc.circuitStats(&rusage, state.Circ)
-			if proc.diagnostics() {
-				state.Circ.PrintInputs(circuit.IDGarbler, inputs)
-			}
-
-			input, err := state.Circ.Inputs[0].Parse(inputs)
+			input, err = state.Circ.Inputs[0].Set(input, inputs[:numInputs])
 			if err != nil {
 				return err
 			}
@@ -531,7 +512,7 @@ run:
 			}
 		} else {
 			// Streaming MPCL.
-			sizes, err := circuit.InputSizes(inputs)
+			sizes, err := circuit.Sizes(inputs[:numInputs])
 			if err != nil {
 				return err
 			}
@@ -543,10 +524,23 @@ run:
 			}
 			inputSizes[1] = sizes
 
+			start := time.Now()
 			cc := compiler.New(proc.mpclcParams)
+			prog, _, err := cc.CompileSSA(state.Name,
+				bytes.NewReader(state.DMPCL), inputSizes)
+			if err != nil {
+				return err
+			}
+			rusage.CompTime = time.Since(start)
 
-			outputs, result, err = cc.Stream(proc.conn, proc.oti, state.Name,
-				bytes.NewReader(state.DMPCL), inputs, inputSizes)
+			input, err = prog.Inputs[0].Set(input, inputs[:numInputs])
+			if err != nil {
+				return err
+			}
+
+			timing := circuit.NewTiming()
+			outputs, result, err = prog.Stream(proc.conn, proc.oti,
+				proc.mpclcParams, input, timing)
 			if err != nil {
 				return err
 			}
@@ -554,12 +548,17 @@ run:
 				mpc.PrintResults(result, outputs, 0)
 			}
 
-			rusage.CompTime = cc.StreamStats.Compile
-			rusage.StreamTime = cc.StreamStats.Stream
-			rusage.GarbleTime = cc.StreamStats.Garble
-			rusage.NumGates = cc.StreamStats.Circuits.Count()
-			rusage.NumXOR = cc.StreamStats.Circuits.NumXOR()
-			rusage.NumNonXOR = cc.StreamStats.Circuits.NumNonXOR()
+			tStream := timing.Get("Stream")
+			tGarble := tStream.Get("Garble")
+			if tStream != nil && tGarble != nil {
+				rusage.GarbleTime = tGarble.Duration()
+				rusage.StreamTime = tStream.Duration() - rusage.GarbleTime
+			}
+
+			cstats := prog.Stats()
+			rusage.NumGates = cstats.Count()
+			rusage.NumXOR = cstats.NumXOR()
+			rusage.NumNonXOR = cstats.NumNonXOR()
 		}
 
 		// Program fragment statistics.
@@ -570,7 +569,7 @@ run:
 		proc.rusage.Add(rusage)
 
 		// Decode syscall.
-		err := proc.decodeSyscall(sys, mpc.Results(result, outputs))
+		err = proc.decodeSyscall(sys, mpc.Results(result, outputs))
 		if err != nil {
 			return err
 		}
