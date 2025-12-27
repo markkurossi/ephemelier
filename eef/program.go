@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/markkurossi/mpc/circuit"
@@ -114,11 +115,31 @@ func NewProgram(file string) (*Program, error) {
 		}
 	}
 
+	var pcs []int
+	var maxNameLen int
 	for pc, circ := range prog.ByPC {
-		fmt.Printf("%-4d %-16s", pc, circ.Name)
+		pcs = append(pcs, pc)
+		if len(circ.Name) > maxNameLen {
+			maxNameLen = len(circ.Name)
+		}
+	}
+	sort.Ints(pcs)
+
+	fmt.Printf("PC   State")
+	for i := 5; i < maxNameLen; i++ {
+		fmt.Print(" ")
+	}
+	fmt.Println("  Gates  Wires")
+	fmt.Println("-----------------------------------------")
+
+	for _, pc := range pcs {
+		circ := prog.ByPC[pc]
+		fmt.Printf("%-4d %s", pc, circ.Name)
+		for i := len(circ.Name); i < maxNameLen; i++ {
+			fmt.Print(" ")
+		}
 		if circ.Circ != nil {
-			fmt.Printf("\t#gates=%-5d #wires=%v",
-				circ.Circ.NumGates, circ.Circ.NumWires)
+			fmt.Printf(" %6d %6d", circ.Circ.NumGates, circ.Circ.NumWires)
 		}
 		fmt.Println()
 	}
