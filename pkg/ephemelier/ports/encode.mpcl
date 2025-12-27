@@ -8,32 +8,33 @@
 package ports
 
 import (
-	"crypto/cipher/gcm"
+	"crypto/cipher/chacha20poly1305"
 	"ephemelier/kernel"
 )
 
 func EncodeMsg(g, e, data []byte) []byte {
-	var key [kernel.KeySize]byte
-	for i := 0; i < kernel.KeySize; i++ {
-		key[i] = g[i] ^ e[i]
-	}
+	var key [kernel.KeySize * 2]byte
+	copy(key, g)
+	copy(key[kernel.KeySize:], e)
+
 	nonce := g[kernel.KeySize : kernel.KeySize+kernel.NonceSize]
 
 	var msg [kernel.NonceSize + len(data) + kernel.TagSize]byte
 	copy(msg, nonce)
 
-	cipher := gcm.SealAES128(key, nonce, data, nil)
+	cipher := chacha20poly1305.Seal(key, nonce, data, nil)
 	copy(msg[kernel.NonceSize:], cipher)
 
 	return msg
 }
 
 func DecodeMsg(g, e []byte) ([]byte, bool) {
-	var key [kernel.KeySize]byte
-	for i := 0; i < kernel.KeySize; i++ {
-		key[i] = g[i] ^ e[i]
-	}
+	var key [kernel.KeySize * 2]byte
+	copy(key, g)
+	copy(key[kernel.KeySize:], e)
+
 	nonce := g[kernel.KeySize : kernel.KeySize+kernel.NonceSize]
 
-	return gcm.OpenAES128(key, nonce, g[kernel.KeySize+kernel.NonceSize:], nil)
+	return chacha20poly1305.Open(key, nonce,
+		g[kernel.KeySize+kernel.NonceSize:], nil)
 }
