@@ -74,6 +74,7 @@ change it to TLS_AES_128_GCM_SHA256, edit:
 | Semihonest mem        | 7.183s  | 0.506    |
 | ChaCha20Poly1305      | 6.393s  | 0.450    |
 | ChaCha20 native block | 5.152s  | 0.363    |
+| Optimized input       | 4.956s  | 0.349    |
 
 | Fibo            | Time    | Relative |
 | :------------   | ------: | -------: |
