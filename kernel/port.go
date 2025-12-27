@@ -141,6 +141,7 @@ func (fd *FDPort) Write(b []byte) int {
 	return n
 }
 
+// RecvFD receives a file descriptor from the port's sender.
 func (fd *FDPort) RecvFD() (*FD, int) {
 	if fd.read == nil {
 		return nil, int(-EBADF)
@@ -157,6 +158,7 @@ func (fd *FDPort) RecvFD() (*FD, int) {
 	return msg.fd, 0
 }
 
+// SendFD sends the file descriptor to port's receiver.
 func (fd *FDPort) SendFD(v *FD) int {
 	if fd.write == nil {
 		return int(-EBADF)

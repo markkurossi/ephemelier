@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 )
 
+// MakeServerHello makes the server_hello message.
 func (conn *Conn) MakeServerHello(kex []byte) ([]byte, error) {
 	keyShare := &KeyShareEntry{
 		Group:       GroupSecp256r1,
@@ -46,6 +47,7 @@ func (conn *Conn) MakeServerHello(kex []byte) ([]byte, error) {
 	return data, nil
 }
 
+// MakeEncryptedExtensions makes the encrypted_extensions message.
 func (conn *Conn) MakeEncryptedExtensions() ([]byte, error) {
 	// EncryptedExtensions.
 	msg := &EncryptedExtensions{
@@ -61,6 +63,7 @@ func (conn *Conn) MakeEncryptedExtensions() ([]byte, error) {
 	return data, nil
 }
 
+// MakeCertificate makes the certificate message.
 func (conn *Conn) MakeCertificate() ([]byte, error) {
 	// Certificate.
 	msgCertificate := &Certificate{
@@ -80,6 +83,7 @@ func (conn *Conn) MakeCertificate() ([]byte, error) {
 	return data, nil
 }
 
+// MakeCertificateVerify makes the certificate_verify message.
 func (conn *Conn) MakeCertificateVerify() ([]byte, error) {
 	hashFunc := crypto.SHA256
 	digest := conn.certificateVerify(hashFunc)
@@ -101,6 +105,7 @@ func (conn *Conn) MakeCertificateVerify() ([]byte, error) {
 	return data, nil
 }
 
+// MakeFinished makes the finished message.
 func (conn *Conn) MakeFinished(server bool) ([]byte, error) {
 	verifyData := conn.finished(server)
 	var vd32 [32]byte

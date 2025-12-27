@@ -12,7 +12,10 @@ import (
 )
 
 var (
-	ZeroHashTLS13  = make([]byte, sha256.Size)
+	// ZeroHashTLS13 defines the TLS 1.3's zero hash.
+	ZeroHashTLS13 = make([]byte, sha256.Size)
+
+	// EmptyHashTLS13 defines the TLS 1.3 empty hash.
 	EmptyHashTLS13 = []byte{
 		0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14,
 		0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24,
@@ -21,12 +24,14 @@ var (
 	}
 )
 
+// ExtractTLS13 implements the TLS 1.3 HKDF extract function.
 func ExtractTLS13(secret, salt []byte) []byte {
 	extractor := hmac.New(sha256.New, salt)
 	extractor.Write(secret)
 	return extractor.Sum(nil)
 }
 
+// ExpandTLS13 implements the TLS 1.3 HKDF expand function.
 func ExpandTLS13(pseudorandomKey, info, out []byte) {
 	expander := hmac.New(sha256.New, pseudorandomKey)
 	counter := []byte{1}

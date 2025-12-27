@@ -152,11 +152,13 @@ func (conn *Conn) readHandshakeMsg() (ContentType, []byte, error) {
 	}
 }
 
+// WriteTranscript updates the connection transcript with data.
 func (conn *Conn) WriteTranscript(data []byte) {
 	conn.keydbgf("WriteTranscript:\n%s", hex.Dump(data))
 	conn.transcript.Write(data)
 }
 
+// Transcript returns the current connection transcript.
 func (conn *Conn) Transcript() []byte {
 	return conn.transcript.Sum(nil)
 }
