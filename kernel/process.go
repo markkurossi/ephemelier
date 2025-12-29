@@ -784,38 +784,39 @@ func (proc *Process) syscall(sys *syscall) error {
 	case SysRead:
 		fd, ok := proc.fds[sys.arg0]
 		if !ok {
-			sys.arg0 = int32(-EBADF)
+			sys.SetArg0(int32(-EBADF))
+			return nil
+		}
+		sys.argBuf = make([]byte, int(sys.arg1))
+		sys.arg0 = int32(fd.Read(sys.argBuf))
+		if sys.arg0 > 0 {
+			sys.argBuf = sys.argBuf[:sys.arg0]
 		} else {
-			sys.argBuf = make([]byte, int(sys.arg1))
-			sys.arg0 = int32(fd.Read(sys.argBuf))
-			if sys.arg0 > 0 {
-				sys.argBuf = sys.argBuf[:sys.arg0]
-			} else {
-				sys.argBuf = nil
-			}
+			sys.argBuf = nil
 		}
 		sys.arg1 = 0
 
 	case SysWrite:
 		fd, ok := proc.fds[sys.arg0]
 		if !ok {
-			sys.arg0 = int32(-EBADF)
-		} else if sys.arg1 < 0 || int(sys.arg1) > len(sys.argBuf) {
-			sys.arg0 = int32(-EINVAL)
-		} else {
-			sys.arg0 = int32(fd.Write(sys.argBuf[:sys.arg1]))
+			sys.SetArg0(int32(-EBADF))
+			return nil
 		}
-		sys.argBuf = nil
-		sys.arg1 = 0
+		data, err := sys.argData()
+		if err != nil {
+			sys.SetArg0(mapError(err))
+			return nil
+		}
+		sys.SetArg0(int32(fd.Write(data)))
 
 	case SysClose:
 		fd, ok := proc.fds[sys.arg0]
 		if !ok {
 			sys.SetArg0(int32(-EBADF))
-		} else {
-			sys.SetArg0(int32(fd.Close()))
-			proc.FreeFD(sys.arg0)
+			return nil
 		}
+		sys.SetArg0(int32(fd.Close()))
+		proc.FreeFD(sys.arg0)
 
 	case SysWait:
 		var pid PartyID
@@ -826,14 +827,12 @@ func (proc *Process) syscall(sys *syscall) error {
 		}
 		child, ok := proc.kern.GetProcess(pid)
 		if !ok {
-			sys.arg0 = int32(-ECHILD)
-		} else {
-			child.WaitState(SZOMB)
-			sys.arg0 = child.exitVal
-			proc.kern.RemoveProcess(pid)
+			sys.SetArg0(int32(-ECHILD))
+			return nil
 		}
-		sys.argBuf = nil
-		sys.arg1 = 0
+		child.WaitState(SZOMB)
+		sys.SetArg0(child.exitVal)
+		proc.kern.RemoveProcess(pid)
 
 	case SysTlsserver:
 		proc.tlsServer(sys)
@@ -848,11 +847,11 @@ func (proc *Process) syscall(sys *syscall) error {
 		buf := make([]byte, sys.arg0)
 		n, err := rand.Read(buf)
 		if err != nil {
-			sys.arg0 = int32(-EFAULT)
-		} else {
-			sys.arg0 = int32(n)
-			sys.argBuf = buf
+			sys.SetArg0(int32(-EFAULT))
+			return nil
 		}
+		sys.arg0 = int32(n)
+		sys.argBuf = buf
 		sys.arg1 = 0
 
 	case SysContinue:
@@ -866,9 +865,7 @@ func (proc *Process) syscall(sys *syscall) error {
 		// Use the new values provided for the syscall.
 
 	case SysGetpid:
-		sys.arg0 = int32(proc.pid)
-		sys.argBuf = nil
-		sys.arg1 = 0
+		sys.SetArg0(int32(proc.pid))
 
 	case SysSendfd:
 		fd, ok := proc.fds[sys.arg0]
@@ -939,16 +936,16 @@ func (proc *Process) syscall(sys *syscall) error {
 
 		fd, ok := proc.fds[sys.arg0]
 		if !ok {
-			sys.arg0 = int32(-EBADF)
-		} else {
-			portfd, ok := fd.Impl.(*FDPort)
-			if !ok {
-				sys.arg0 = int32(-EBADF)
-			} else {
-				sys.argBuf = portfd.CreateMsg()
-				sys.arg0 = int32(len(sys.argBuf))
-			}
+			sys.SetArg0(int32(-EBADF))
+			return nil
 		}
+		portfd, ok := fd.Impl.(*FDPort)
+		if !ok {
+			sys.SetArg0(int32(-EBADF))
+			return nil
+		}
+		sys.argBuf = portfd.CreateMsg()
+		sys.arg0 = int32(len(sys.argBuf))
 
 	default:
 		return fmt.Errorf("invalid syscall: %v", sys.call)
