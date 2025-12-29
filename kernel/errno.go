@@ -175,6 +175,10 @@ func (err Errno) String() string {
 	return fmt.Sprintf("{Errno %d}", err)
 }
 
+func (err Errno) Error() string {
+	return err.String()
+}
+
 // Description returns a short description about the error code.
 func (err Errno) Description() string {
 	desc, ok := errnoDescriptions[err]
@@ -386,19 +390,24 @@ var errnoDescriptions = map[Errno]string{
 	ENOTRECOVERABLE: "State not recoverable",
 }
 
-func mapError(err error) int {
+func mapError(err error) int32 {
 	if err == nil {
 		return 0
 	}
+	errno, ok := err.(Errno)
+	if ok {
+		return int32(-errno)
+	}
+
 	var perr *fs.PathError
 	if errors.As(err, &perr) || errors.Is(err, io.EOF) {
-		return int(-EBADF)
+		return int32(-EBADF)
 	}
 	var tlsAlert tls.AlertDescription
 	if errors.As(err, &tlsAlert) {
 		errno, ok := tlsAlertToErrno[tlsAlert]
 		if ok {
-			return int(-errno)
+			return int32(-errno)
 		}
 	}
 	var netOpError *net.OpError
@@ -412,11 +421,11 @@ func mapError(err error) int {
 		}
 		opError := netOpError.Error()
 		if errors.Is(netOpError.Err, net.ErrClosed) {
-			return int(-EBADF)
+			return int32(-EBADF)
 		} else if strings.Contains(opError, "connection reset by peer") {
-			return int(-ECONNRESET)
+			return int32(-ECONNRESET)
 		} else if strings.Contains(opError, "broken pipe") {
-			return int(-EPIPE)
+			return int32(-EPIPE)
 		}
 	}
 
@@ -424,5 +433,5 @@ func mapError(err error) int {
 	fmt.Printf(" - err : %v\n", err)
 	fmt.Printf(" - type: %T\n", err)
 
-	return int(-EINVAL)
+	return int32(-EINVAL)
 }

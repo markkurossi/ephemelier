@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +36,8 @@ type Process struct {
 	role        Role
 	args        []string
 	pid         PID
+	cwd         string
+	root        string
 	conn        *p2p.Conn
 	oti         ot.OT
 	state       ProcState
@@ -354,7 +358,22 @@ run:
 			break run
 
 		case SysSpawn, SysDial, SysListen:
+			// XXX SysDial should sync FD with garbler
 			sys.SetArg0(0)
+
+		case SysOpen:
+			fd := NewDevNullFD()
+
+			// Get FD from garbler.
+			gfd, err := proc.recvFD()
+			if err == nil {
+				sys.SetArg0(int32(gfd))
+				err = proc.SetFD(sys.arg0, fd)
+			}
+			if err != nil {
+				fd.Close()
+				sys.SetArg0(mapError(err))
+			}
 
 		case SysAccept:
 			fd := NewSocketFD(NewConnDevNull())
@@ -367,7 +386,7 @@ run:
 			}
 			if err != nil {
 				fd.Close()
-				sys.SetArg0(int32(mapError(err)))
+				sys.SetArg0(mapError(err))
 			}
 
 		case SysGetport:
@@ -584,6 +603,7 @@ run:
 			break run
 
 		case SysSpawn:
+			// XXX if sys.arg1 < 0 || sys.arg1 > len(sys.argBuf)
 			args := strings.Split(string(sys.argBuf[:sys.arg1]), "\n")
 			if len(args) == 0 {
 				sys.SetArg0(int32(-EINVAL))
@@ -605,13 +625,14 @@ run:
 			}
 
 		case SysDial:
+			// XXX if sys.arg1 < 0 || sys.arg1 > len(sys.argBuf)
 			network, address, errno := ParseNetAddress(sys.argBuf[:sys.arg1])
 			if errno != 0 {
 				sys.arg0 = int32(errno)
 			} else {
 				conn, err := net.Dial(network, address)
 				if err != nil {
-					sys.arg0 = int32(mapError(err))
+					sys.arg0 = mapError(err)
 				} else {
 					fd := NewSocketFD(conn)
 					sys.arg0 = proc.AllocFD(fd)
@@ -621,16 +642,49 @@ run:
 			sys.arg1 = 0
 
 		case SysListen:
+			// XXX if sys.arg1 < 0 || sys.arg1 > len(sys.argBuf)
 			network, address, errno := ParseNetAddress(sys.argBuf[:sys.arg1])
 			if errno != 0 {
 				sys.arg0 = int32(errno)
 			} else {
 				listener, err := net.Listen(network, address)
 				if err != nil {
-					sys.arg0 = int32(mapError(err))
+					sys.arg0 = mapError(err)
 				} else {
 					fd := NewListenerFD(listener)
 					sys.arg0 = proc.AllocFD(fd)
+				}
+			}
+			sys.argBuf = nil
+			sys.arg1 = 0
+
+		case SysOpen:
+			if sys.arg1 < 1 || int(sys.arg1) > len(sys.argBuf) {
+				sys.arg0 = int32(-EINVAL)
+				proc.sendFD(int(-EINVAL))
+			} else {
+				path := string(sys.argBuf[:sys.arg1])
+				if path[0] != '/' {
+					path = filepath.Join(proc.cwd, path)
+				}
+				path = filepath.Clean(path)
+				path = filepath.Join(proc.kern.params.Filesystem, proc.root,
+					path)
+				file, err := os.Open(path)
+				if err != nil {
+					sys.arg0 = mapError(err)
+					proc.sendFD(int(sys.arg0))
+				} else {
+					fd := NewFileFD(file)
+					sys.arg0 = proc.AllocFD(fd)
+
+					// Sync FD with evaluator.
+					err = proc.sendFD(int(sys.arg0))
+					if err != nil {
+						fd.Close()
+						proc.FreeFD(sys.arg0)
+						sys.arg0 = mapError(err)
+					}
 				}
 			}
 			sys.argBuf = nil
@@ -647,7 +701,7 @@ run:
 				} else {
 					conn, err := listenerfd.listener.Accept()
 					if err != nil {
-						sys.arg0 = int32(mapError(err))
+						sys.arg0 = mapError(err)
 					} else {
 						fd := NewSocketFD(conn)
 						sys.arg0 = proc.AllocFD(fd)
@@ -660,7 +714,7 @@ run:
 						if err != nil {
 							fd.Close()
 							proc.FreeFD(sys.arg0)
-							sys.arg0 = int32(mapError(err))
+							sys.arg0 = mapError(err)
 						}
 					}
 				}
@@ -895,6 +949,25 @@ func (proc *Process) syscall(sys *syscall) error {
 	}
 
 	return nil
+}
+
+func (proc *Process) sendFD(fd int) error {
+	err := proc.conn.SendUint32(fd)
+	if err != nil {
+		return err
+	}
+	return proc.conn.Flush()
+}
+
+func (proc *Process) recvFD() (int, error) {
+	fd, err := proc.conn.ReceiveUint32()
+	if err != nil {
+		return int(-EINVAL), err
+	}
+	if int32(fd) < 0 {
+		return int(-EINVAL), Errno(-int32(fd))
+	}
+	return int(fd), nil
 }
 
 func (proc *Process) setPC(sys *syscall) (*eef.Circuit, error) {

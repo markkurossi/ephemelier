@@ -27,7 +27,7 @@ func NewFileFD(f *os.File) *FD {
 // Close implements FD.Close.
 func (fd *FDFile) Close() int {
 	err := fd.f.Close()
-	return mapError(err)
+	return int(mapError(err))
 }
 
 // Read implements FD.Read.
@@ -37,7 +37,7 @@ func (fd *FDFile) Read(b []byte) int {
 		if errors.Is(err, io.EOF) {
 			return 0
 		}
-		return mapError(err)
+		return int(mapError(err))
 	}
 	return n
 }
@@ -46,7 +46,7 @@ func (fd *FDFile) Read(b []byte) int {
 func (fd *FDFile) Write(b []byte) int {
 	n, err := fd.f.Write(b)
 	if err != nil {
-		return mapError(err)
+		return int(mapError(err))
 	}
 	return n
 }

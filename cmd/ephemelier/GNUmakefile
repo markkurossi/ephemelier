@@ -10,7 +10,8 @@ else
 subdir_prefix := $(subst $(CURDIR)/,,$(subdir))/
 endif
 
-PROGRAMS := bin/hello bin/fibo bin/ping bin/pingd bin/random bin/sh bin/tlsd
+PROGRAMS := bin/hello bin/fibo bin/ping bin/pingd bin/random bin/sh \
+bin/tlsd bin/cat
 
 # The all target.
 all: all-targets

@@ -37,6 +37,7 @@ func main() {
 	fConsole := flag.Bool("console", false, "start console")
 	ktrace := flag.Bool("ktrace", false, "kernel trace")
 	ktraceHex := flag.Bool("x", false, "hexdump ktrace data fields")
+	fs := flag.String("fs", "", "filesystem root directory")
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to `file`")
 	memprofile := flag.String("memprofile", "",
 		"write memory profile to `file`")
@@ -56,16 +57,32 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	kern = kernel.New(&kernel.Params{
+	params := &kernel.Params{
 		Trace:       *ktrace,
 		TraceHex:    *ktraceHex,
 		Verbose:     *fVerbose,
 		Diagnostics: *fDiagnostics,
+		Filesystem:  *fs,
 		Port:        mpcPort,
 		Stdin:       stdin,
 		Stdout:      stdout,
 		Stderr:      stderr,
-	})
+	}
+	if len(params.Filesystem) == 0 {
+		if *evaluator {
+			params.Filesystem = "data/fs1"
+		} else {
+			params.Filesystem = "data/fs0"
+		}
+	}
+	// Make sure filesystem root exists.
+	err := os.MkdirAll(params.Filesystem, 0755)
+	if err != nil {
+		log.Fatalf("could not create filesystem root '%s': %s",
+			params.Filesystem, err)
+	}
+
+	kern = kernel.New(params)
 
 	mode := "Garbler"
 	if *evaluator {
@@ -74,7 +91,6 @@ func main() {
 
 	fmt.Printf("Ephemelier %v Node\n", mode)
 
-	var err error
 	if *evaluator {
 		err = kern.Evaluator(devNull, devNull, stderr)
 		if err != nil {

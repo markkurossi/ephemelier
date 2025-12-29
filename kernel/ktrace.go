@@ -72,8 +72,12 @@ func (proc *Process) ktraceCall(sys *syscall) {
 		SysTlsstatus, SysRecvfd:
 		fmt.Printf("(%d)", sys.arg0)
 
-	case SysSpawn, SysDial, SysListen:
-		fmt.Printf("(%q)", string(sys.argBuf[:sys.arg1]))
+	case SysSpawn, SysDial, SysListen, SysOpen:
+		if sys.arg1 < 0 || int(sys.arg1) > len(sys.argBuf) {
+			fmt.Printf("(%s:%d/[0-%d])", EINVAL, sys.arg1, len(sys.argBuf))
+		} else {
+			fmt.Printf("(%q)", string(sys.argBuf[:sys.arg1]))
+		}
 
 	case SysRead, SysTlsserver, SysTlsclient, SysSendfd:
 		fmt.Printf("(%d, %d)", sys.arg0, sys.arg1)

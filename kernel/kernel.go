@@ -79,6 +79,7 @@ type Params struct {
 	TraceHex    bool
 	Verbose     bool
 	Diagnostics bool
+	Filesystem  string
 	Port        string
 	Stdin       *FD
 	Stdout      *FD
@@ -204,6 +205,8 @@ func (kern *Kernel) CreateProcess(conn *p2p.Conn, role Role, args []string,
 		kern:    kern,
 		role:    role,
 		args:    args,
+		cwd:     "/",
+		root:    "/",
 		conn:    conn,
 		oti:     ot.NewCO(rand),
 		iostats: p2p.NewIOStats(),

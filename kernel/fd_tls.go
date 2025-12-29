@@ -42,7 +42,7 @@ func (fd *FDTLS) Close() int {
 	if fd.conn == nil {
 		return 0
 	}
-	return mapError(fd.conn.Close())
+	return int(mapError(fd.conn.Close()))
 }
 
 // Read implements FD.Read.
@@ -55,7 +55,7 @@ func (fd *FDTLS) Read(b []byte) int {
 		if errors.Is(err, io.EOF) {
 			return 0
 		}
-		return mapError(err)
+		return int(mapError(err))
 	}
 	need := len(data)
 	if !fd.handshakeDone {
@@ -82,7 +82,7 @@ func (fd *FDTLS) Write(b []byte) int {
 	}
 	err := fd.conn.WriteRecord(tls.CTApplicationData, b)
 	if err != nil {
-		return mapError(err)
+		return int(mapError(err))
 	}
 	return len(b)
 }

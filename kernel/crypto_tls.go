@@ -95,7 +95,7 @@ func (proc *Process) tlsServer(sys *syscall) {
 		err = proc.tlsServerEvaluator(socketfd, sys)
 	}
 	if err != nil {
-		sys.SetArg0(int32(mapError(err)))
+		sys.SetArg0(mapError(err))
 	}
 }
 
@@ -249,7 +249,7 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 		if err != nil {
 			fd.Close()
 			proc.FreeFD(sys.arg0)
-			sys.arg0 = int32(mapError(err))
+			sys.arg0 = mapError(err)
 		}
 		return nil
 
@@ -372,7 +372,7 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 		}
 		if err != nil {
 			fd.Close()
-			sys.SetArg0(int32(mapError(err)))
+			sys.SetArg0(mapError(err))
 		}
 
 		return nil
@@ -434,7 +434,7 @@ func (proc *Process) tlsHandshake(sys *syscall) {
 		}
 		err := tlsfd.conn.WriteRecord(tls.CTApplicationData, appData)
 		if err != nil {
-			sys.SetArg0(int32(mapError(err)))
+			sys.SetArg0(mapError(err))
 			return
 		}
 	}
@@ -449,21 +449,21 @@ func (proc *Process) tlsHandshake(sys *syscall) {
 	case tls.HTEncryptedExtensions:
 		data, err = tlsfd.conn.MakeEncryptedExtensions()
 		if err != nil {
-			sys.SetArg0(int32(mapError(err)))
+			sys.SetArg0(mapError(err))
 			return
 		}
 
 	case tls.HTCertificate:
 		data, err = tlsfd.conn.MakeCertificate()
 		if err != nil {
-			sys.SetArg0(int32(mapError(err)))
+			sys.SetArg0(mapError(err))
 			return
 		}
 
 	case tls.HTCertificateVerify:
 		data, err = tlsfd.conn.MakeCertificateVerify()
 		if err != nil {
-			sys.SetArg0(int32(mapError(err)))
+			sys.SetArg0(mapError(err))
 			return
 		}
 

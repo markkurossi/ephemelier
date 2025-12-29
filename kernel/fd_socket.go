@@ -62,7 +62,7 @@ func NewSocketFD(conn net.Conn) *FD {
 // Close implements FD.Close.
 func (fd *FDSocket) Close() int {
 	err := fd.conn.Close()
-	return mapError(err)
+	return int(mapError(err))
 }
 
 // Read implements FD.Read.
@@ -72,7 +72,7 @@ func (fd *FDSocket) Read(b []byte) int {
 		if errors.Is(err, io.EOF) {
 			return 0
 		}
-		return mapError(err)
+		return int(mapError(err))
 	}
 	return n
 }
@@ -81,7 +81,7 @@ func (fd *FDSocket) Read(b []byte) int {
 func (fd *FDSocket) Write(b []byte) int {
 	n, err := fd.conn.Write(b)
 	if err != nil {
-		return mapError(err)
+		return int(mapError(err))
 	}
 	return n
 }
@@ -101,7 +101,7 @@ func NewListenerFD(listener net.Listener) *FD {
 // Close implements FD.Close.
 func (fd *FDListener) Close() int {
 	err := fd.listener.Close()
-	return mapError(err)
+	return int(mapError(err))
 }
 
 // Read implements FD.Read.
