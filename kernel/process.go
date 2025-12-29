@@ -700,39 +700,38 @@ run:
 		case SysAccept:
 			fd, ok := proc.fds[sys.arg0]
 			if !ok {
-				sys.arg0 = int32(-EBADF)
-			} else {
-				listenerfd, ok := fd.Impl.(*FDListener)
-				if !ok {
-					sys.arg0 = int32(-ENOTSOCK)
-				} else {
-					conn, err := listenerfd.listener.Accept()
-					if err != nil {
-						sys.arg0 = mapError(err)
-					} else {
-						fd := NewSocketFD(conn)
-						sys.arg0 = proc.AllocFD(fd)
-
-						// Sync FD with evaluator.
-						err = proc.conn.SendUint32(int(sys.arg0))
-						if err == nil {
-							err = proc.conn.Flush()
-						}
-						if err != nil {
-							fd.Close()
-							proc.FreeFD(sys.arg0)
-							sys.arg0 = mapError(err)
-						}
-					}
-				}
+				sys.SetArg0(int32(-EBADF))
+				break
 			}
-			sys.argBuf = nil
-			sys.arg1 = 0
+			listenerfd, ok := fd.Impl.(*FDListener)
+			if !ok {
+				sys.SetArg0(int32(-ENOTSOCK))
+				break
+			}
+			conn, err := listenerfd.listener.Accept()
+			if err != nil {
+				sys.SetArg0(mapError(err))
+				break
+			}
+
+			cfd := NewSocketFD(conn)
+			sys.SetArg0(proc.AllocFD(cfd))
+
+			// Sync FD with evaluator.
+			err = proc.conn.SendUint32(int(sys.arg0))
+			if err == nil {
+				err = proc.conn.Flush()
+			}
+			if err != nil {
+				cfd.Close()
+				proc.FreeFD(sys.arg0)
+				sys.SetArg0(mapError(err))
+			}
 
 		case SysGetport:
 			if sys.arg0 <= 0 {
 				sys.SetArg0(int32(-EINVAL))
-				return nil
+				break
 			}
 
 			pid := PID(sys.arg0)
@@ -740,7 +739,7 @@ run:
 			port, err := proc.kern.GetProcessPort(gpid)
 			if err != nil {
 				sys.SetArg0(int32(-EINVAL))
-				return nil
+				break
 			}
 			var fd *FD
 			if pid == proc.pid {
