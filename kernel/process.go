@@ -392,7 +392,7 @@ run:
 		case SysGetport:
 			if sys.arg0 <= 0 {
 				sys.SetArg0(int32(-EINVAL))
-				return nil
+				break
 			}
 
 			pid := PID(sys.arg0)
@@ -400,24 +400,25 @@ run:
 			port, err := proc.kern.GetProcessPort(epid)
 			if err != nil {
 				sys.SetArg0(int32(-EINVAL))
-			} else {
-				var fd *FD
-				if pid == proc.pid {
-					fd = port.NewServerFD()
-				} else {
-					fd = port.NewClientFD()
-				}
+				break
+			}
 
-				// Get FD from garbler.
-				gfd, err := proc.conn.ReceiveUint32()
-				if err == nil {
-					sys.SetArg0(int32(gfd))
-					err = proc.SetFD(sys.arg0, fd)
-				}
-				if err != nil {
-					fd.Close()
-					sys.SetArg0(int32(-EFAULT))
-				}
+			var fd *FD
+			if pid == proc.pid {
+				fd = port.NewServerFD()
+			} else {
+				fd = port.NewClientFD()
+			}
+
+			// Get FD from garbler.
+			gfd, err := proc.conn.ReceiveUint32()
+			if err == nil {
+				sys.SetArg0(int32(gfd))
+				err = proc.SetFD(sys.arg0, fd)
+			}
+			if err != nil {
+				fd.Close()
+				sys.SetArg0(int32(-EFAULT))
 			}
 
 		default:
