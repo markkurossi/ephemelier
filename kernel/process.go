@@ -603,11 +603,15 @@ run:
 			break run
 
 		case SysSpawn:
-			// XXX if sys.arg1 < 0 || sys.arg1 > len(sys.argBuf)
-			args := strings.Split(string(sys.argBuf[:sys.arg1]), "\n")
+			command, err := sys.argString()
+			if err != nil {
+				sys.SetArg0(mapError(err))
+				break
+			}
+			args := strings.Split(command, "\n")
 			if len(args) == 0 {
 				sys.SetArg0(int32(-EINVAL))
-				return nil
+				break
 			}
 			cmd := "bin/" + args[0]
 			args = args[1:]
@@ -619,76 +623,79 @@ run:
 				proc.fds[1].Copy(), proc.fds[2].Copy())
 			if err != nil {
 				sys.arg0 = int32(-ENOENT)
-			} else {
-				sys.arg0 = int32(child.pid)
-				go child.Run()
+				break
 			}
+			sys.arg0 = int32(child.pid)
+			go child.Run()
 
 		case SysDial:
-			// XXX if sys.arg1 < 0 || sys.arg1 > len(sys.argBuf)
-			network, address, errno := ParseNetAddress(sys.argBuf[:sys.arg1])
-			if errno != 0 {
-				sys.arg0 = int32(errno)
-			} else {
-				conn, err := net.Dial(network, address)
-				if err != nil {
-					sys.arg0 = mapError(err)
-				} else {
-					fd := NewSocketFD(conn)
-					sys.arg0 = proc.AllocFD(fd)
-				}
+			addrData, err := sys.argData()
+			if err != nil {
+				sys.SetArg0(mapError(err))
+				break
 			}
-			sys.argBuf = nil
-			sys.arg1 = 0
+			network, address, errno := ParseNetAddress(addrData)
+			if errno != 0 {
+				sys.SetArg0(-int32(errno))
+				break
+			}
+			conn, err := net.Dial(network, address)
+			if err != nil {
+				sys.SetArg0(mapError(err))
+				break
+			}
+			fd := NewSocketFD(conn)
+			sys.SetArg0(proc.AllocFD(fd))
+			// XXX sync fd with evaluator
 
 		case SysListen:
-			// XXX if sys.arg1 < 0 || sys.arg1 > len(sys.argBuf)
-			network, address, errno := ParseNetAddress(sys.argBuf[:sys.arg1])
-			if errno != 0 {
-				sys.arg0 = int32(errno)
-			} else {
-				listener, err := net.Listen(network, address)
-				if err != nil {
-					sys.arg0 = mapError(err)
-				} else {
-					fd := NewListenerFD(listener)
-					sys.arg0 = proc.AllocFD(fd)
-				}
+			addrData, err := sys.argData()
+			if err != nil {
+				sys.SetArg0(mapError(err))
+				break
 			}
-			sys.argBuf = nil
-			sys.arg1 = 0
+			network, address, errno := ParseNetAddress(addrData)
+			if errno != 0 {
+				sys.SetArg0(-int32(errno))
+				break
+			}
+			listener, err := net.Listen(network, address)
+			if err != nil {
+				sys.SetArg0(mapError(err))
+				break
+			}
+			fd := NewListenerFD(listener)
+			sys.SetArg0(proc.AllocFD(fd))
 
 		case SysOpen:
-			if sys.arg1 < 1 || int(sys.arg1) > len(sys.argBuf) {
-				sys.arg0 = int32(-EINVAL)
+			path, err := sys.argString()
+			if err != nil || len(path) == 0 {
+				sys.SetArg0(mapError(err))
 				proc.sendFD(int(-EINVAL))
-			} else {
-				path := string(sys.argBuf[:sys.arg1])
-				if path[0] != '/' {
-					path = filepath.Join(proc.cwd, path)
-				}
-				path = filepath.Clean(path)
-				path = filepath.Join(proc.kern.params.Filesystem, proc.root,
-					path)
-				file, err := os.Open(path)
-				if err != nil {
-					sys.arg0 = mapError(err)
-					proc.sendFD(int(sys.arg0))
-				} else {
-					fd := NewFileFD(file)
-					sys.arg0 = proc.AllocFD(fd)
-
-					// Sync FD with evaluator.
-					err = proc.sendFD(int(sys.arg0))
-					if err != nil {
-						fd.Close()
-						proc.FreeFD(sys.arg0)
-						sys.arg0 = mapError(err)
-					}
-				}
+				break
 			}
-			sys.argBuf = nil
-			sys.arg1 = 0
+			if path[0] != '/' {
+				path = filepath.Join(proc.cwd, path)
+			}
+			path = filepath.Clean(path)
+			path = filepath.Join(proc.kern.params.Filesystem, proc.root, path)
+
+			file, err := os.Open(path)
+			if err != nil {
+				sys.SetArg0(mapError(err))
+				proc.sendFD(int(sys.arg0))
+				break
+			}
+			fd := NewFileFD(file)
+			sys.SetArg0(proc.AllocFD(fd))
+
+			// Sync FD with evaluator.
+			err = proc.sendFD(int(sys.arg0))
+			if err != nil {
+				fd.Close()
+				proc.FreeFD(sys.arg0)
+				sys.SetArg0(mapError(err))
+			}
 
 		case SysAccept:
 			fd, ok := proc.fds[sys.arg0]
@@ -1000,6 +1007,20 @@ type syscall struct {
 func (sys *syscall) Print() {
 	fmt.Printf("pc=%v, call=%v, arg0=%v, arg1=%v, arg2=%v\n",
 		sys.pc, sys.call, sys.arg0, sys.argBuf, sys.arg1)
+}
+
+func (sys *syscall) argString() (string, error) {
+	if sys.arg1 < 0 || int(sys.arg1) > len(sys.argBuf) {
+		return "", EINVAL
+	}
+	return string(sys.argBuf[:sys.arg1]), nil
+}
+
+func (sys *syscall) argData() ([]byte, error) {
+	if sys.arg1 < 0 || int(sys.arg1) > len(sys.argBuf) {
+		return nil, EINVAL
+	}
+	return sys.argBuf[:sys.arg1], nil
 }
 
 func (sys *syscall) SetArg0(arg0 int32) {
