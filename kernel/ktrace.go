@@ -153,7 +153,7 @@ func (proc *Process) ktraceRet(sys *syscall) {
 				fmt.Printf(", nil")
 			}
 
-		case SysYield, SysNext:
+		case SysYield, SysNext, SysOpen:
 			fmt.Printf("%d, ", sys.arg0)
 			if len(sys.argBuf) <= dataLimit {
 				fmt.Printf("%x, %d", sys.argBuf, sys.arg1)

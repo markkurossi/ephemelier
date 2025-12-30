@@ -1057,15 +1057,16 @@ func (proc *Process) decodeSyscall(sys *syscall, values []interface{}) error {
 		return fmt.Errorf("invalid syscall: %T", values[2])
 	}
 	sys.call = Syscall(call)
+	if sys.call == SysYield {
+		// Yield with preserved values. We are done.
+		proc.debugSyscall(values)
+		return nil
+	}
 
 	// arg0.
 	arg0, ok := values[3].(int32)
 	if !ok {
 		return fmt.Errorf("invalid arg0: %T", values[3])
-	}
-	if sys.call == SysYield {
-		// Yield with preserved values. We are done.
-		return nil
 	}
 	sys.arg0 = arg0
 
@@ -1089,21 +1090,26 @@ func (proc *Process) decodeSyscall(sys *syscall, values []interface{}) error {
 		sys.arg1 = 0
 	}
 
-	if proc.kern.params.Trace {
-		// Print any additional debug values.
-		for i := 6; i < len(values); i++ {
-			proc.ktracePrefix()
-			switch v := values[i].(type) {
-			case []byte:
-				fmt.Printf("DBG  %x", v)
-			default:
-				fmt.Printf("DBG  %v", v)
-			}
-			fmt.Println()
-		}
-	}
+	proc.debugSyscall(values)
 
 	return nil
+}
+
+func (proc *Process) debugSyscall(values []interface{}) {
+	if !proc.kern.params.Trace {
+		return
+	}
+	// Print any additional debug values.
+	for i := 6; i < len(values); i++ {
+		proc.ktracePrefix()
+		switch v := values[i].(type) {
+		case []byte:
+			fmt.Printf("DBG  %x", v)
+		default:
+			fmt.Printf("DBG  %v", v)
+		}
+		fmt.Println()
+	}
 }
 
 func (proc *Process) debugf(format string, a ...interface{}) {
