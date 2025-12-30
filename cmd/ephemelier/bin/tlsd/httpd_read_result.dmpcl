@@ -41,33 +41,21 @@ func main(g memory.G, e memory.E) (
 
 	mem = binary.PutUint64(mem, tlsmem.OfsClientSeq, seq+1)
 
-	// XXX favicon... or just print the request
+	var next kernel.PC
+	var arg1 int32
 
-	var reply []byte
 	if bytes.HasPrefix(plain, []byte("GET /")) {
-		body := []byte("<html><body><h1>Hello, I'm Ephemelier!</h1></body></html>\n")
-		hdr := []byte("HTTP/1.1 200 OK\nContent-Length: ")
-		l := []byte(strconv.Itoa(len(body)))
-		sep := []byte("\n\n")
-
-		reply = make([]byte, len(hdr)+len(l)+len(sep)+len(body))
-		n := copy(reply, hdr)
-		n += copy(reply[n:], l)
-		n += copy(reply[n:], sep)
-		copy(reply[n:], body)
-
+		next = intern(StHttpdCtPlain)
+		arg1 = -1
+		for i := 5; i < len(plain); i++ {
+			if arg1 == -1 && plain[i] == ' ' {
+				arg1 = i - 5
+			}
+		}
 	} else {
-		reply = []byte("Hello, I'm Ephemelier!\n")
+		next = intern(StHttpdCtDynamic)
 	}
 
-	copy(key, mem[tlsmem.OfsServerKey:])
-	copy(iv, mem[tlsmem.OfsServerIV:])
-	seq = binary.GetUint64(mem[tlsmem.OfsServerSeq:])
-
-	cipher := tls.Encrypt(key, iv, seq, tls.CTApplicationData, reply)
-
-	mem = binary.PutUint64(mem, tlsmem.OfsServerSeq, seq+1)
-
-	return semihonest.Encode(nonce, mem, g.key, e.key),
-		intern(StHttpdStart), kernel.SysWrite, tlsfd, cipher, len(cipher)
+	return semihonest.Encode(nonce, mem, g.key, e.key), next,
+		kernel.SysNext, 0, plain, arg1
 }

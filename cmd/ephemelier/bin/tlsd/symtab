@@ -7,24 +7,32 @@ package main
 
 // Interned symbols.
 const (
-	Init                   = 3
-	StChildGetportResult   = 1
-	StChildMain            = 4
-	StChildRecvfdResult    = 0
-	StHttpdEnd             = 11
-	StHttpdRead            = 14
-	StHttpdReadResult      = 12
-	StHttpdStart           = 13
-	StMainAccept           = 8
-	StMainAcceptResult     = 6
-	StMainGetportResult    = 10
-	StMainListenResult     = 5
-	StMainSendfdResult     = 9
-	StMainSpawnResult      = 7
-	StTlsserverClose       = 15
-	StTlsserverDone        = 19
-	StTlsserverKex         = 17
-	StTlsserverKexFinished = 18
-	StTlsserverKexRead     = 16
-	StTlsserverResult      = 2
+	Init                     = 3
+	StChildGetportResult     = 1
+	StChildMain              = 4
+	StChildRecvfdResult      = 0
+	StHttpdCtDynamic         = 21
+	StHttpdCtPlain           = 20
+	StHttpdCtPlainOpen       = 12
+	StHttpdCtPlainRead       = 18
+	StHttpdCtPlainReadResult = 14
+	StHttpdCtPlainResp       = 13
+	StHttpdCtPlainWrite      = 16
+	StHttpdEnd               = 15
+	StHttpdFilePlainRead     = 17
+	StHttpdRead              = 22
+	StHttpdReadResult        = 19
+	StHttpdStart             = 11
+	StMainAccept             = 8
+	StMainAcceptResult       = 6
+	StMainGetportResult      = 10
+	StMainListenResult       = 5
+	StMainSendfdResult       = 9
+	StMainSpawnResult        = 7
+	StTlsserverClose         = 23
+	StTlsserverDone          = 27
+	StTlsserverKex           = 25
+	StTlsserverKexFinished   = 26
+	StTlsserverKexRead       = 24
+	StTlsserverResult        = 2
 )

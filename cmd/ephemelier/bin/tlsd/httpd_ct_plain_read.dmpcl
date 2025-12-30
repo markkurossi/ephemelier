@@ -1,0 +1,31 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"crypto/tls"
+	"encoding/binary"
+	"encoding/hex"
+	"ephemelier/kernel"
+	"ephemelier/memory"
+	"ephemelier/memory/semihonest"
+	"ephemelier/tlsmem"
+	"strconv"
+)
+
+func main(g memory.G, e memory.E) (
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+
+	nonce, mem, ok := semihonest.Decode(g.mem, g.key, e.key)
+	if !ok {
+		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
+	}
+	fd := int32(binary.GetUint32(mem[tlsmem.Size:]))
+
+	return nil, intern(StHttpdCtPlainReadResult), kernel.SysRead, fd, nil, 1024
+}
