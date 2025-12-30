@@ -1,0 +1,29 @@
+// -*- go -*-
+//
+// Copyright (c) 2025 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"ephemelier/kernel"
+	"ephemelier/memory"
+	"ephemelier/memory/semihonest"
+)
+
+func main(g semihonest.G1B, e memory.E1B) (
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+
+	if g.arg0 < 0 {
+		return nil, 0, kernel.SysExit, 1, nil, 0
+	}
+	nonce, mem, ok := semihonest.Decode(g.mem, g.key, e.key)
+	if !ok {
+		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
+	}
+	fd := int32(binary.GetUint32(mem))
+
+	return nil, intern(StReadResult), kernel.SysRead, fd, nil, 1024
+}

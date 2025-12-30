@@ -14,7 +14,6 @@ import (
 	"math/big"
 	"net"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -675,11 +674,15 @@ run:
 				proc.sendFD(int(-EINVAL))
 				break
 			}
-			if path[0] != '/' {
-				path = filepath.Join(proc.cwd, path)
+			path = MakePath(path, proc.cwd, proc.root,
+				proc.kern.params.Filesystem)
+
+			info, err := os.Stat(path)
+			if err != nil {
+				sys.SetArg0(mapError(err))
+				proc.sendFD(int(sys.arg0))
+				break
 			}
-			path = filepath.Clean(path)
-			path = filepath.Join(proc.kern.params.Filesystem, proc.root, path)
 
 			file, err := os.Open(path)
 			if err != nil {
@@ -689,6 +692,8 @@ run:
 			}
 			fd := NewFileFD(file)
 			sys.SetArg0(proc.AllocFD(fd))
+
+			sys.argBuf = MakeFileInfo(info)
 
 			// Sync FD with evaluator.
 			err = proc.sendFD(int(sys.arg0))

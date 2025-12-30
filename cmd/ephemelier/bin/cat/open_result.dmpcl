@@ -11,9 +11,10 @@ import (
 	"ephemelier/kernel"
 	"ephemelier/memory"
 	"ephemelier/memory/semihonest"
+	"strconv"
 )
 
-func main(g, e memory.PeerInit) (
+func main(g memory.G, e memory.E) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
 	if g.arg0 < 0 {
@@ -24,6 +25,12 @@ func main(g, e memory.PeerInit) (
 
 	mem = binary.PutUint32(mem, 0, uint32(g.arg0))
 
+	info := []byte("Size   : " +
+		strconv.Itoa(int32(binary.GetUint64(g.argBuf[0:]))) +
+		"\nModTime: " +
+		strconv.Itoa(int32(binary.GetUint64(g.argBuf[8:]))) +
+		"\n")
+
 	return semihonest.Encode(nonce, mem, g.key, e.key),
-		intern(StReadResult), kernel.SysRead, g.arg0, nil, 1024
+		intern(StInfoResult), kernel.SysWrite, 2, info, len(info)
 }

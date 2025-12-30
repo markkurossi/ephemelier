@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 // FDFile implements file FDs.
@@ -49,4 +50,24 @@ func (fd *FDFile) Write(b []byte) int {
 		return int(mapError(err))
 	}
 	return n
+}
+
+// MakePath creates a cleaned path from the path argument and the
+// system state cwd, chroot, and root.
+func MakePath(path, cwd, chroot, root string) string {
+	if path[0] != '/' {
+		path = filepath.Join(cwd, path)
+	}
+	path = filepath.Clean(path)
+	return filepath.Join(root, chroot, path)
+}
+
+// MakeFileInfo encodes info into []byte buffer.
+func MakeFileInfo(info os.FileInfo) []byte {
+	buf := make([]byte, 16)
+
+	bo.PutUint64(buf[0:], uint64(info.Size()))
+	bo.PutUint64(buf[8:], uint64(info.ModTime().UnixMilli()))
+
+	return buf
 }
