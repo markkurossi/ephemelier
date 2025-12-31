@@ -44,6 +44,7 @@ const (
 	SysYield
 	SysNext
 	SysGetpid
+	SysChroot
 )
 
 // Port system calls.
@@ -77,6 +78,7 @@ var syscallNames = map[Syscall]string{
 	SysYield:     "yield",
 	SysNext:      "next",
 	SysGetpid:    "getpid",
+	SysChroot:    "chroot",
 
 	SysGetport:    "getport",
 	SysCreateport: "createport",

@@ -76,8 +76,18 @@ var pathTests = []struct {
 }
 
 func TestPaths(t *testing.T) {
+	var kern Kernel
+
+	proc := &Process{
+		kern: &kern,
+	}
+
 	for idx, test := range pathTests {
-		path := MakePath(test.path, test.cwd, test.chroot, test.root)
+		proc.cwd = test.cwd
+		proc.root = test.chroot
+		kern.params.Filesystem = test.root
+
+		path := proc.MakePath(test.path)
 		if path != test.result {
 			t.Errorf("test%d: got %v, expected %v\n", idx, path, test.result)
 		}

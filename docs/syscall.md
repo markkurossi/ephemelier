@@ -9,18 +9,19 @@
  - yield() => arg0, argBuf, arg1                   ; continue with old values
  - next(arg0, argBuf, arg1) => arg0, argBuf, arg1  ; continue with new values
  - getpid() => pid
+ - chroot(argBuf:path, arg1:pathLen) => arg0:errno
 
 ## File Descriptors and I/O
 
  - peek()
- - read(arg0:fd, arg1:size) => size, buf
+ - read(arg0:fd, arg1:size) => arg0:size, argBuf:data
  - skip()
- - write(arg0:fd, argBuf:data, arg1:size) => size
- - open()
- - close()
- - dial(argbuf:address, arg1:size) => fd
- - listen(argbuf:address, arg1:size) => fd
- - accept(arg0:fd) => fd
+ - write(arg0:fd, argBuf:data, arg1:size) => arg0:size
+ - open(argBuf:path, arg1:pathLen) => arg0:fd, argBuf:fileInfo
+ - close(arg0:fd) => errno
+ - dial(argbuf:address, arg1:size) => arg0:fd
+ - listen(argbuf:address, arg1:size) => arg0:fd
+ - accept(arg0:fd) => arg0:fd
 
 ## Cryptography Functions
 

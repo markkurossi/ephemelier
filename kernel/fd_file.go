@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // FDFile implements file FDs.
@@ -54,12 +55,32 @@ func (fd *FDFile) Write(b []byte) int {
 
 // MakePath creates a cleaned path from the path argument and the
 // system state cwd, chroot, and root.
-func MakePath(path, cwd, chroot, root string) string {
+func (proc *Process) MakePath(path string) string {
 	if path[0] != '/' {
-		path = filepath.Join(cwd, path)
+		path = filepath.Join(proc.cwd, path)
 	}
 	path = filepath.Clean(path)
-	return filepath.Join(root, chroot, path)
+	return filepath.Join(proc.kern.params.Filesystem, proc.root, path)
+}
+
+// Chroot changes the process' root directory.
+func (proc *Process) Chroot(path string) error {
+	path = proc.MakePath(path)
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return Errno(ENOTDIR)
+	}
+	proc.root = path[len(proc.kern.params.Filesystem):]
+	if strings.HasPrefix(path, proc.cwd) {
+		proc.cwd = proc.cwd[len(path):]
+	} else {
+		proc.cwd = "/"
+	}
+	return nil
 }
 
 // MakeFileInfo encodes info into []byte buffer.

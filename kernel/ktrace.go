@@ -72,7 +72,7 @@ func (proc *Process) ktraceCall(sys *syscall) {
 		SysTlsstatus, SysRecvfd:
 		fmt.Printf("(%d)", sys.arg0)
 
-	case SysSpawn, SysDial, SysListen, SysOpen:
+	case SysSpawn, SysDial, SysListen, SysOpen, SysChroot:
 		if sys.arg1 < 0 || int(sys.arg1) > len(sys.argBuf) {
 			fmt.Printf("(%s:%d/[0-%d])", EINVAL, sys.arg1, len(sys.argBuf))
 		} else {
@@ -85,7 +85,9 @@ func (proc *Process) ktraceCall(sys *syscall) {
 	case SysTlshs:
 		ht := tls.HandshakeType(sys.arg1)
 		fmt.Printf("(%d, ", sys.arg0)
-		if len(sys.argBuf) <= dataLimit {
+		if len(sys.argBuf) == 0 {
+			fmt.Printf("nil, %s)", ht)
+		} else if len(sys.argBuf) <= dataLimit {
 			fmt.Printf("%x, %s)", sys.argBuf, ht)
 		} else {
 			fmt.Printf("%x..., %d)", sys.argBuf[:dataLimit], ht)
@@ -155,7 +157,9 @@ func (proc *Process) ktraceRet(sys *syscall) {
 
 		case SysYield, SysNext, SysOpen:
 			fmt.Printf("%d, ", sys.arg0)
-			if len(sys.argBuf) <= dataLimit {
+			if len(sys.argBuf) == 0 {
+				fmt.Printf("nil, %d", sys.arg1)
+			} else if len(sys.argBuf) <= dataLimit {
 				fmt.Printf("%x, %d", sys.argBuf, sys.arg1)
 			} else {
 				fmt.Printf("%x..., %d", sys.argBuf[:dataLimit], sys.arg1)

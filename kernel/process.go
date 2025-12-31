@@ -388,6 +388,9 @@ run:
 				sys.SetArg0(mapError(err))
 			}
 
+		case SysChroot:
+			sys.SetArg0(0)
+
 		case SysGetport:
 			if sys.arg0 <= 0 {
 				sys.SetArg0(int32(-EINVAL))
@@ -670,12 +673,11 @@ run:
 		case SysOpen:
 			path, err := sys.argString()
 			if err != nil || len(path) == 0 {
-				sys.SetArg0(mapError(err))
+				sys.SetArg0(int32(-EINVAL))
 				proc.sendFD(int(-EINVAL))
 				break
 			}
-			path = MakePath(path, proc.cwd, proc.root,
-				proc.kern.params.Filesystem)
+			path = proc.MakePath(path)
 
 			info, err := os.Stat(path)
 			if err != nil {
@@ -733,6 +735,19 @@ run:
 				proc.FreeFD(sys.arg0)
 				sys.SetArg0(mapError(err))
 			}
+
+		case SysChroot:
+			path, err := sys.argString()
+			if err != nil || len(path) == 0 {
+				sys.SetArg0(int32(-EINVAL))
+				break
+			}
+			err = proc.Chroot(path)
+			if err != nil {
+				sys.SetArg0(mapError(err))
+				break
+			}
+			sys.SetArg0(0)
 
 		case SysGetport:
 			if sys.arg0 <= 0 {

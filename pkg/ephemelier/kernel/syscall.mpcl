@@ -40,6 +40,7 @@ const (
 	SysYield     = 19
 	SysNext      = 20
 	SysGetpid    = 21
+	SysChroot    = 22
 
 	SysGetport    = 100
 	SysCreateport = 101

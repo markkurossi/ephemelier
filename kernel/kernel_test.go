@@ -14,8 +14,8 @@ func TestSyscall(t *testing.T) {
 	if SysExit != 1 {
 		t.Errorf("SysExit=%v, expected 1", int(SysExit))
 	}
-	if SysGetpid != 21 {
-		t.Errorf("SysGetpid=%v, expected 21", int(SysGetpid))
+	if SysChroot != 22 {
+		t.Errorf("SysChroot=%v, expected 22", int(SysChroot))
 	}
 	if SysGetport != 100 {
 		t.Errorf("SysGetport=%v, expected 100", int(SysGetport))
