@@ -27,7 +27,7 @@ func main(g memory.G, e memory.E) (
 	}
 	tlsfd := int32(binary.GetUint32(mem[tlsmem.OfsFD:]))
 
-	body := []byte("<html><body><h1>Hello, I'm Ephemelier!</h1></body></html>")
+	body := []byte("<html><body><h1>Hello, I'm Ephemelier!</h1></body></html>\n")
 	hdr := []byte("HTTP/1.1 200 OK\nContent-Length: " +
 		strconv.Itoa(len(body)) + "\n" +
 		"\n")

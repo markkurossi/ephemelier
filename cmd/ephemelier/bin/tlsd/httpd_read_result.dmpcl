@@ -46,10 +46,9 @@ func main(g memory.G, e memory.E) (
 
 	if bytes.HasPrefix(plain, []byte("GET /")) {
 		next = intern(StHttpdCtPlain)
-		arg1 = -1
 		for i := 5; i < len(plain); i++ {
-			if arg1 == -1 && plain[i] == ' ' {
-				arg1 = i - 5
+			if arg1 == 0 && (plain[i] == ' ' || plain[i] == '\n') {
+				arg1 = i - 4
 			}
 		}
 	} else {

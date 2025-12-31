@@ -24,18 +24,17 @@ func main(g memory.G, e memory.E) (
 	var path []byte
 	var pathLen int32
 
-	// len("GET /") = 5
-	prefixLen := 5
+	// len("GET ") = 4
+	prefixLen := 4
 
-	if g.arg1 == 0 {
-		path = []byte("/etc/httpd/index.html")
+	if g.arg1 == 1 && g.argBuf[prefixLen] == '/' {
+		path = []byte("index.html")
 		pathLen = len(path)
 	} else {
-		path = make([]byte, 11+len(g.argBuf)-prefixLen)
-		copy(path, []byte("/etc/httpd/"))
-		copy(path[11:], g.argBuf[prefixLen:])
+		path = make([]byte, len(g.argBuf)-prefixLen)
+		copy(path, g.argBuf[prefixLen:])
 
-		pathLen = 11 + g.arg1
+		pathLen = g.arg1
 	}
 
 	return nil, intern(StHttpdCtPlainOpen), kernel.SysOpen, 0, path, pathLen
