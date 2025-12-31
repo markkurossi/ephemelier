@@ -400,9 +400,22 @@ func mapError(err error) int32 {
 	}
 
 	var perr *fs.PathError
-	if errors.As(err, &perr) || errors.Is(err, io.EOF) {
+	if errors.As(err, &perr) {
+		fsErr := perr.Err.Error()
+		if strings.Contains(fsErr, "no such file or dir") {
+			return int32(-ENOENT)
+		}
+		fmt.Printf("fs.PathError:\n")
+		fmt.Printf(" - Op  : %v\n", perr.Op)
+		fmt.Printf(" - Path: %v\n", perr.Path)
+		fmt.Printf(" - Err : %v\n", perr.Err)
+		fmt.Printf(" =>      %v\n", EBADF)
 		return int32(-EBADF)
 	}
+	if errors.Is(err, io.EOF) {
+		return int32(-EBADF)
+	}
+
 	var tlsAlert tls.AlertDescription
 	if errors.As(err, &tlsAlert) {
 		errno, ok := tlsAlertToErrno[tlsAlert]
