@@ -4,7 +4,7 @@
 // All rights reserved.
 //
 
-// Package spdz implements the SPDZ protocol for P-256 point addtion.
+// Package spdz implements the SPDZ protocol for P-256 point addition.
 package spdz
 
 import (
@@ -23,7 +23,6 @@ var (
 	curve       = elliptic.P256()
 	curveParams = curve.Params()
 	p256P       = curveParams.P
-	p256N       = curveParams.N
 )
 
 // Role defines the SPDZ protocol role.
@@ -34,11 +33,6 @@ const (
 	Sender Role = iota
 	Receiver
 )
-
-// OTExtRole returns the corresponding otext role.
-func (role Role) OTExtRole() int {
-	return int(role)
-}
 
 func modReduce(x *big.Int) *big.Int {
 	z := new(big.Int).Mod(x, p256P)
