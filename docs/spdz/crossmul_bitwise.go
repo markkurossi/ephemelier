@@ -71,25 +71,19 @@ func runBitwiseDirection(conn *p2p.Conn, oti ot.OT, id int, localIsSender bool, 
 		if err := oti.InitSender(conn); err != nil {
 			return nil, err
 		}
+		ext, err := otext.NewIKNPSender(oti, conn, rand.Reader)
+		if err != nil {
+			return nil, err
+		}
+		return runBitwiseSender(conn, ext, a)
 	} else {
 		if err := oti.InitReceiver(conn); err != nil {
 			return nil, err
 		}
-	}
-
-	role := otext.ReceiverRole
-	if localIsSender {
-		role = otext.SenderRole
-	}
-
-	ext := otext.NewIKNPExt(oti, conn, role)
-	if err := ext.Setup(rand.Reader); err != nil {
-		return nil, err
-	}
-
-	if localIsSender {
-		return runBitwiseSender(conn, ext, a)
-	} else {
+		ext, err := otext.NewIKNPReceiver(oti, conn, rand.Reader)
+		if err != nil {
+			return nil, err
+		}
 		return runBitwiseReceiver(conn, ext, a, b)
 	}
 }
@@ -98,7 +92,7 @@ func runBitwiseDirection(conn *p2p.Conn, oti ot.OT, id int, localIsSender bool, 
 // Sender side: sends masked pairs (u0, u1) for each bit
 // -----------------------------------------------------------------------------
 
-func runBitwiseSender(conn *p2p.Conn, ext *otext.IKNPExt, a *big.Int) (*big.Int, error) {
+func runBitwiseSender(conn *p2p.Conn, ext *otext.IKNPSender, a *big.Int) (*big.Int, error) {
 
 	// Precompute 2^j mod p
 	powers := make([]*big.Int, fieldBits)
@@ -139,7 +133,7 @@ func runBitwiseSender(conn *p2p.Conn, ext *otext.IKNPExt, a *big.Int) (*big.Int,
 	}
 
 	totalChunks := otsPerDirection // = 512
-	wires, err := ext.ExpandSend(totalChunks)
+	wires, err := ext.Expand(totalChunks)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +196,7 @@ func runBitwiseSender(conn *p2p.Conn, ext *otext.IKNPExt, a *big.Int) (*big.Int,
 // Receiver side: obtains chosen messages u_{b_j}
 // -----------------------------------------------------------------------------
 
-func runBitwiseReceiver(conn *p2p.Conn, ext *otext.IKNPExt, a, b *big.Int) (*big.Int, error) {
+func runBitwiseReceiver(conn *p2p.Conn, ext *otext.IKNPReceiver, a, b *big.Int) (*big.Int, error) {
 
 	flags := make([]bool, otsPerDirection)
 	for j := 0; j < fieldBits; j++ {
@@ -211,7 +205,7 @@ func runBitwiseReceiver(conn *p2p.Conn, ext *otext.IKNPExt, a, b *big.Int) (*big
 		flags[j*2+1] = bit
 	}
 
-	labels, err := ext.ExpandReceive(flags)
+	labels, err := ext.Expand(flags)
 	if err != nil {
 		return nil, err
 	}

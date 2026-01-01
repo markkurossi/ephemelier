@@ -27,25 +27,32 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 		return nil, errors.New("n must be positive")
 	}
 
+	var iknpS *otext.IKNPSender
+	var iknpR *otext.IKNPReceiver
+	var err error
+
 	// Init base-OT roles
 	switch role {
 	case Sender:
 		if err := oti.InitSender(conn); err != nil {
-			return nil, fmt.Errorf("InitSender: %w", err)
+			return nil, err
+		}
+		iknpS, err = otext.NewIKNPSender(oti, conn, rand.Reader)
+		if err != nil {
+			return nil, err
 		}
 
 	case Receiver:
 		if err := oti.InitReceiver(conn); err != nil {
-			return nil, fmt.Errorf("InitReceiver: %w", err)
+			return nil, err
+		}
+		iknpR, err = otext.NewIKNPReceiver(oti, conn, rand.Reader)
+		if err != nil {
+			return nil, err
 		}
 
 	default:
 		return nil, fmt.Errorf("invalid role: %d", role)
-	}
-
-	ext := otext.NewIKNPExt(oti, conn, role.OTExtRole())
-	if err := ext.Setup(rand.Reader); err != nil {
-		return nil, fmt.Errorf("IKNP Setup: %w", err)
 	}
 
 	triples := make([]*Triple, n)
@@ -63,7 +70,7 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 		// 1) Sample A shares via IKNP (batched)
 		if role == Sender {
 			// sender expands m wires
-			wires, err := ext.ExpandSend(m)
+			wires, err := iknpS.Expand(m)
 			if err != nil {
 				return nil, fmt.Errorf("ExpandSend A: %w", err)
 			}
@@ -73,7 +80,7 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 			}
 		} else {
 			flags := randomBools(m)
-			labels, err := ext.ExpandReceive(flags)
+			labels, err := iknpR.Expand(flags)
 			if err != nil {
 				return nil, fmt.Errorf("ExpandReceive A: %w", err)
 			}
@@ -108,9 +115,9 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 
 		// 2) Sample B shares via IKNP (batched)
 		if role == Sender {
-			wires, err := ext.ExpandSend(m)
+			wires, err := iknpS.Expand(m)
 			if err != nil {
-				return nil, fmt.Errorf("ExpandSend B: %w", err)
+				return nil, err
 			}
 			for i := 0; i < m; i++ {
 				b0 := ExpandLabelToField(wires[i].L0)
@@ -118,9 +125,9 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 			}
 		} else {
 			flags := randomBools(m)
-			labels, err := ext.ExpandReceive(flags)
+			labels, err := iknpR.Expand(flags)
 			if err != nil {
-				return nil, fmt.Errorf("ExpandReceive B: %w", err)
+				return nil, err
 			}
 			for i := 0; i < m; i++ {
 				b1 := ExpandLabelToField(labels[i])
@@ -184,28 +191,21 @@ func CrossMultiplyBatch(conn *p2p.Conn, oti ot.OT, role Role,
 	// Helper that runs one VOLE direction and returns per-triple
 	// contributions (big.Int)
 	runDirection := func(localIsSender bool) ([]*big.Int, error) {
-		// construct vole extension with the appropriate role
-		var role vole.Role
-		if localIsSender {
-			role = vole.SenderRole
-		} else {
-			role = vole.ReceiverRole
-		}
-		ve := vole.NewExt(oti, conn, role)
-		if err := ve.Setup(rand.Reader); err != nil {
-			return nil, fmt.Errorf("VOLE Setup(dir): %w", err)
-		}
-
 		// Build local input vector for this direction:
 		// - if sender, senderInputs = local A shares (triples[t].A.V)
 		// - if receiver, receiverInputs = local B shares (triples[t].B.V)
 		if localIsSender {
+			ve, err := vole.NewSender(oti, conn, rand.Reader)
+			if err != nil {
+				return nil, err
+			}
+
 			xs := make([]*big.Int, m)
 			for t := 0; t < m; t++ {
 				xs[t] = triples[t].A.V
 			}
 			// MulSender returns r_i (sender masks)
-			rs, err := ve.MulSender(xs, p256P)
+			rs, err := ve.Mul(xs, p256P)
 			if err != nil {
 				return nil, fmt.Errorf("VOLE MulSender: %w", err)
 			}
@@ -223,12 +223,17 @@ func CrossMultiplyBatch(conn *p2p.Conn, oti ot.OT, role Role,
 			}
 			return out, nil
 		} else {
+			ve, err := vole.NewReceiver(oti, conn, rand.Reader)
+			if err != nil {
+				return nil, err
+			}
+
 			ys := make([]*big.Int, m)
 			for t := 0; t < m; t++ {
 				ys[t] = triples[t].B.V
 			}
 			// MulReceiver returns u_i = r_i + x_i*y_i
-			us, err := ve.MulReceiver(ys, p256P)
+			us, err := ve.Mul(ys, p256P)
 			if err != nil {
 				return nil, fmt.Errorf("VOLE MulReceiver: %w", err)
 			}
