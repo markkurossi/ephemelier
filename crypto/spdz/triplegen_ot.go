@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -13,7 +13,6 @@ import (
 	"math/big"
 
 	"github.com/markkurossi/mpc/ot"
-	"github.com/markkurossi/mpc/otext"
 	"github.com/markkurossi/mpc/p2p"
 	"github.com/markkurossi/mpc/vole"
 )
@@ -27,8 +26,8 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 		return nil, errors.New("n must be positive")
 	}
 
-	var iknpS *otext.IKNPSender
-	var iknpR *otext.IKNPReceiver
+	var iknpS *ot.IKNPSender
+	var iknpR *ot.IKNPReceiver
 	var err error
 
 	// Init base-OT roles
@@ -37,7 +36,7 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 		if err := oti.InitSender(conn); err != nil {
 			return nil, err
 		}
-		iknpS, err = otext.NewIKNPSender(oti, conn, rand.Reader)
+		iknpS, err = ot.NewIKNPSender(oti, conn, rand.Reader, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -46,7 +45,7 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 		if err := oti.InitReceiver(conn); err != nil {
 			return nil, err
 		}
-		iknpR, err = otext.NewIKNPReceiver(oti, conn, rand.Reader)
+		iknpR, err = ot.NewIKNPReceiver(oti, conn, rand.Reader)
 		if err != nil {
 			return nil, err
 		}
@@ -70,17 +69,18 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 		// 1) Sample A shares via IKNP (batched)
 		if role == Sender {
 			// sender expands m wires
-			wires, err := iknpS.Expand(m)
+			labels, err := iknpS.Send(m)
 			if err != nil {
 				return nil, fmt.Errorf("ExpandSend A: %w", err)
 			}
 			for i := 0; i < m; i++ {
-				a0 := ExpandLabelToField(wires[i].L0)
+				a0 := ExpandLabelToField(labels[i])
 				triples[base+i] = &Triple{A: NewShare(a0)}
 			}
 		} else {
 			flags := randomBools(m)
-			labels, err := iknpR.Expand(flags)
+			labels := make([]ot.Label, m)
+			err := iknpR.Receive(flags, labels)
 			if err != nil {
 				return nil, fmt.Errorf("ExpandReceive A: %w", err)
 			}
@@ -115,17 +115,18 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 
 		// 2) Sample B shares via IKNP (batched)
 		if role == Sender {
-			wires, err := iknpS.Expand(m)
+			labels, err := iknpS.Send(m)
 			if err != nil {
 				return nil, err
 			}
 			for i := 0; i < m; i++ {
-				b0 := ExpandLabelToField(wires[i].L0)
+				b0 := ExpandLabelToField(labels[i])
 				triples[base+i].B = NewShare(b0)
 			}
 		} else {
 			flags := randomBools(m)
-			labels, err := iknpR.Expand(flags)
+			labels := make([]ot.Label, m)
+			err := iknpR.Receive(flags, labels)
 			if err != nil {
 				return nil, err
 			}
