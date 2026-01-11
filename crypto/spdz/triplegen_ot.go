@@ -69,7 +69,7 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 		// 1) Sample A shares via IKNP (batched)
 		if role == Sender {
 			// sender expands m wires
-			labels, err := iknpS.Send(m)
+			labels, err := iknpS.Send(m, false)
 			if err != nil {
 				return nil, fmt.Errorf("ExpandSend A: %w", err)
 			}
@@ -80,7 +80,7 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 		} else {
 			flags := randomBools(m)
 			labels := make([]ot.Label, m)
-			err := iknpR.Receive(flags, labels)
+			err := iknpR.Receive(flags, labels, false)
 			if err != nil {
 				return nil, fmt.Errorf("ExpandReceive A: %w", err)
 			}
@@ -115,7 +115,7 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 
 		// 2) Sample B shares via IKNP (batched)
 		if role == Sender {
-			labels, err := iknpS.Send(m)
+			labels, err := iknpS.Send(m, false)
 			if err != nil {
 				return nil, err
 			}
@@ -126,7 +126,7 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, role Role, n int) (
 		} else {
 			flags := randomBools(m)
 			labels := make([]ot.Label, m)
-			err := iknpR.Receive(flags, labels)
+			err := iknpR.Receive(flags, labels, false)
 			if err != nil {
 				return nil, err
 			}
