@@ -8,7 +8,6 @@ import (
 	"math/big"
 
 	"github.com/markkurossi/mpc/ot"
-	"github.com/markkurossi/mpc/otext"
 	"github.com/markkurossi/mpc/p2p"
 )
 
@@ -71,7 +70,7 @@ func runBitwiseDirection(conn *p2p.Conn, oti ot.OT, id int, localIsSender bool, 
 		if err := oti.InitSender(conn); err != nil {
 			return nil, err
 		}
-		ext, err := otext.NewIKNPSender(oti, conn, rand.Reader)
+		ext, err := ot.NewIKNPSender(oti, conn, rand.Reader, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -80,7 +79,7 @@ func runBitwiseDirection(conn *p2p.Conn, oti ot.OT, id int, localIsSender bool, 
 		if err := oti.InitReceiver(conn); err != nil {
 			return nil, err
 		}
-		ext, err := otext.NewIKNPReceiver(oti, conn, rand.Reader)
+		ext, err := ot.NewIKNPReceiver(oti, conn, rand.Reader)
 		if err != nil {
 			return nil, err
 		}
@@ -92,7 +91,7 @@ func runBitwiseDirection(conn *p2p.Conn, oti ot.OT, id int, localIsSender bool, 
 // Sender side: sends masked pairs (u0, u1) for each bit
 // -----------------------------------------------------------------------------
 
-func runBitwiseSender(conn *p2p.Conn, ext *otext.IKNPSender, a *big.Int) (*big.Int, error) {
+func runBitwiseSender(conn *p2p.Conn, ext *ot.IKNPSender, a *big.Int) (*big.Int, error) {
 
 	// Precompute 2^j mod p
 	powers := make([]*big.Int, fieldBits)
@@ -133,12 +132,12 @@ func runBitwiseSender(conn *p2p.Conn, ext *otext.IKNPSender, a *big.Int) (*big.I
 	}
 
 	totalChunks := otsPerDirection // = 512
-	wires, err := ext.Expand(totalChunks)
+	labels, err := ext.Send(totalChunks, false)
 	if err != nil {
 		return nil, err
 	}
-	if len(wires) != totalChunks {
-		return nil, fmt.Errorf("ExpandSend returned %d wires", len(wires))
+	if len(labels) != totalChunks {
+		return nil, fmt.Errorf("ExpandSend returned %d wires", len(labels))
 	}
 
 	// Build delta buffer: for each chunk we send D0||D1
@@ -162,13 +161,16 @@ func runBitwiseSender(conn *p2p.Conn, ext *otext.IKNPSender, a *big.Int) (*big.I
 		}
 
 		for c := 0; c < 2; c++ {
-			w := wires[j*2+c]
-			var d0, d1 ot.LabelData
-			w.L0.GetData(&d0)
-			w.L1.GetData(&d1)
+			l := labels[j*2+c]
 
-			pad0 := labelPRG(d0[:], bytesPerChunk)
-			pad1 := labelPRG(d1[:], bytesPerChunk)
+			var ld ot.LabelData
+
+			l.GetData(&ld)
+			pad0 := labelPRG(ld[:], bytesPerChunk)
+
+			l.Xor(ext.Delta)
+			l.GetData(&ld)
+			pad1 := labelPRG(ld[:], bytesPerChunk)
 
 			D0 := xorBytes(chunks[c].m0, pad0)
 			D1 := xorBytes(chunks[c].m1, pad1)
@@ -196,7 +198,7 @@ func runBitwiseSender(conn *p2p.Conn, ext *otext.IKNPSender, a *big.Int) (*big.I
 // Receiver side: obtains chosen messages u_{b_j}
 // -----------------------------------------------------------------------------
 
-func runBitwiseReceiver(conn *p2p.Conn, ext *otext.IKNPReceiver, a, b *big.Int) (*big.Int, error) {
+func runBitwiseReceiver(conn *p2p.Conn, ext *ot.IKNPReceiver, a, b *big.Int) (*big.Int, error) {
 
 	flags := make([]bool, otsPerDirection)
 	for j := 0; j < fieldBits; j++ {
@@ -205,7 +207,8 @@ func runBitwiseReceiver(conn *p2p.Conn, ext *otext.IKNPReceiver, a, b *big.Int) 
 		flags[j*2+1] = bit
 	}
 
-	labels, err := ext.Expand(flags)
+	labels := make([]ot.Label, otsPerDirection)
+	err := ext.Receive(flags, labels, false)
 	if err != nil {
 		return nil, err
 	}

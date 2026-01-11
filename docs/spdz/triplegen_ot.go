@@ -7,7 +7,6 @@ import (
 	"math/big"
 
 	"github.com/markkurossi/mpc/ot"
-	"github.com/markkurossi/mpc/otext"
 	"github.com/markkurossi/mpc/p2p"
 	"github.com/markkurossi/mpc/vole"
 )
@@ -23,14 +22,14 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, id int, n int, audi
 	}
 
 	// init base-OT roles
-	var iknpS *otext.IKNPSender
-	var iknpR *otext.IKNPReceiver
+	var iknpS *ot.IKNPSender
+	var iknpR *ot.IKNPReceiver
 	if id == 0 {
 		err := oti.InitSender(conn)
 		if err != nil {
 			return nil, err
 		}
-		iknpS, err = otext.NewIKNPSender(oti, conn, rand.Reader)
+		iknpS, err = ot.NewIKNPSender(oti, conn, rand.Reader, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -39,7 +38,7 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, id int, n int, audi
 		if err != nil {
 			return nil, err
 		}
-		iknpR, err = otext.NewIKNPReceiver(oti, conn, rand.Reader)
+		iknpR, err = ot.NewIKNPReceiver(oti, conn, rand.Reader)
 		if err != nil {
 			return nil, err
 		}
@@ -59,17 +58,18 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, id int, n int, audi
 		// 1) Sample A shares via IKNP (batched)
 		if id == 0 {
 			// sender expands m wires
-			wires, err := iknpS.Expand(m)
+			labels, err := iknpS.Send(m, false)
 			if err != nil {
 				return nil, fmt.Errorf("ExpandSend A: %w", err)
 			}
 			for i := 0; i < m; i++ {
-				a0 := ExpandLabelToField(wires[i].L0)
+				a0 := ExpandLabelToField(labels[i])
 				triples[base+i] = &Triple{A: NewShare(a0)}
 			}
 		} else {
 			flags := randomBools(m)
-			labels, err := iknpR.Expand(flags)
+			labels := make([]ot.Label, m)
+			err := iknpR.Receive(flags, labels, false)
 			if err != nil {
 				return nil, fmt.Errorf("ExpandReceive A: %w", err)
 			}
@@ -104,17 +104,18 @@ func GenerateBeaverTriplesOTBatch(conn *p2p.Conn, oti ot.OT, id int, n int, audi
 
 		// 2) Sample B shares via IKNP (batched)
 		if id == 0 {
-			wires, err := iknpS.Expand(m)
+			labels, err := iknpS.Send(m, false)
 			if err != nil {
 				return nil, fmt.Errorf("ExpandSend B: %w", err)
 			}
 			for i := 0; i < m; i++ {
-				b0 := ExpandLabelToField(wires[i].L0)
+				b0 := ExpandLabelToField(labels[i])
 				triples[base+i].B = NewShare(b0)
 			}
 		} else {
 			flags := randomBools(m)
-			labels, err := iknpR.Expand(flags)
+			labels := make([]ot.Label, m)
+			err := iknpR.Receive(flags, labels, false)
 			if err != nil {
 				return nil, fmt.Errorf("ExpandReceive B: %w", err)
 			}
