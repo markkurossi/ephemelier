@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -8,6 +8,7 @@ package spdz
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"sync"
 	"testing"
@@ -60,11 +61,14 @@ func TestP256WellKnown(t *testing.T) {
 			t.Fatalf("invalid ry")
 		}
 
-		testAdd(t, gx, gy, ex, ey, rx, ry)
+		err := testAdd(gx, gy, ex, ey, rx, ry)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
-func testAdd(t *testing.T, gx, gy, ex, ey, rx, ry *big.Int) {
+func testAdd(gx, gy, ex, ey, rx, ry *big.Int) error {
 
 	gConn, eConn := p2p.Pipe()
 	var wg sync.WaitGroup
@@ -78,25 +82,27 @@ func testAdd(t *testing.T, gx, gy, ex, ey, rx, ry *big.Int) {
 
 	rgx, rgy, err := P256Add(0, gConn, gx, gy)
 	if err != nil {
-		t.Fatalf("garbler failed: %v", err)
+		return err
 	}
 
 	wg.Wait()
 
 	if eErr != nil {
-		t.Fatalf("evaluator failed: %v", err)
+		return eErr
 	}
 
 	crx := add(rgx, rex)
 	cry := add(rgy, rey)
 
 	if crx.Cmp(rx) != 0 {
-		t.Errorf("computed x mismatch: %s != %s", crx.Text(16), rx.Text(16))
+		return fmt.Errorf("computed x mismatch: %s != %s",
+			crx.Text(16), rx.Text(16))
 	}
 	if cry.Cmp(ry) != 0 {
-		t.Errorf("computed y mismatch: %s != %s", cry.Text(16), ry.Text(16))
+		return fmt.Errorf("computed y mismatch: %s != %s",
+			cry.Text(16), ry.Text(16))
 	}
-
+	return nil
 }
 
 func TestRandomPoints(t *testing.T) {
@@ -111,7 +117,29 @@ func TestRandomPoints(t *testing.T) {
 		}
 		rx, ry := curve.Add(gx, gy, ex, ey)
 
-		testAdd(t, gx, gy, ex, ey, rx, ry)
+		err = testAdd(gx, gy, ex, ey, rx, ry)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkP256Add(b *testing.B) {
+	gx, gy, err := randomPoint()
+	if err != nil {
+		b.Fatal(err)
+	}
+	ex, ey, err := randomPoint()
+	if err != nil {
+		b.Fatal(err)
+	}
+	rx, ry := curve.Add(gx, gy, ex, ey)
+
+	for b.Loop() {
+		err = testAdd(gx, gy, ex, ey, rx, ry)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
