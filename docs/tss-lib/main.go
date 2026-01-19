@@ -13,13 +13,16 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
 	"os"
 	"sync"
 
-	"github.com/bnb-chain/tss-lib/ecdsa/keygen"
-	"github.com/bnb-chain/tss-lib/tss"
+	"github.com/bnb-chain/tss-lib/v2/common"
+	"github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
+	"github.com/bnb-chain/tss-lib/v2/ecdsa/signing"
+	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/markkurossi/mpc/ot"
 	"github.com/markkurossi/mpc/p2p"
 )
@@ -82,12 +85,12 @@ func (peer *Peer) debugf(format string, a ...interface{}) {
 func (peer *Peer) Keygen() {
 	errCh := make(chan *tss.Error)
 	outCh := make(chan tss.Message)
-	endCh := make(chan keygen.LocalPartySaveData)
+	endCh := make(chan *keygen.LocalPartySaveData)
 	curve := elliptic.P256()
 
 	n := len(peer.ctx.IDs())
 
-	params := tss.NewParameters(curve, peer.ctx, peer.PartyID, n, n)
+	params := tss.NewParameters(curve, peer.ctx, peer.PartyID, n, 1)
 	party := keygen.NewLocalParty(params, outCh, endCh).(*keygen.LocalParty)
 
 	go func() {
@@ -98,10 +101,11 @@ func (peer *Peer) Keygen() {
 
 	inCh := make(chan []byte)
 	go func() {
-		for {
+		for { // XXX when to terminate
 			data, err := peer.io.ReceiveData()
 			if err != nil {
 				errCh <- party.WrapError(err)
+				return
 			}
 			inCh <- data
 		}
@@ -169,7 +173,89 @@ func (peer *Peer) Keygen() {
 	}
 }
 
-func (peer *Peer) Sign() {
+func (peer *Peer) Sign(msg []byte) {
+	errCh := make(chan *tss.Error)
+	outCh := make(chan tss.Message)
+	endCh := make(chan *common.SignatureData)
+	curve := elliptic.P256()
+
+	n := len(peer.ctx.IDs())
+
+	key, err := peer.loadSaveData()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	peer.debugf("n=%v\n", n)
+	peer.debugf("ids=%v\n", peer.ctx.IDs())
+
+	params := tss.NewParameters(curve, peer.ctx, peer.PartyID, n, 1)
+	party := signing.NewLocalParty(new(big.Int).SetBytes(msg), params, key,
+		outCh, endCh, len(msg)).(*signing.LocalParty)
+
+	go func() {
+		if err := party.Start(); err != nil {
+			errCh <- err
+		}
+	}()
+
+	inCh := make(chan []byte)
+	go func() {
+		for { // XXX when to terminate
+			data, err := peer.io.ReceiveData()
+			if err != nil {
+				errCh <- party.WrapError(err)
+				return
+			}
+			inCh <- data
+		}
+	}()
+
+	for {
+		select {
+		case err := <-errCh:
+			log.Fatal(err)
+
+		case msg := <-outCh:
+			dst := msg.GetTo()
+			peer.debugf("msg: src=%v, dst=%v\n", msg.GetFrom().Id, dst)
+
+			if dst != nil && dst[0].Index == msg.GetFrom().Index {
+				log.Fatalf("party %d tried to send a message to itself",
+					dst[0].Index)
+			}
+
+			// Send message to our peer.
+			data, err := marshalMessage(msg)
+			if err != nil {
+				log.Fatal(party.WrapError(err))
+			}
+			if err := peer.io.SendData(data); err != nil {
+				log.Fatal(err)
+			}
+			if err := peer.io.Flush(); err != nil {
+				log.Fatal(err)
+			}
+
+		case signature := <-endCh:
+			peer.debugf("signature: %x\n", signature.Signature)
+
+			return
+
+		case in := <-inCh:
+			msg, err := unmarshalMessage(in)
+			if err != nil {
+				log.Fatal(err)
+			}
+			peer.debugf("input: src=%v\n", msg.GetFrom().Id)
+			go func() {
+				_, err := party.Update(msg)
+				if err != nil {
+					errCh <- party.WrapError(err)
+				}
+			}()
+		}
+	}
 }
 
 func main() {
@@ -209,13 +295,15 @@ func main() {
 		}()
 
 	case "sign":
+		msg := []byte("Hello, world!")
+
 		go func() {
 			defer wg.Done()
-			e.Sign()
+			e.Sign(msg)
 		}()
 		go func() {
 			defer wg.Done()
-			g.Sign()
+			g.Sign(msg)
 		}()
 
 	default:
@@ -268,7 +356,7 @@ func unmarshalMessage(data []byte) (tss.ParsedMessage, error) {
 	return tss.ParseWireMessage(msgData, &from, isBroadcast)
 }
 
-func (peer *Peer) writeSaveData(save keygen.LocalPartySaveData) error {
+func (peer *Peer) writeSaveData(save *keygen.LocalPartySaveData) error {
 	data, err := json.Marshal(save)
 	if err != nil {
 		return err
@@ -281,4 +369,21 @@ func (peer *Peer) writeSaveData(save keygen.LocalPartySaveData) error {
 
 	_, err = f.Write(data)
 	return err
+}
+
+func (peer *Peer) loadSaveData() (keygen.LocalPartySaveData, error) {
+	var result keygen.LocalPartySaveData
+
+	f, err := os.Open(fmt.Sprintf("peer-%v.share", peer.PartyID.Id))
+	if err != nil {
+		return result, err
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return result, err
+	}
+	err = json.Unmarshal(data, &result)
+	return result, err
 }
