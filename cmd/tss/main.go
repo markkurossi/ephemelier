@@ -48,7 +48,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			err = e.WriteSaveData(save)
+			err = tss.WriteSaveData(shareName(e), save)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -59,7 +59,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			err = g.WriteSaveData(save)
+			err = tss.WriteSaveData(shareName(g), save)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -70,7 +70,7 @@ func main() {
 
 		go func() {
 			defer wg.Done()
-			key, err := e.LoadSaveData()
+			key, err := tss.ReadSaveData(shareName(e))
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -82,7 +82,7 @@ func main() {
 		}()
 		go func() {
 			defer wg.Done()
-			key, err := g.LoadSaveData()
+			key, err := tss.ReadSaveData(shareName(g))
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -98,6 +98,10 @@ func main() {
 	}
 
 	wg.Wait()
+}
+
+func shareName(peer *tss.Peer) string {
+	return fmt.Sprintf("peer-%v.share", peer.PartyID.Id)
 }
 
 func verifySignature(key *ecdsa.PublicKey, hash, signature []byte) {

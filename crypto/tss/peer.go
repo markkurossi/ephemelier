@@ -27,6 +27,7 @@ var (
 	bo = binary.BigEndian
 )
 
+// Peer implements a two-party peer for threshold signature scheme.
 type Peer struct {
 	io      ot.IO
 	ctx     *tss.PeerContext
@@ -49,6 +50,8 @@ func makePartyID(id string) *tss.PartyID {
 	return tss.NewPartyID(id, moniker, key)
 }
 
+// NewPeer creates a new two-party peer for threshold signature
+// scheme. The argument specifies the peer's ID (evaluator / garbler).
 func NewPeer(io ot.IO, evaluator bool) (*Peer, error) {
 	ids := tss.SortPartyIDs(tss.UnSortedPartyIDs{
 		makePartyID("E"),
@@ -164,6 +167,9 @@ func (peer *Peer) Keygen() (*keygen.LocalPartySaveData, error) {
 	}
 }
 
+// Sign implements the threshold signature for the message msg using
+// the local key share key. The function returns the message hash,
+// signature, and an optional error.
 func (peer *Peer) Sign(key *keygen.LocalPartySaveData, msg []byte) (
 	[]byte, []byte, error) {
 
@@ -301,12 +307,13 @@ func unmarshalMessage(data []byte) (tss.ParsedMessage, error) {
 	return tss.ParseWireMessage(msgData, &from, isBroadcast)
 }
 
-func (peer *Peer) WriteSaveData(save *keygen.LocalPartySaveData) error {
+// WriteSaveData writes the local party save data to file.
+func WriteSaveData(file string, save *keygen.LocalPartySaveData) error {
 	data, err := json.Marshal(save)
 	if err != nil {
 		return err
 	}
-	f, err := os.Create(fmt.Sprintf("peer-%v.share", peer.PartyID.Id))
+	f, err := os.Create(file)
 	if err != nil {
 		return err
 	}
@@ -316,8 +323,9 @@ func (peer *Peer) WriteSaveData(save *keygen.LocalPartySaveData) error {
 	return err
 }
 
-func (peer *Peer) LoadSaveData() (*keygen.LocalPartySaveData, error) {
-	f, err := os.Open(fmt.Sprintf("peer-%v.share", peer.PartyID.Id))
+// ReadSaveData reads the local party save data from file.
+func ReadSaveData(file string) (*keygen.LocalPartySaveData, error) {
+	f, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
