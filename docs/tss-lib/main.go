@@ -83,7 +83,7 @@ func (peer *Peer) debugf(format string, a ...interface{}) {
 }
 
 // Keygen implements the threshold key generation.
-func (peer *Peer) Keygen() {
+func (peer *Peer) Keygen() (*keygen.LocalPartySaveData, error) {
 	errCh := make(chan *tss.Error)
 	outCh := make(chan tss.Message)
 	endCh := make(chan *keygen.LocalPartySaveData)
@@ -115,27 +115,27 @@ func (peer *Peer) Keygen() {
 	for {
 		select {
 		case err := <-errCh:
-			log.Fatal(err)
+			return nil, err
 
 		case msg := <-outCh:
 			dst := msg.GetTo()
 			peer.debugf("msg: src=%v, dst=%v\n", msg.GetFrom().Id, dst)
 
 			if dst != nil && dst[0].Index == msg.GetFrom().Index {
-				log.Fatalf("party %d tried to send a message to itself",
-					dst[0].Index)
+				return nil, fmt.Errorf("party %v sending a message to itself",
+					peer.PartyID)
 			}
 
 			// Send message to our peer.
 			data, err := marshalMessage(msg)
 			if err != nil {
-				log.Fatal(party.WrapError(err))
+				return nil, party.WrapError(err)
 			}
 			if err := peer.io.SendData(data); err != nil {
-				log.Fatal(err)
+				return nil, party.WrapError(err)
 			}
 			if err := peer.io.Flush(); err != nil {
-				log.Fatal(err)
+				return nil, party.WrapError(err)
 			}
 
 		case save := <-endCh:
@@ -143,21 +143,16 @@ func (peer *Peer) Keygen() {
 			pk := save.ECDSAPub.ToECDSAPubKey()
 			data, err := pk.Bytes()
 			if err != nil {
-				log.Fatalf("ecdsa.PublicKey.Bytes: %v\n", err)
+				return nil, err
 			}
 			peer.debugf("compressed: %x\n", data)
 
-			err = peer.writeSaveData(save)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			return
+			return save, nil
 
 		case in := <-inCh:
 			msg, err := unmarshalMessage(in)
 			if err != nil {
-				log.Fatal(err)
+				return nil, err
 			}
 			peer.debugf("input: src=%v\n", msg.GetFrom().Id)
 			go func() {
@@ -170,7 +165,9 @@ func (peer *Peer) Keygen() {
 	}
 }
 
-func (peer *Peer) Sign(msg []byte) {
+func (peer *Peer) Sign(key *keygen.LocalPartySaveData, msg []byte) (
+	[]byte, []byte, error) {
+
 	errCh := make(chan *tss.Error)
 	outCh := make(chan tss.Message)
 	endCh := make(chan *common.SignatureData)
@@ -178,16 +175,8 @@ func (peer *Peer) Sign(msg []byte) {
 
 	n := len(peer.ctx.IDs())
 
-	key, err := peer.loadSaveData()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	peer.debugf("n=%v\n", n)
-	peer.debugf("ids=%v\n", peer.ctx.IDs())
-
 	params := tss.NewParameters(curve, peer.ctx, peer.PartyID, n, 1)
-	party := signing.NewLocalParty(new(big.Int).SetBytes(msg), params, key,
+	party := signing.NewLocalParty(new(big.Int).SetBytes(msg), params, *key,
 		outCh, endCh, len(msg)).(*signing.LocalParty)
 
 	go func() {
@@ -211,27 +200,28 @@ func (peer *Peer) Sign(msg []byte) {
 	for {
 		select {
 		case err := <-errCh:
-			log.Fatal(err)
+			return nil, nil, err
 
 		case msg := <-outCh:
 			dst := msg.GetTo()
 			peer.debugf("msg: src=%v, dst=%v\n", msg.GetFrom().Id, dst)
 
 			if dst != nil && dst[0].Index == msg.GetFrom().Index {
-				log.Fatalf("party %d tried to send a message to itself",
-					dst[0].Index)
+				return nil, nil,
+					fmt.Errorf("party %v sending a message to itself",
+						peer.PartyID)
 			}
 
 			// Send message to our peer.
 			data, err := marshalMessage(msg)
 			if err != nil {
-				log.Fatal(party.WrapError(err))
+				return nil, nil, party.WrapError(err)
 			}
 			if err := peer.io.SendData(data); err != nil {
-				log.Fatal(err)
+				return nil, nil, err
 			}
 			if err := peer.io.Flush(); err != nil {
-				log.Fatal(err)
+				return nil, nil, err
 			}
 
 		case signature := <-endCh:
@@ -242,25 +232,16 @@ func (peer *Peer) Sign(msg []byte) {
 				S: new(big.Int).SetBytes(signature.S),
 			}
 
-			der, err := asn1.Marshal(sig)
+			data, err := asn1.Marshal(sig)
 			if err != nil {
-				log.Fatal(err)
+				return nil, nil, err
 			}
-
-			pub := key.ECDSAPub.ToECDSAPubKey()
-
-			result := ecdsa.Verify(pub, signature.M, sig.R, sig.S)
-			peer.debugf("ecdsa.Verify: %v\n", result)
-
-			result = ecdsa.VerifyASN1(pub, signature.M, der)
-			peer.debugf("ecdsa.VerifyASN1: %v\n", result)
-
-			return
+			return signature.M, data, nil
 
 		case in := <-inCh:
 			msg, err := unmarshalMessage(in)
 			if err != nil {
-				log.Fatal(err)
+				return nil, nil, err
 			}
 			peer.debugf("input: src=%v\n", msg.GetFrom().Id)
 			go func() {
@@ -307,11 +288,25 @@ func main() {
 	case "keygen":
 		go func() {
 			defer wg.Done()
-			e.Keygen()
+			save, err := e.Keygen()
+			if err != nil {
+				log.Fatal(err)
+			}
+			err = e.writeSaveData(save)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}()
 		go func() {
 			defer wg.Done()
-			g.Keygen()
+			save, err := g.Keygen()
+			if err != nil {
+				log.Fatal(err)
+			}
+			err = g.writeSaveData(save)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}()
 
 	case "sign":
@@ -319,11 +314,27 @@ func main() {
 
 		go func() {
 			defer wg.Done()
-			e.Sign(msg)
+			key, err := e.loadSaveData()
+			if err != nil {
+				log.Fatal(err)
+			}
+			hash, signature, err := e.Sign(key, msg)
+			if err != nil {
+				log.Fatal(err)
+			}
+			verifySignature(key.ECDSAPub.ToECDSAPubKey(), hash, signature)
 		}()
 		go func() {
 			defer wg.Done()
-			g.Sign(msg)
+			key, err := g.loadSaveData()
+			if err != nil {
+				log.Fatal(err)
+			}
+			hash, signature, err := g.Sign(key, msg)
+			if err != nil {
+				log.Fatal(err)
+			}
+			verifySignature(key.ECDSAPub.ToECDSAPubKey(), hash, signature)
 		}()
 
 	default:
@@ -331,6 +342,11 @@ func main() {
 	}
 
 	wg.Wait()
+}
+
+func verifySignature(key *ecdsa.PublicKey, hash, signature []byte) {
+	result := ecdsa.VerifyASN1(key, hash, signature)
+	fmt.Printf("ecdsa.VerifyASN1: %v\n", result)
 }
 
 func marshalMessage(msg tss.Message) ([]byte, error) {
@@ -391,19 +407,21 @@ func (peer *Peer) writeSaveData(save *keygen.LocalPartySaveData) error {
 	return err
 }
 
-func (peer *Peer) loadSaveData() (keygen.LocalPartySaveData, error) {
-	var result keygen.LocalPartySaveData
-
+func (peer *Peer) loadSaveData() (*keygen.LocalPartySaveData, error) {
 	f, err := os.Open(fmt.Sprintf("peer-%v.share", peer.PartyID.Id))
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 	defer f.Close()
 
 	data, err := io.ReadAll(f)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
-	err = json.Unmarshal(data, &result)
-	return result, err
+	result := new(keygen.LocalPartySaveData)
+	err = json.Unmarshal(data, result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
