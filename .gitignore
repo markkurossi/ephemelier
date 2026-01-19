@@ -39,7 +39,10 @@ go.work.sum
 cmd/ca/ca
 cmd/ephemelier/ephemelier
 cmd/tlsclient/tlsclient
+cmd/tss/*.share
+cmd/tss/tss
 
 docs/additive-ss/additive-ss
 docs/spdz/spdz
+docs/tss-lib/*.share
 docs/tss-lib/tss-lib
