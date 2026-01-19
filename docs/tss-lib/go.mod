@@ -2,7 +2,10 @@ module github.com/markkurossi/hello/tss-lib
 
 go 1.25.0
 
-require github.com/bnb-chain/tss-lib v1.5.0
+require (
+	github.com/bnb-chain/tss-lib v1.5.0
+	github.com/markkurossi/mpc v0.0.0-20260117084758-6b8078b82f11
+)
 
 require (
 	github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412 // indirect
@@ -14,6 +17,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/ipfs/go-log/v2 v2.9.0 // indirect
+	github.com/markkurossi/crypto v0.0.0-20240520115340-daed3f9a1082 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/otiai10/primes v0.4.0 // indirect

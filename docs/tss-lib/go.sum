@@ -55,6 +55,10 @@ github.com/kkdai/bstream v0.0.0-20161212061736-f391b8402d23/go.mod h1:J+Gs4SYgM6
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
 github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
+github.com/markkurossi/crypto v0.0.0-20240520115340-daed3f9a1082 h1:9lj+7BEGrRT+7iylAqu0hY50nHQk3+LUL2g0eWDqAuw=
+github.com/markkurossi/crypto v0.0.0-20240520115340-daed3f9a1082/go.mod h1:+mhV8wp86RN6GgVyETgAd6oY+D3xLNESWKty2fGNg5U=
+github.com/markkurossi/mpc v0.0.0-20260117084758-6b8078b82f11 h1:e/hyi2PsJ1YAiVghXx5U1Y0iVEdDYMn9e2LRLoseqLs=
+github.com/markkurossi/mpc v0.0.0-20260117084758-6b8078b82f11/go.mod h1:dDfKZ9D+gXqJBFjITF64Ws2nwth3TpthUdnStoE8x+A=
 github.com/mattn/go-colorable v0.1.1/go.mod h1:FuOcm+DKB9mbwrcAfNl7/TZVBZ6rcnceauSikq3lYCQ=
 github.com/mattn/go-colorable v0.1.2/go.mod h1:U0ppj6V5qS13XJ6of8GYAs25YV2eR4EVcfRqFIhoBtE=
 github.com/mattn/go-isatty v0.0.5/go.mod h1:Iq45c/XA43vh69/j3iqttzPXn0bhXyGjM0Hdxcsrc5s=
