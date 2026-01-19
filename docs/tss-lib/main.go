@@ -9,6 +9,7 @@ package main
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"encoding/asn1"
 	"encoding/binary"
 	"encoding/json"
 	"flag"
@@ -139,11 +140,7 @@ func (peer *Peer) Keygen() {
 
 		case save := <-endCh:
 			peer.debugf("save: id=%v\n", peer.PartyID.Id)
-			pk := ecdsa.PublicKey{
-				Curve: curve,
-				X:     save.ECDSAPub.X(),
-				Y:     save.ECDSAPub.Y(),
-			}
+			pk := save.ECDSAPub.ToECDSAPubKey()
 			data, err := pk.Bytes()
 			if err != nil {
 				log.Fatalf("ecdsa.PublicKey.Bytes: %v\n", err)
@@ -240,6 +237,24 @@ func (peer *Peer) Sign(msg []byte) {
 		case signature := <-endCh:
 			peer.debugf("signature: %x\n", signature.Signature)
 
+			sig := ecdsaSig{
+				R: new(big.Int).SetBytes(signature.R),
+				S: new(big.Int).SetBytes(signature.S),
+			}
+
+			der, err := asn1.Marshal(sig)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			pub := key.ECDSAPub.ToECDSAPubKey()
+
+			result := ecdsa.Verify(pub, signature.M, sig.R, sig.S)
+			peer.debugf("ecdsa.Verify: %v\n", result)
+
+			result = ecdsa.VerifyASN1(pub, signature.M, der)
+			peer.debugf("ecdsa.VerifyASN1: %v\n", result)
+
 			return
 
 		case in := <-inCh:
@@ -256,6 +271,11 @@ func (peer *Peer) Sign(msg []byte) {
 			}()
 		}
 	}
+}
+
+type ecdsaSig struct {
+	R *big.Int
+	S *big.Int
 }
 
 func main() {
