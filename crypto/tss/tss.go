@@ -13,6 +13,7 @@ import (
 	"encoding/asn1"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -26,7 +27,15 @@ import (
 )
 
 var (
-	bo = binary.BigEndian
+	bo           = binary.BigEndian
+	errTruncated = errors.New("truncated message")
+)
+
+type msgType byte
+
+const (
+	msgTSS msgType = iota
+	msgDone
 )
 
 // Peer implements a two-party peer for threshold signature scheme.
@@ -105,35 +114,27 @@ func (peer *Peer) Keygen() (*keygen.LocalPartySaveData, error) {
 	}()
 
 	inCh := make(chan []byte)
-	go func() {
-		for { // XXX when to terminate
-			data, err := peer.io.ReceiveData()
-			if err != nil {
-				errCh <- party.WrapError(err)
-				return
-			}
-			inCh <- data
-		}
-	}()
+	go peer.ioReader(party, inCh, errCh)
 
 	for {
 		select {
 		case err := <-errCh:
-			return nil, err
+			return nil, peer.sendError(err)
 
 		case msg := <-outCh:
 			dst := msg.GetTo()
 			peer.debugf("msg: src=%v, dst=%v\n", msg.GetFrom().Id, dst)
 
 			if dst != nil && dst[0].Index == msg.GetFrom().Index {
-				return nil, fmt.Errorf("party %v sending a message to itself",
-					peer.PartyID)
+				return nil, peer.sendError(
+					fmt.Errorf("party %v sending a message to itself",
+						peer.PartyID))
 			}
 
 			// Send message to our peer.
-			data, err := marshalMessage(msg)
+			data, err := marshalTSSMessage(msg)
 			if err != nil {
-				return nil, party.WrapError(err)
+				return nil, peer.sendError(party.WrapError(err))
 			}
 			if err := peer.io.SendData(data); err != nil {
 				return nil, party.WrapError(err)
@@ -147,16 +148,16 @@ func (peer *Peer) Keygen() (*keygen.LocalPartySaveData, error) {
 			pk := save.ECDSAPub.ToECDSAPubKey()
 			data, err := pk.Bytes()
 			if err != nil {
-				return nil, err
+				return nil, peer.sendError(err)
 			}
 			peer.debugf("compressed: %x\n", data)
 
-			return save, nil
+			return save, peer.sendDone()
 
 		case in := <-inCh:
-			msg, err := unmarshalMessage(in)
+			msg, err := unmarshalTSSMessage(in)
 			if err != nil {
-				return nil, err
+				return nil, peer.sendError(err)
 			}
 			peer.debugf("input: src=%v\n", msg.GetFrom().Id)
 			go func() {
@@ -193,36 +194,27 @@ func (peer *Peer) Sign(key *keygen.LocalPartySaveData, msg []byte) (
 	}()
 
 	inCh := make(chan []byte)
-	go func() {
-		for { // XXX when to terminate
-			data, err := peer.io.ReceiveData()
-			if err != nil {
-				errCh <- party.WrapError(err)
-				return
-			}
-			inCh <- data
-		}
-	}()
+	go peer.ioReader(party, inCh, errCh)
 
 	for {
 		select {
 		case err := <-errCh:
-			return nil, nil, err
+			return nil, nil, peer.sendError(err)
 
 		case msg := <-outCh:
 			dst := msg.GetTo()
 			peer.debugf("msg: src=%v, dst=%v\n", msg.GetFrom().Id, dst)
 
 			if dst != nil && dst[0].Index == msg.GetFrom().Index {
-				return nil, nil,
+				return nil, nil, peer.sendError(
 					fmt.Errorf("party %v sending a message to itself",
-						peer.PartyID)
+						peer.PartyID))
 			}
 
 			// Send message to our peer.
-			data, err := marshalMessage(msg)
+			data, err := marshalTSSMessage(msg)
 			if err != nil {
-				return nil, nil, party.WrapError(err)
+				return nil, nil, peer.sendError(party.WrapError(err))
 			}
 			if err := peer.io.SendData(data); err != nil {
 				return nil, nil, err
@@ -241,14 +233,14 @@ func (peer *Peer) Sign(key *keygen.LocalPartySaveData, msg []byte) (
 
 			data, err := asn1.Marshal(sig)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, peer.sendError(err)
 			}
 			return signature.M, data, nil
 
 		case in := <-inCh:
-			msg, err := unmarshalMessage(in)
+			msg, err := unmarshalTSSMessage(in)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, peer.sendError(err)
 			}
 			peer.debugf("input: src=%v\n", msg.GetFrom().Id)
 			go func() {
@@ -261,12 +253,69 @@ func (peer *Peer) Sign(key *keygen.LocalPartySaveData, msg []byte) (
 	}
 }
 
+func (peer *Peer) sendError(err error) error {
+	msg := []byte(err.Error())
+	buf := make([]byte, 1+len(msg))
+	buf[0] = byte(msgDone)
+	copy(buf[1:], msg)
+
+	if err := peer.sendDoneMsg(buf); err != nil {
+		return err
+	}
+
+	return err
+}
+
+func (peer *Peer) sendDone() error {
+	return peer.sendDoneMsg([]byte{byte(msgDone)})
+}
+
+func (peer *Peer) sendDoneMsg(data []byte) error {
+	if err := peer.io.SendData(data); err != nil {
+		return err
+	}
+	if err := peer.io.Flush(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (peer *Peer) ioReader(party tss.Party, inC chan []byte,
+	errC chan *tss.Error) {
+
+	for {
+		data, err := peer.io.ReceiveData()
+		if err != nil {
+			errC <- party.WrapError(err)
+			return
+		}
+		if len(data) == 0 {
+			errC <- party.WrapError(errTruncated)
+			return
+		}
+		switch msgType(data[0]) {
+		case msgTSS:
+			inC <- data
+
+		case msgDone:
+			if len(data) > 1 {
+				errC <- party.WrapError(errors.New(string(data[1:])))
+			}
+			return
+
+		default:
+			errC <- party.WrapError(fmt.Errorf("invalid message %d", data[0]))
+			return
+		}
+	}
+}
+
 type ecdsaSig struct {
 	R *big.Int
 	S *big.Int
 }
 
-func marshalMessage(msg tss.Message) ([]byte, error) {
+func marshalTSSMessage(msg tss.Message) ([]byte, error) {
 	msgData, _, err := msg.WireBytes()
 	if err != nil {
 		return nil, err
@@ -276,12 +325,13 @@ func marshalMessage(msg tss.Message) ([]byte, error) {
 		return nil, err
 	}
 
-	l := 4 + len(msgData) + len(fromData) + 1
+	l := 1 + 4 + len(msgData) + len(fromData) + 1
 
 	data := make([]byte, l)
-	bo.PutUint32(data, uint32(len(msgData)))
-	copy(data[4:], msgData)
-	copy(data[4+len(msgData):], fromData)
+	data[0] = byte(msgTSS)
+	bo.PutUint32(data[1:], uint32(len(msgData)))
+	copy(data[5:], msgData)
+	copy(data[5+len(msgData):], fromData)
 
 	if msg.IsBroadcast() {
 		data[l-1] = 1
@@ -289,16 +339,19 @@ func marshalMessage(msg tss.Message) ([]byte, error) {
 	return data, nil
 }
 
-func unmarshalMessage(data []byte) (tss.ParsedMessage, error) {
-	if len(data) < 5 {
-		return nil, fmt.Errorf("truncated message")
+func unmarshalTSSMessage(data []byte) (tss.ParsedMessage, error) {
+	if len(data) < 6 {
+		return nil, errTruncated
 	}
-	msgLen := int(bo.Uint32(data))
-	if 4+msgLen+1 > len(data) {
-		return nil, fmt.Errorf("truncated message")
+	msgLen := int(bo.Uint32(data[1:]))
+	if 1+4+msgLen+1 > len(data) {
+		return nil, errTruncated
 	}
-	msgData := data[4 : 4+msgLen]
-	fromData := data[4+msgLen : len(data)-1]
+	if msgType(data[0]) != msgTSS {
+		return nil, fmt.Errorf("invalid TSS message: %d", data[0])
+	}
+	msgData := data[5 : 5+msgLen]
+	fromData := data[5+msgLen : len(data)-1]
 	isBroadcast := data[len(data)-1] == 1
 
 	var from tss.PartyID
