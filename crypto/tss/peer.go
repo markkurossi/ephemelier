@@ -4,6 +4,8 @@
 // All rights reserved.
 //
 
+// Package tss implements multi-party threshold signature scheme using
+// the https://github.com/bnb-chain/tss-lib library.
 package tss
 
 import (
