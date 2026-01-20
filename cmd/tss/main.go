@@ -105,6 +105,12 @@ func shareName(peer *tss.Peer) string {
 }
 
 func verifySignature(key *ecdsa.PublicKey, hash, signature []byte) {
+	fmt.Printf("verifySignature:\n")
+	keyBytes, err := key.Bytes()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf(" pubkey: %x\n", keyBytes)
 	result := ecdsa.VerifyASN1(key, hash, signature)
-	fmt.Printf("ecdsa.VerifyASN1: %v\n", result)
+	fmt.Printf(" verify: %v\n", result)
 }
