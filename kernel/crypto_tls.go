@@ -8,13 +8,9 @@ package kernel
 
 import (
 	"crypto"
-	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"math/big"
-	"os"
 
 	"github.com/markkurossi/ephemelier/crypto/spdz"
 	"github.com/markkurossi/ephemelier/crypto/tls"
@@ -116,17 +112,8 @@ func (proc *Process) tlsServer(sys *syscall) {
 
 func (proc *Process) tlsServerGarbler(sock *FDSocket, key *Key,
 	sys *syscall) error {
-	priv, cert, err := LoadKeyAndCert("ephemelier-key.pem",
-		"ephemelier-cert.pem")
-	if err != nil {
-		return err
-	}
 
-	conn := tls.NewConnection(sock.conn, &tls.Config{
-		PrivateKey:  priv,
-		Certificate: cert,
-	})
-
+	conn := tls.NewConnection(sock.conn, &tls.Config{})
 	clientKex, err := conn.ServerHandshake()
 	if err != nil {
 		proc.tlsPeerErrf(err, "handshake failed: %v", err)
@@ -250,7 +237,7 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, key *Key,
 		}
 
 		// Return TLS FD.
-		fd := NewTLSFD(conn, priv, cert, key)
+		fd := NewTLSFD(conn, key)
 		sys.SetArg0(proc.AllocFD(fd))
 
 		// Return our share of the shared secret | transcript.
@@ -376,7 +363,7 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, key *Key,
 		}
 
 		// Return TLS FD.
-		fd := NewTLSFD(nil, nil, nil, key)
+		fd := NewTLSFD(nil, key)
 
 		// Get FD from garbler.
 		gfd, err := proc.conn.ReceiveUint32()
@@ -581,51 +568,6 @@ func (proc *Process) tlsPeerErrf(err error, format string, a ...interface{}) {
 	}
 	proc.conn.SendData(data)
 	proc.conn.Flush()
-}
-
-// LoadKeyAndCert loads the private key and certificate from PEM files
-func LoadKeyAndCert(keyPath, certPath string) (
-	*ecdsa.PrivateKey, *x509.Certificate, error) {
-
-	// Load certificate file.
-	certPEM, err := os.ReadFile(certPath)
-	if err != nil {
-		return nil, nil, err
-	}
-	certBlock, _ := pem.Decode(certPEM)
-	if certBlock == nil {
-		return nil, nil, fmt.Errorf("failed to decode certificate PEM")
-	}
-	cert, err := x509.ParseCertificate(certBlock.Bytes)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Load private key file.
-	keyPEM, err := os.ReadFile(keyPath)
-	if err != nil {
-		return nil, nil, err
-	}
-	keyBlock, _ := pem.Decode(keyPEM)
-	if keyBlock == nil {
-		return nil, nil, fmt.Errorf("failed to decode private key PEM")
-	}
-	privateKey, err := x509.ParseECPrivateKey(keyBlock.Bytes)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Verify that the private key matches the certificate's public key.
-	certPubKey, ok := cert.PublicKey.(*ecdsa.PublicKey)
-	if !ok {
-		return nil, nil, fmt.Errorf("certificate public key is not ECDSA")
-	}
-	if !certPubKey.Equal(&privateKey.PublicKey) {
-		return nil, nil,
-			fmt.Errorf("private key does not match certificate public key")
-	}
-
-	return privateKey, cert, nil
 }
 
 var tlsAlertToErrno = map[tls.AlertDescription]Errno{
