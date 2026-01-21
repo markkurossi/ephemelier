@@ -10,7 +10,6 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/markkurossi/ephemelier/crypto/spdz"
 	"github.com/markkurossi/ephemelier/crypto/tls"
+	"github.com/markkurossi/ephemelier/crypto/tss"
 )
 
 // The debugMPC flag enables MPC protocol debugging. When enabled, the
@@ -425,12 +425,31 @@ func (proc *Process) tlsHandshake(sys *syscall) {
 		sys.SetArg0(int32(-ENOTSOCK))
 		return
 	}
+
+	ht := tls.HandshakeType(sys.arg1)
 	if proc.role == RoleEvaluator {
+		switch ht {
+		case tls.HTCertificateVerify:
+			// Receive digest from the garbler.
+			digest, err := proc.conn.ReceiveData()
+			if err != nil {
+				sys.SetArg0(mapError(err))
+				return
+			}
+			peer, err := tss.NewPeer(proc.conn, true)
+			if err != nil {
+				sys.SetArg0(mapError(err))
+				return
+			}
+			_, _, err = peer.Sign(tlsfd.key.Share, digest)
+			if err != nil {
+				sys.SetArg0(int32(-EIO))
+				return
+			}
+		}
 		sys.SetArg0(sys.arg1)
 		return
 	}
-
-	ht := tls.HandshakeType(sys.arg1)
 
 	if len(sys.argBuf) > 0 {
 		var appData []byte
@@ -472,7 +491,7 @@ func (proc *Process) tlsHandshake(sys *syscall) {
 		}
 
 	case tls.HTCertificate:
-		data, err = tlsfd.conn.MakeCertificate(tlsfd.cert)
+		data, err = tlsfd.conn.MakeCertificate(tlsfd.key.Certificate)
 		if err != nil {
 			sys.SetArg0(mapError(err))
 			return
@@ -481,7 +500,22 @@ func (proc *Process) tlsHandshake(sys *syscall) {
 	case tls.HTCertificateVerify:
 		hashFunc := crypto.SHA256
 		digest := tlsfd.conn.CertificateVerify(hashFunc)
-		signature, err := tlsfd.priv.Sign(rand.Reader, digest, hashFunc)
+
+		// Send digest to evaluator.
+		err = proc.conn.SendData(digest)
+		if err == nil {
+			err = proc.conn.Flush()
+		}
+		if err != nil {
+			sys.SetArg0(mapError(err))
+			return
+		}
+		peer, err := tss.NewPeer(proc.conn, false)
+		if err != nil {
+			sys.SetArg0(mapError(err))
+			return
+		}
+		_, signature, err := peer.Sign(tlsfd.key.Share, digest)
 		if err != nil {
 			sys.SetArg0(int32(-EIO))
 			return
