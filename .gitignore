@@ -41,6 +41,7 @@ cmd/ephemelier/ephemelier
 cmd/tlsclient/tlsclient
 cmd/tss/*.share
 cmd/tss/tss
+cmd/vault/vault
 
 docs/additive-ss/additive-ss
 docs/spdz/spdz
