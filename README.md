@@ -66,10 +66,10 @@ $ ../vault/vault -o data/vault1/httpd -t P-256 import peer-E.share
 
 # TODO
 
- - [ ] FROST [RFC 9591](https://www.rfc-editor.org/rfc/rfc9591.txt)
+ - [x] [Multi-Party Threshold Signature Scheme](https://github.com/bnb-chain/tss-lib)
  - [x] Circuit stats in streaming mode (INFO)
  - [x] Optimize input setting (direct vs. via strings)
- - [x] Review `mpc/otext`
+ - [x] Review `mpc/ot`
  - [ ] Review `mpc/vole`
  - [ ] Review [SPDZ Implementation](crypto/spdz/)
  - [ ] Implement [Ephemelier State Machine Compiler](cmd/esmc/)
