@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -70,4 +70,5 @@ var (
 	_ FDImpl = &FDListener{}
 	_ FDImpl = &FDPort{}
 	_ FDImpl = &FDDevNull{}
+	_ FDImpl = &Key{}
 )

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -72,7 +72,7 @@ func (proc *Process) ktraceCall(sys *syscall) {
 		SysTlsstatus, SysRecvfd:
 		fmt.Printf("(%d)", sys.arg0)
 
-	case SysSpawn, SysDial, SysListen, SysOpen, SysChroot:
+	case SysSpawn, SysDial, SysListen, SysOpen, SysChroot, SysOpenkey:
 		if sys.arg1 < 0 || int(sys.arg1) > len(sys.argBuf) {
 			fmt.Printf("(%s:%d/[0-%d])", EINVAL, sys.arg1, len(sys.argBuf))
 		} else {

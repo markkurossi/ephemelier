@@ -1,6 +1,6 @@
 // -*- go -*-
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -14,9 +14,10 @@ import (
 	"ephemelier/tlsmem"
 )
 
-func main(g, e memory.PeerInit) ([]byte, kernel.PC, kernel.Syscall, int32) {
+func main(g, e memory.PeerInit) (
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 	if g.arg0 < 0 {
-		return nil, 0, kernel.SysExit, 1
+		return nil, 0, kernel.SysExit, 1, nil, 0
 	}
 
 	var nonce [12]byte
@@ -24,6 +25,8 @@ func main(g, e memory.PeerInit) ([]byte, kernel.PC, kernel.Syscall, int32) {
 
 	mem = binary.PutUint32(mem, tlsmem.OfsFD, uint32(g.arg0))
 
+	key := []byte("httpd")
+
 	return semihonest.Encode(nonce, mem, g.key, e.key),
-		intern(StTlsserverResult), kernel.SysTlsserver, int32(g.arg0)
+		intern(StChildOpenkeyResult), kernel.SysOpenkey, 0, key, len(key)
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -7,8 +7,8 @@
 package tls
 
 import (
-	"crypto"
 	"crypto/rand"
+	"crypto/x509"
 )
 
 // MakeServerHello makes the server_hello message.
@@ -64,12 +64,12 @@ func (conn *Conn) MakeEncryptedExtensions() ([]byte, error) {
 }
 
 // MakeCertificate makes the certificate message.
-func (conn *Conn) MakeCertificate() ([]byte, error) {
+func (conn *Conn) MakeCertificate(cert *x509.Certificate) ([]byte, error) {
 	// Certificate.
 	msgCertificate := &Certificate{
 		CertificateList: []CertificateEntry{
 			CertificateEntry{
-				Data: conn.config.Certificate.Raw,
+				Data: cert.Raw,
 			},
 		},
 	}
@@ -84,13 +84,7 @@ func (conn *Conn) MakeCertificate() ([]byte, error) {
 }
 
 // MakeCertificateVerify makes the certificate_verify message.
-func (conn *Conn) MakeCertificateVerify() ([]byte, error) {
-	hashFunc := crypto.SHA256
-	digest := conn.certificateVerify(hashFunc)
-	signature, err := conn.config.PrivateKey.Sign(rand.Reader, digest, hashFunc)
-	if err != nil {
-		return nil, err
-	}
+func (conn *Conn) MakeCertificateVerify(signature []byte) ([]byte, error) {
 	msgCertVerify := &CertificateVerify{
 		Algorithm: conn.signatureSchemes[0],
 		Signature: signature,

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -7,8 +7,10 @@
 package kernel
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -78,6 +80,7 @@ var (
 )
 
 func (proc *Process) tlsServer(sys *syscall) {
+	// arg0 is the socket fd.
 	fd, ok := proc.fds[sys.arg0]
 	if !ok {
 		sys.SetArg0(int32(-EBADF))
@@ -88,18 +91,31 @@ func (proc *Process) tlsServer(sys *syscall) {
 		sys.SetArg0(int32(-ENOTSOCK))
 		return
 	}
+
+	// arg1 is the key fd.
+	fd, ok = proc.fds[sys.arg1]
+	if !ok {
+		sys.SetArg0(int32(-EBADF))
+	}
+	keyfd, ok := fd.Impl.(*Key)
+	if !ok {
+		sys.SetArg0(int32(-EINVAL))
+		return
+	}
+
 	var err error
 	if proc.role == RoleGarbler {
-		err = proc.tlsServerGarbler(socketfd, sys)
+		err = proc.tlsServerGarbler(socketfd, keyfd, sys)
 	} else {
-		err = proc.tlsServerEvaluator(socketfd, sys)
+		err = proc.tlsServerEvaluator(socketfd, keyfd, sys)
 	}
 	if err != nil {
 		sys.SetArg0(mapError(err))
 	}
 }
 
-func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
+func (proc *Process) tlsServerGarbler(sock *FDSocket, key *Key,
+	sys *syscall) error {
 	priv, cert, err := LoadKeyAndCert("ephemelier-key.pem",
 		"ephemelier-cert.pem")
 	if err != nil {
@@ -234,7 +250,7 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 		}
 
 		// Return TLS FD.
-		fd := NewTLSFD(conn, priv, cert)
+		fd := NewTLSFD(conn, priv, cert, key)
 		sys.SetArg0(proc.AllocFD(fd))
 
 		// Return our share of the shared secret | transcript.
@@ -272,7 +288,9 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, sys *syscall) error {
 	}
 }
 
-func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
+func (proc *Process) tlsServerEvaluator(sock *FDSocket, key *Key,
+	sys *syscall) error {
+
 	var dhPeer *DHPeer
 
 	b, err := proc.conn.ReceiveByte()
@@ -358,7 +376,7 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, sys *syscall) error {
 		}
 
 		// Return TLS FD.
-		fd := NewTLSFD(nil, nil, nil)
+		fd := NewTLSFD(nil, nil, nil, key)
 
 		// Get FD from garbler.
 		gfd, err := proc.conn.ReceiveUint32()
@@ -454,14 +472,21 @@ func (proc *Process) tlsHandshake(sys *syscall) {
 		}
 
 	case tls.HTCertificate:
-		data, err = tlsfd.conn.MakeCertificate()
+		data, err = tlsfd.conn.MakeCertificate(tlsfd.cert)
 		if err != nil {
 			sys.SetArg0(mapError(err))
 			return
 		}
 
 	case tls.HTCertificateVerify:
-		data, err = tlsfd.conn.MakeCertificateVerify()
+		hashFunc := crypto.SHA256
+		digest := tlsfd.conn.CertificateVerify(hashFunc)
+		signature, err := tlsfd.priv.Sign(rand.Reader, digest, hashFunc)
+		if err != nil {
+			sys.SetArg0(int32(-EIO))
+			return
+		}
+		data, err = tlsfd.conn.MakeCertificateVerify(signature)
 		if err != nil {
 			sys.SetArg0(mapError(err))
 			return

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -391,6 +391,30 @@ run:
 		case SysChroot:
 			sys.SetArg0(0)
 
+		case SysOpenkey:
+			name, err := sys.argString()
+			if err != nil || len(name) == 0 {
+				sys.SetArg0(int32(-EINVAL))
+				return nil
+			}
+			fd, err := proc.openKey(name)
+			if err != nil {
+				sys.SetArg0(mapError(err))
+				proc.conn.ReceiveUint32()
+				return nil
+			}
+
+			// Get FD from garbler.
+			gfd, err := proc.conn.ReceiveUint32()
+			if err == nil {
+				sys.SetArg0(int32(gfd))
+				err = proc.SetFD(sys.arg0, fd)
+			}
+			if err != nil {
+				fd.Close()
+				sys.SetArg0(mapError(err))
+			}
+
 		case SysGetport:
 			if sys.arg0 <= 0 {
 				sys.SetArg0(int32(-EINVAL))
@@ -748,6 +772,32 @@ run:
 				break
 			}
 			sys.SetArg0(0)
+
+		case SysOpenkey:
+			name, err := sys.argString()
+			if err != nil || len(name) == 0 {
+				sys.SetArg0(int32(-EINVAL))
+				proc.sendFD(int(-EINVAL))
+				return nil
+			}
+			fd, err := proc.openKey(name)
+			if err != nil {
+				sys.SetArg0(mapError(err))
+				proc.sendFD(int(sys.arg0))
+				return nil
+			}
+			sys.SetArg0(proc.AllocFD(fd))
+
+			// Sync FD with evaluator.
+			err = proc.conn.SendUint32(int(sys.arg0))
+			if err == nil {
+				err = proc.conn.Flush()
+			}
+			if err != nil {
+				fd.Close()
+				proc.FreeFD(sys.arg0)
+				sys.SetArg0(mapError(err))
+			}
 
 		case SysGetport:
 			if sys.arg0 <= 0 {

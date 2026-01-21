@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -45,6 +45,7 @@ const (
 	SysNext
 	SysGetpid
 	SysChroot
+	SysOpenkey
 )
 
 // Port system calls.
@@ -79,6 +80,7 @@ var syscallNames = map[Syscall]string{
 	SysNext:      "next",
 	SysGetpid:    "getpid",
 	SysChroot:    "chroot",
+	SysOpenkey:   "openkey",
 
 	SysGetport:    "getport",
 	SysCreateport: "createport",

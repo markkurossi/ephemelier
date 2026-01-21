@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023-2025 Markku Rossi
+// Copyright (c) 2023-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -38,6 +38,7 @@ func main() {
 	ktrace := flag.Bool("ktrace", false, "kernel trace")
 	ktraceHex := flag.Bool("x", false, "hexdump ktrace data fields")
 	fs := flag.String("fs", "", "filesystem root directory")
+	vault := flag.String("vault", "", "keyvault root directory")
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to `file`")
 	memprofile := flag.String("memprofile", "",
 		"write memory profile to `file`")
@@ -63,6 +64,7 @@ func main() {
 		Verbose:     *fVerbose,
 		Diagnostics: *fDiagnostics,
 		Filesystem:  *fs,
+		Vault:       *vault,
 		Port:        mpcPort,
 		Stdin:       stdin,
 		Stdout:      stdout,
@@ -75,6 +77,14 @@ func main() {
 			params.Filesystem = "data/fs0"
 		}
 	}
+	if len(params.Vault) == 0 {
+		if *evaluator {
+			params.Vault = "data/vault1"
+		} else {
+			params.Vault = "data/vault0"
+		}
+	}
+
 	// Make sure filesystem root exists.
 	err := os.MkdirAll(params.Filesystem, 0755)
 	if err != nil {

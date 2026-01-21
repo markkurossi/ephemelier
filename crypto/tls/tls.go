@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -429,7 +429,7 @@ func (conn *Conn) ServerHandshakeServerHello(sharedSecret, kex []byte) error {
 	}
 
 	// Certificate.
-	data, err = conn.MakeCertificate()
+	data, err = conn.MakeCertificate(conn.config.Certificate)
 	if err != nil {
 		return conn.internalErrorf("make certificate failed: %v", err)
 	}
@@ -440,7 +440,13 @@ func (conn *Conn) ServerHandshakeServerHello(sharedSecret, kex []byte) error {
 	}
 
 	// CertificateVerify.
-	data, err = conn.MakeCertificateVerify()
+	hashFunc := crypto.SHA256
+	digest := conn.CertificateVerify(hashFunc)
+	signature, err := conn.config.PrivateKey.Sign(rand.Reader, digest, hashFunc)
+	if err != nil {
+		return conn.internalErrorf("make certificate_verify failed: %v", err)
+	}
+	data, err = conn.MakeCertificateVerify(signature)
 	if err != nil {
 		return conn.internalErrorf("make certificate_verify failed: %v", err)
 	}
@@ -1041,7 +1047,7 @@ func (conn *Conn) recvCertificateVerify(data []byte) error {
 	}
 	_ = verifyPubkeyAlg
 
-	digest := conn.certificateVerify(hashFunc)
+	digest := conn.CertificateVerify(hashFunc)
 
 	var pubkeyAlg x509.PublicKeyAlgorithm
 	var verifyResult bool

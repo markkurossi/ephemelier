@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -171,7 +171,7 @@ var (
 	clientSignatureCtx = []byte("TLS 1.3, client CertificateVerify")
 )
 
-func (conn *Conn) certificateVerify(hash crypto.Hash) []byte {
+func (conn *Conn) CertificateVerify(hash crypto.Hash) []byte {
 	data := make([]byte, 0, 64+len(serverSignatureCtx)+1+conn.transcript.Size())
 
 	for i := 0; i < 64; i++ {

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -22,18 +22,20 @@ type FDTLS struct {
 	conn          *tls.Conn
 	priv          *ecdsa.PrivateKey
 	cert          *x509.Certificate
+	key           *Key
 	handshakeDone bool
 }
 
 // NewTLSFD creates a new TLS FD. The arguments must be non-nil for
 // garbler and nil for evaluator.
 func NewTLSFD(conn *tls.Conn, priv *ecdsa.PrivateKey,
-	cert *x509.Certificate) *FD {
+	cert *x509.Certificate, key *Key) *FD {
 
 	return NewFD(&FDTLS{
 		conn: conn,
 		priv: priv,
 		cert: cert,
+		key:  key,
 	})
 }
 

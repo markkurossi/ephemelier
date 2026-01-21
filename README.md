@@ -51,7 +51,20 @@ change it to TLS_AES_128_GCM_SHA256, edit:
  - configure cipher suite in `crypto/tls/tls.go`
  - configure cipher key size in `pkg/ephemelier/tlsmem/tlsmem.mpcl`
 
-## TODO
+## Creating HTTPS private key and certificate
+
+``` shell
+$ cd cmd/apps/ephemelier
+$ ../tss/tss keygen
+...
+E: compressed: 0461108f1e6572a06f75bae4b4b603759e0f31d0cf48fa7fe4583765a185a569bc96209ab639b21dbc6f731e115626e907ae3e6556acb46b486de5c55173d7b862
+ ../../../nap/cmd/unspammer/unspammer -ca ../../../nap/cmd/unspammer/nap -create-ee localhost -pubkey 0461108f1e6572a06f75bae4b4b603759e0f31d0cf48fa7fe4583765a185a569bc96209ab639b21dbc6f731e115626e907ae3e6556acb46b486de5c55173d7b862
+$ ../vault/vault -o data/vault0/httpd -t P-256 import peer-G.share ee-cert.pem
+$ ../vault/vault -o data/vault1/httpd -t P-256 import peer-E.share
+```
+
+
+# TODO
 
  - [ ] FROST [RFC 9591](https://www.rfc-editor.org/rfc/rfc9591.txt)
  - [x] Circuit stats in streaming mode (INFO)

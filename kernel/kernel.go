@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -80,6 +80,7 @@ type Params struct {
 	Verbose     bool
 	Diagnostics bool
 	Filesystem  string
+	Vault       string
 	Port        string
 	Stdin       *FD
 	Stdout      *FD

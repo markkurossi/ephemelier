@@ -1,6 +1,6 @@
 // -*- go -*-
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -41,6 +41,7 @@ const (
 	SysNext      = 20
 	SysGetpid    = 21
 	SysChroot    = 22
+	SysOpenkey   = 23
 
 	SysGetport    = 100
 	SysCreateport = 101

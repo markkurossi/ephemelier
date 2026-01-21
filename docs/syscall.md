@@ -31,6 +31,7 @@
  - tlshs(arg0:fd, argBuf:payload, arg1:HSType) => HSType, Data
  - tlsstatus(arg0:fd, arg1:status) => errno
  - createkey(arg0:typeSize, argBuf:name, arg1:nameSize) => fd
+ - openkey(argBuf:name, arg1:nameSize) => fd
  - sign(arg0:fd, argBuf:data, arg1:size) => size, signature
 
 ## Ports
