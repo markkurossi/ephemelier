@@ -90,6 +90,7 @@ $ ../vault/vault -o data/vault1/httpd -t P-256 import peer-E.share
 | Optimized input       | 4.956s  | 0.349    |
 | New HTTPD             | 5.785s  | 0.407    |
 | IKNP OT               | 4.918s  | 0.346    |
+| Threshold signatures  | 5.296s  | 0.373    |
 
 | Fibo            | Time    | Relative |
 | :------------   | ------: | -------: |
