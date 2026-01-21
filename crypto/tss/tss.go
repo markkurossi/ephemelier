@@ -18,6 +18,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"sync"
 
 	"github.com/bnb-chain/tss-lib/v2/common"
 	"github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
@@ -46,6 +47,7 @@ type ecdsaSig struct {
 
 // Peer implements a two-party peer for threshold signature scheme.
 type Peer struct {
+	Debug   bool
 	io      ot.IO
 	ctx     *tss.PeerContext
 	PartyID *tss.PartyID
@@ -97,6 +99,9 @@ func NewPeer(io ot.IO, evaluator bool) (*Peer, error) {
 }
 
 func (peer *Peer) debugf(format string, a ...interface{}) {
+	if !peer.Debug {
+		return
+	}
 	msg := fmt.Sprintf(format, a...)
 	fmt.Printf("%v: %v", peer.PartyID.Id, msg)
 }
@@ -112,14 +117,18 @@ func (peer *Peer) Keygen() (*keygen.LocalPartySaveData, error) {
 	params := tss.NewParameters(curve, peer.ctx, peer.PartyID, n, 1)
 	party := keygen.NewLocalParty(params, outC, endC).(*keygen.LocalParty)
 
-	go func() {
+	var wg sync.WaitGroup
+
+	wg.Go(func() {
 		if err := party.Start(); err != nil {
 			errC <- err
 		}
-	}()
+	})
 
 	inC := make(chan []byte)
-	go peer.ioReader(party, inC, errC)
+	wg.Go(func() {
+		peer.ioReader(party, inC, errC)
+	})
 
 	for {
 		select {
@@ -150,14 +159,10 @@ func (peer *Peer) Keygen() (*keygen.LocalPartySaveData, error) {
 
 		case save := <-endC:
 			peer.debugf("save: id=%v\n", peer.PartyID.Id)
-			pk := save.ECDSAPub.ToECDSAPubKey()
-			data, err := pk.Bytes()
-			if err != nil {
-				return nil, peer.sendError(err)
-			}
-			peer.debugf("compressed: %x\n", data)
+			err := peer.sendDone()
+			wg.Wait()
 
-			return save, peer.sendDone()
+			return save, err
 
 		case in := <-inC:
 			msg, err := unmarshalTSSMessage(in)
@@ -191,14 +196,18 @@ func (peer *Peer) Sign(key *keygen.LocalPartySaveData, msg []byte) (
 	party := signing.NewLocalParty(new(big.Int).SetBytes(msg), params, *key,
 		outC, endC, len(msg)).(*signing.LocalParty)
 
-	go func() {
+	var wg sync.WaitGroup
+
+	wg.Go(func() {
 		if err := party.Start(); err != nil {
 			errC <- err
 		}
-	}()
+	})
 
 	inC := make(chan []byte)
-	go peer.ioReader(party, inC, errC)
+	wg.Go(func() {
+		peer.ioReader(party, inC, errC)
+	})
 
 	for {
 		select {
@@ -228,8 +237,6 @@ func (peer *Peer) Sign(key *keygen.LocalPartySaveData, msg []byte) (
 			}
 
 		case signature := <-endC:
-			peer.debugf("signature: %x\n", signature.Signature)
-
 			sig := ecdsaSig{
 				R: new(big.Int).SetBytes(signature.R),
 				S: new(big.Int).SetBytes(signature.S),
@@ -237,9 +244,14 @@ func (peer *Peer) Sign(key *keygen.LocalPartySaveData, msg []byte) (
 
 			data, err := asn1.Marshal(sig)
 			if err != nil {
-				return nil, nil, peer.sendError(err)
+				peer.sendError(err)
+				wg.Wait()
+				return nil, nil, err
 			}
-			return signature.M, data, nil
+			err = peer.sendDone()
+			wg.Wait()
+
+			return signature.M, data, err
 
 		case in := <-inC:
 			msg, err := unmarshalTSSMessage(in)
@@ -247,12 +259,12 @@ func (peer *Peer) Sign(key *keygen.LocalPartySaveData, msg []byte) (
 				return nil, nil, peer.sendError(err)
 			}
 			peer.debugf("input: src=%v\n", msg.GetFrom().Id)
-			go func() {
+			wg.Go(func() {
 				_, err := party.Update(msg)
 				if err != nil {
 					errC <- party.WrapError(err)
 				}
-			}()
+			})
 		}
 	}
 }
