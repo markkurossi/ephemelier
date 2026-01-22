@@ -42,6 +42,7 @@ cmd/tlsclient/tlsclient
 cmd/tss/*.share
 cmd/tss/tss
 cmd/vault/vault
+cmd/fs-tool/fs-tool
 
 docs/additive-ss/additive-ss
 docs/spdz/spdz
