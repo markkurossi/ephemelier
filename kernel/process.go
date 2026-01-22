@@ -397,7 +397,7 @@ run:
 				sys.SetArg0(int32(-EINVAL))
 				return nil
 			}
-			fd, err := proc.openKey(name)
+			fd, err := OpenKey(proc.keyPath(name))
 			if err != nil {
 				sys.SetArg0(mapError(err))
 				proc.conn.ReceiveUint32()
@@ -780,7 +780,7 @@ run:
 				proc.sendFD(int(-EINVAL))
 				return nil
 			}
-			fd, err := proc.openKey(name)
+			fd, err := OpenKey(proc.keyPath(name))
 			if err != nil {
 				sys.SetArg0(mapError(err))
 				proc.sendFD(int(sys.arg0))

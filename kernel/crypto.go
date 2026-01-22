@@ -23,11 +23,13 @@ type KeyType int
 const (
 	KeyTypeAES KeyType = iota
 	KeyTypeP256
+	KeyTypeChaCha20
 )
 
 var KeyTypes = map[KeyType]string{
-	KeyTypeAES:  "AES",
-	KeyTypeP256: "P-256",
+	KeyTypeAES:      "AES",
+	KeyTypeP256:     "P-256",
+	KeyTypeChaCha20: "ChaCha20",
 }
 
 func (kt KeyType) String() string {
@@ -36,6 +38,19 @@ func (kt KeyType) String() string {
 		return name
 	}
 	return fmt.Sprintf("{KeyType %d}", kt)
+}
+
+func (kt KeyType) BitSize() (int, error) {
+	switch kt {
+	case KeyTypeAES:
+		return 128, nil
+	case KeyTypeP256:
+		return 256, nil
+	case KeyTypeChaCha20:
+		return 256, nil
+	default:
+		return 0, fmt.Errorf("invalid key type: %v", kt)
+	}
 }
 
 type keyJSON struct {
@@ -60,7 +75,7 @@ func (key *Key) Close() int {
 // Read implements FDImpl.Read.
 func (key *Key) Read(b []byte) int {
 	switch key.Type {
-	case KeyTypeAES:
+	case KeyTypeAES, KeyTypeChaCha20:
 		return copy(b, key.Data)
 
 	default:
@@ -102,8 +117,8 @@ func (proc *Process) keyPath(name string) string {
 	return filepath.Join(proc.kern.params.Vault, name)
 }
 
-func (proc *Process) openKey(name string) (*FD, error) {
-	f, err := os.Open(proc.keyPath(name))
+func OpenKey(filename string) (*FD, error) {
+	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
