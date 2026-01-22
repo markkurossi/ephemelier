@@ -15,17 +15,19 @@ import (
 	"path/filepath"
 
 	"github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
-	_ "github.com/markkurossi/ephemelier/crypto/tss"
 )
 
+// KeyType defines the cryptographic key types.
 type KeyType int
 
+// Support key types.
 const (
 	KeyTypeAES KeyType = iota
 	KeyTypeP256
 	KeyTypeChaCha20
 )
 
+// KeyTypes define a mapping from KeyType to its name.
 var KeyTypes = map[KeyType]string{
 	KeyTypeAES:      "AES",
 	KeyTypeP256:     "P-256",
@@ -40,6 +42,7 @@ func (kt KeyType) String() string {
 	return fmt.Sprintf("{KeyType %d}", kt)
 }
 
+// BitSize returns the default key size in bits.
 func (kt KeyType) BitSize() (int, error) {
 	switch kt {
 	case KeyTypeAES:
@@ -60,6 +63,7 @@ type keyJSON struct {
 	Certificate []byte `json:",omitempty"`
 }
 
+// Key implements a cryptographic key.
 type Key struct {
 	Type        KeyType
 	Data        []byte
@@ -88,6 +92,7 @@ func (key *Key) Write(b []byte) int {
 	return int(-EBADF)
 }
 
+// Bytes serializes the key.
 func (key *Key) Bytes() ([]byte, error) {
 	var shareData []byte
 	var err error
@@ -117,6 +122,7 @@ func (proc *Process) keyPath(name string) string {
 	return filepath.Join(proc.kern.params.Vault, name)
 }
 
+// OpenKey open the key from the file.
 func OpenKey(filename string) (*FD, error) {
 	f, err := os.Open(filename)
 	if err != nil {

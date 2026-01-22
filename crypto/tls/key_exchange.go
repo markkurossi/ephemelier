@@ -171,6 +171,8 @@ var (
 	clientSignatureCtx = []byte("TLS 1.3, client CertificateVerify")
 )
 
+// CertificateVerify computes the hash digest for the
+// certificate_verify message.
 func (conn *Conn) CertificateVerify(hash crypto.Hash) []byte {
 	data := make([]byte, 0, 64+len(serverSignatureCtx)+1+conn.transcript.Size())
 
