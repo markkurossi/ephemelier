@@ -7,6 +7,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"flag"
@@ -35,7 +36,7 @@ func main() {
 	var keyType kernel.KeyType
 	var match bool
 	for k, v := range kernel.KeyTypes {
-		if v == *t {
+		if strings.EqualFold(v, *t) {
 			keyType = k
 			match = true
 		}
@@ -45,12 +46,18 @@ func main() {
 	}
 
 	if len(flag.Args()) == 0 {
-		log.Fatalf("usage: vault import arg...")
+		log.Fatalf("usage: vault import/create arg...")
 	}
 
 	switch flag.Args()[0] {
 	case "import":
 		err := importFiles(*out, keyType, flag.Args()[1:])
+		if err != nil {
+			log.Fatal(err)
+		}
+
+	case "create":
+		err := create(*out, keyType)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -91,6 +98,32 @@ func importFiles(filename string, keyType kernel.KeyType, args []string) error {
 		}
 	}
 
+	return saveKey(key, filename)
+}
+
+func create(filename string, keyType kernel.KeyType) error {
+	key := &kernel.Key{
+		Type: keyType,
+	}
+	switch keyType {
+	case kernel.KeyTypeAES, kernel.KeyTypeChaCha20:
+		bits, err := keyType.BitSize()
+		if err != nil {
+			return err
+		}
+		key.Data = make([]byte, bits/8)
+		_, err = rand.Read(key.Data)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("key type %v not supported", keyType)
+	}
+
+	return saveKey(key, filename)
+}
+
+func saveKey(key *kernel.Key, filename string) error {
 	data, err := key.Bytes()
 	if err != nil {
 		return err
