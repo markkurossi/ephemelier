@@ -27,10 +27,10 @@
 ## Encrypted File Header
 
 - Magic: uint16(0x4501)
-- Algorithm: uint16
 - BlockSize: uint16
-- Flags: uint16
-- FileSize: uint64
+- Algorithm: uint8
+- Flags: uint8
+- PlainSize: int64
 - Nonce: uint96
 
 ```

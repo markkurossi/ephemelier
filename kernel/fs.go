@@ -33,6 +33,9 @@ const (
 const (
 	// EncrFileMagic is the magic value for encrypted files.
 	EncrFileMagic uint32 = 0x45464d01
+
+	// EncrFileHdrSize defines the size of the encrypted file header.
+	EncrFileHdrSize int = 28
 )
 
 var oflags = map[OpenFlag]string{
@@ -139,36 +142,24 @@ type FileInfo struct {
 	Algorithm KeyType
 	Flags     uint8
 	PlainSize int64
-	Nonce     [16]byte
+	Nonce     [12]byte
 }
 
 // NewFileInfo constructs FileInfo from info and the optional file
 // header.
-func NewFileInfo(info os.FileInfo, hdr []byte) (*FileInfo, error) {
+func NewFileInfo(info os.FileInfo, hdr *FileHeader) (*FileInfo, error) {
 	fi := &FileInfo{
 		Size:    info.Size(),
 		ModTime: info.ModTime(),
 	}
-	switch len(hdr) {
-	case 0:
-		return fi, nil
-
-	case 28:
-		magic := bo.Uint32(hdr[0:])
-		if magic != EncrFileMagic {
-			return nil, fmt.Errorf("invalid EncrFileMagic %08x", magic)
-		}
-		fi.BlockSize = bo.Uint16(hdr[4:])
-		fi.Algorithm = KeyType(hdr[6])
-		fi.Flags = hdr[7]
-		fi.PlainSize = int64(bo.Uint64(hdr[8:]))
-		copy(fi.Nonce[:], hdr[16:])
-
-		return fi, nil
-
-	default:
-		return nil, fmt.Errorf("invalid encryption header length: %v", len(hdr))
+	if hdr != nil {
+		fi.BlockSize = hdr.BlockSize
+		fi.Algorithm = hdr.Algorithm
+		fi.Flags = hdr.Flags
+		fi.PlainSize = hdr.PlainSize
+		copy(fi.Nonce[:], hdr.Nonce[:])
 	}
+	return fi, nil
 }
 
 // Bytes return the serialized file info.
@@ -193,6 +184,52 @@ func (fi *FileInfo) Bytes() []byte {
 
 		copy(buf[20:], fi.Nonce[:])
 	}
+
+	return buf
+}
+
+// FileHeader defines the file header for encrypted files.
+type FileHeader struct {
+	Magic     uint32
+	BlockSize uint16
+	Algorithm KeyType
+	Flags     uint8
+	PlainSize int64
+	Nonce     [12]byte
+}
+
+// NewFileHeader creates a new FileHeader from the serialized data.
+func NewFileHeader(buf []byte) (*FileHeader, error) {
+	if len(buf) != int(EncrFileHdrSize) {
+		return nil, fmt.Errorf("invalid encryption header length: %v", len(buf))
+	}
+
+	magic := bo.Uint32(buf[0:])
+	if magic != EncrFileMagic {
+		return nil, fmt.Errorf("invalid EncrFileMagic %08x", magic)
+	}
+	hdr := &FileHeader{
+		Magic:     magic,
+		BlockSize: bo.Uint16(buf[4:]),
+		Algorithm: KeyType(buf[6]),
+		Flags:     buf[7],
+		PlainSize: int64(bo.Uint64(buf[8:])),
+	}
+	copy(hdr.Nonce[:], buf[16:])
+
+	return hdr, nil
+}
+
+// Bytes return the serialized file header.
+func (hdr *FileHeader) Bytes() []byte {
+	buf := make([]byte, EncrFileHdrSize)
+
+	bo.PutUint32(buf[0:], hdr.Magic)
+	bo.PutUint16(buf[4:], hdr.BlockSize)
+	buf[6] = byte(hdr.Algorithm)
+	buf[7] = hdr.Flags
+	bo.PutUint64(buf[8:], uint64(hdr.PlainSize))
+	copy(buf[16:], hdr.Nonce[:])
 
 	return buf
 }

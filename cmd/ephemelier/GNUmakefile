@@ -29,3 +29,14 @@ clean:
 
 %.stamp : %.dmpcl
 	garbled $(MPCLCFLAGS) -sids $(dir $+)symtab -suffix stamp -i 0,16x00,200x00,60x00,0 -pi 0,16x00,16x00 $+
+
+fsfiles := fs/etc/motd fs/etc/httpd/test.html
+
+.PHONY: import
+
+import:
+	@echo "Importing FS files"
+	@for f in $(fsfiles); do \
+	  echo " - $$f"; \
+	  ../fs-tool/fs-tool -prefix fs/ -vault data/vault -fs data/fs0 -key files import $$f; \
+	done

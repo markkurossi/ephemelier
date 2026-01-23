@@ -19,13 +19,13 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/markkurossi/ephemelier/kernel"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
 const (
-	FileMagic = uint16(0x4501)
 	BlockSize = 1024
 )
 
@@ -37,6 +37,7 @@ func main() {
 	vault := flag.String("vault", "", "vault prefix")
 	fs := flag.String("fs", "", "filesystem directory")
 	key := flag.String("key", "", "filesystem encryption key")
+	prefix := flag.String("prefix", "", "source/destination file prefix")
 	flag.Parse()
 
 	if len(*vault) == 0 {
@@ -55,7 +56,7 @@ func main() {
 
 	switch flag.Args()[0] {
 	case "import":
-		err := importFiles(*vault, *fs, *key, flag.Args()[1:])
+		err := importFiles(*vault, *fs, *key, *prefix, flag.Args()[1:])
 		if err != nil {
 			log.Fatalf("could not import files: %s", err)
 		}
@@ -64,19 +65,24 @@ func main() {
 		if err != nil {
 			log.Fatalf("could not export files: %s", err)
 		}
+	case "stat":
+		err := statFiles(*vault, *fs, *key, flag.Args()[1:])
+		if err != nil {
+			log.Fatalf("could not export files: %s", err)
+		}
 	default:
 		log.Fatalf("invalid command: %s", flag.Args()[0])
 	}
 }
 
-func importFiles(vault, fs, keyname string, files []string) error {
+func importFiles(vault, fs, keyname, prefix string, files []string) error {
 	key, err := makeKey(vault, keyname)
 	if err != nil {
 		return err
 	}
 
 	for _, file := range files {
-		err := encryptFile(fs, file, key)
+		err := encryptFile(fs, file, prefix, key)
 		if err != nil {
 			return err
 		}
@@ -85,39 +91,16 @@ func importFiles(vault, fs, keyname string, files []string) error {
 	return nil
 }
 
-func makeKey(vault, keyname string) ([]byte, error) {
-	path := filepath.Join(fmt.Sprintf("%s0", vault), keyname)
-	gkey, err := kernel.OpenKey(path)
-	if err != nil {
-		return nil, err
-	}
-	path = filepath.Join(fmt.Sprintf("%s1", vault), keyname)
-	ekey, err := kernel.OpenKey(path)
-	if err != nil {
-		return nil, err
-	}
-	gdata := make([]byte, 512)
-	gn := gkey.Read(gdata)
-	if gn <= 0 {
-		return nil, fmt.Errorf("failed to read gkey: %v", kernel.Errno(-gn))
-	}
-	edata := make([]byte, 512)
-	en := ekey.Read(edata)
-	if en != gn {
-		return nil, fmt.Errorf("invalid ekey: read %v, expected %v", en, gn)
-	}
-
-	for i := 0; i < gn; i++ {
-		gdata[i] ^= edata[i]
-	}
-	return gdata[:gn], nil
-}
-
-func encryptFile(fs, file string, key []byte) error {
+func encryptFile(fs, file, prefix string, key []byte) error {
 	buf := make([]byte, BlockSize)
 
 	// Make sure the directory exists.
-	dst := filepath.Join(fs, file)
+	if !strings.HasPrefix(file, prefix) {
+		return fmt.Errorf("input file %v does not have prefix %v",
+			file, prefix)
+	}
+
+	dst := filepath.Join(fs, file[len(prefix):])
 	err := os.MkdirAll(filepath.Dir(dst), 0755)
 	if err != nil {
 		return err
@@ -130,23 +113,20 @@ func encryptFile(fs, file string, key []byte) error {
 		return err
 	}
 
-	var flags uint16
-
-	var hdr [28]byte
-	bo.PutUint16(hdr[0:], FileMagic)
-	bo.PutUint16(hdr[2:], uint16(kernel.KeyTypeChaCha20))
-	bo.PutUint16(hdr[4:], BlockSize)
-	bo.PutUint16(hdr[6:], flags)
-	bo.PutUint64(hdr[8:], uint64(fi.Size()))
-
-	var aad [14]byte
-	bo.PutUint64(aad[4:], uint64(fi.Size()))
-	bo.PutUint16(aad[:12], flags)
-
-	_, err = rand.Read(hdr[16:28])
+	hdr := &kernel.FileHeader{
+		Magic:     kernel.EncrFileMagic,
+		BlockSize: BlockSize,
+		Algorithm: kernel.KeyTypeChaCha20,
+		PlainSize: fi.Size(),
+	}
+	_, err = rand.Read(hdr.Nonce[:])
 	if err != nil {
 		return err
 	}
+
+	var aad [14]byte
+	bo.PutUint64(aad[4:], uint64(hdr.PlainSize))
+	bo.PutUint16(aad[:12], uint16(hdr.Flags))
 
 	out, err := os.Create(dst)
 	if err != nil {
@@ -154,7 +134,7 @@ func encryptFile(fs, file string, key []byte) error {
 	}
 	defer out.Close()
 
-	_, err = out.Write(hdr[:])
+	_, err = out.Write(hdr.Bytes())
 	if err != nil {
 		return err
 	}
@@ -180,12 +160,14 @@ func encryptFile(fs, file string, key []byte) error {
 		}
 
 		var nonce [12]byte
-		copy(nonce[:], hdr[16:])
+		copy(nonce[:], hdr.Nonce[:])
 		var seq [8]byte
 		bo.PutUint64(seq[:], uint64(i))
 		for i := 0; i < len(seq); i++ {
 			nonce[4+i] ^= seq[i]
 		}
+
+		bo.PutUint32(aad[0:], uint32(i))
 
 		cipher := aead.Seal(buf[:0], nonce[:], buf[:n], aad[:])
 		_, err = out.Write(cipher)
@@ -222,25 +204,22 @@ func decryptFile(fs, file string, key []byte) error {
 	}
 	defer in.Close()
 
-	var hdr [28]byte
-	_, err = in.Read(hdr[:])
+	var hdrbuf [kernel.EncrFileHdrSize]byte
+	_, err = in.Read(hdrbuf[:])
 	if err != nil {
 		return err
 	}
-	magic := bo.Uint16(hdr[0:])
-	if magic != FileMagic {
-		return fmt.Errorf("invalid magic: %04x", magic)
+	hdr, err := kernel.NewFileHeader(hdrbuf[:])
+	if err != nil {
+		return err
 	}
 	// XXX check KeyType
-	blockSize := int(bo.Uint16(hdr[4:]))
-	flags := bo.Uint16(hdr[6:])
-	fileSize := bo.Uint64(hdr[8:])
 
-	buf := make([]byte, blockSize)
+	buf := make([]byte, hdr.BlockSize)
 
 	var aad [14]byte
-	bo.PutUint64(aad[4:], fileSize)
-	bo.PutUint16(aad[:12], flags)
+	bo.PutUint64(aad[4:], uint64(hdr.PlainSize))
+	bo.PutUint16(aad[:12], uint16(hdr.Flags))
 
 	out, err := os.Create(filepath.Join("x", file))
 	if err != nil {
@@ -263,12 +242,14 @@ func decryptFile(fs, file string, key []byte) error {
 		}
 
 		var nonce [12]byte
-		copy(nonce[:], hdr[16:])
+		copy(nonce[:], hdr.Nonce[:])
 		var seq [8]byte
 		bo.PutUint64(seq[:], uint64(i))
 		for i := 0; i < len(seq); i++ {
 			nonce[4+i] ^= seq[i]
 		}
+
+		bo.PutUint32(aad[0:], uint32(i))
 
 		plain, err := aead.Open(buf[:0], nonce[:], buf[:n], aad[:])
 		if err != nil {
@@ -281,4 +262,78 @@ func decryptFile(fs, file string, key []byte) error {
 	}
 
 	return nil
+}
+
+func statFiles(vault, fs, keyname string, files []string) error {
+	key, err := makeKey(vault, keyname)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		err := statFile(fs, file, key)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func statFile(fs, file string, key []byte) error {
+	// Open input file and read file header.
+	src := filepath.Join(fs, file)
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	var hdrbuf [kernel.EncrFileHdrSize]byte
+	_, err = in.Read(hdrbuf[:])
+	if err != nil {
+		return err
+	}
+	hdr, err := kernel.NewFileHeader(hdrbuf[:])
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("file %v:\n", file)
+	fmt.Printf(" - magic    : %08x\n", hdr.Magic)
+	fmt.Printf(" - blockSize: %v\n", hdr.BlockSize)
+	fmt.Printf(" - algorithm: %v\n", hdr.Algorithm)
+	fmt.Printf(" - flags    : %04x\n", hdr.Flags)
+	fmt.Printf(" - plainSize: %v\n", hdr.PlainSize)
+	fmt.Printf(" - nonce    : %x\n", hdr.Nonce)
+
+	return nil
+}
+
+func makeKey(vault, keyname string) ([]byte, error) {
+	path := filepath.Join(fmt.Sprintf("%s0", vault), keyname)
+	gkey, err := kernel.OpenKey(path)
+	if err != nil {
+		return nil, err
+	}
+	path = filepath.Join(fmt.Sprintf("%s1", vault), keyname)
+	ekey, err := kernel.OpenKey(path)
+	if err != nil {
+		return nil, err
+	}
+	gdata := make([]byte, 512)
+	gn := gkey.Read(gdata)
+	if gn <= 0 {
+		return nil, fmt.Errorf("failed to read gkey: %v", kernel.Errno(-gn))
+	}
+	edata := make([]byte, 512)
+	en := ekey.Read(edata)
+	if en != gn {
+		return nil, fmt.Errorf("invalid ekey: read %v, expected %v", en, gn)
+	}
+
+	for i := 0; i < gn; i++ {
+		gdata[i] ^= edata[i]
+	}
+	return gdata[:gn], nil
 }
