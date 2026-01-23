@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025, 2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -7,6 +7,7 @@
 package kernel
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -92,4 +93,8 @@ func TestPaths(t *testing.T) {
 			t.Errorf("test%d: got %v, expected %v\n", idx, path, test.result)
 		}
 	}
+}
+
+func TestOpenFlags(t *testing.T) {
+	fmt.Printf("0x601 = %v\n", OpenFlag(0x601))
 }

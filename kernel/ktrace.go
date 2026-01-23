@@ -72,7 +72,15 @@ func (proc *Process) ktraceCall(sys *syscall) {
 		SysTlsstatus, SysRecvfd:
 		fmt.Printf("(%d)", sys.arg0)
 
-	case SysSpawn, SysDial, SysListen, SysOpen, SysChroot, SysOpenkey:
+	case SysOpen:
+		fmt.Printf("(%v, ", OpenFlag(sys.arg0))
+		if sys.arg1 < 0 || int(sys.arg1) > len(sys.argBuf) {
+			fmt.Printf("%s:%d/[0-%d])", EINVAL, sys.arg1, len(sys.argBuf))
+		} else {
+			fmt.Printf("%q)", string(sys.argBuf[:sys.arg1]))
+		}
+
+	case SysSpawn, SysDial, SysListen, SysChroot, SysOpenkey:
 		if sys.arg1 < 0 || int(sys.arg1) > len(sys.argBuf) {
 			fmt.Printf("(%s:%d/[0-%d])", EINVAL, sys.arg1, len(sys.argBuf))
 		} else {

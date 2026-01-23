@@ -719,7 +719,14 @@ run:
 			fd := NewFileFD(file)
 			sys.SetArg0(proc.AllocFD(fd))
 
-			sys.argBuf = MakeFileInfo(info)
+			fi, err := NewFileInfo(info, nil)
+			if err != nil {
+				sys.SetArg0(mapError(err))
+				proc.sendFD(int(sys.arg0))
+				break
+			}
+
+			sys.argBuf = fi.Bytes()
 
 			// Sync FD with evaluator.
 			err = proc.sendFD(int(sys.arg0))
