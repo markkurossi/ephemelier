@@ -1,0 +1,37 @@
+// -*- go -*-
+//
+// Copyright (c) 2025-2026 Markku Rossi
+//
+// All rights reserved.
+//
+
+package main
+
+import (
+	"ephemelier/fs"
+	"ephemelier/kernel"
+	"ephemelier/memory"
+	"ephemelier/memory/semihonest"
+)
+
+func main(g memory.G, e memory.E) (
+	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
+
+	if g.arg0 < 0 {
+		return nil, 0, kernel.SysExit, g.arg0, nil, 0
+	}
+
+	nonce, mem, ok := semihonest.Decode(g.mem, g.key, e.key)
+	if !ok {
+		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
+	}
+	for i := 0; i < len(g.argBuf) && i < len(e.argBuf); i++ {
+		mem[fs.MemOfsKey+i] = g.argBuf[i] ^ e.argBuf[i]
+	}
+
+	path := []byte("/etc/motd")
+
+	return semihonest.Encode(nonce, mem, g.key, e.key),
+		intern(StFileOpenResult), kernel.SysOpen, kernel.Encrypt,
+		path, len(path)
+}

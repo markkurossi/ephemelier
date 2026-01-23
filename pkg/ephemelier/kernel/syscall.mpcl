@@ -56,6 +56,17 @@ const (
 	TagSize   = 16
 )
 
+// Flags for the open syscall.
+const (
+	ReadOnly  int32 = 0x00000000
+	WriteOnly int32 = 0x00000001
+	ReadWrite int32 = 0x00000002
+	Append    int32 = 0x00000008
+	Create    int32 = 0x00000200
+	Truncate  int32 = 0x00000400
+	Encrypt   int32 = 0x01000000
+)
+
 // PeerResult implements syscall interface with result argument for
 // garbler and evaluator.
 type PeerResult struct {

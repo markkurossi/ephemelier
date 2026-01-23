@@ -7,12 +7,17 @@ package main
 
 // Interned symbols.
 const (
-	Init           = 0
-	StEnd          = 6
-	StPrompt       = 1
-	StPromptResult = 5
-	StReadResult   = 2
-	StSpawnResult  = 7
-	StWaitResult   = 4
-	StWriteResult  = 3
+	Init              = 0
+	StEnd             = 10
+	StFileOpenResult  = 12
+	StFileReadResult  = 8
+	StFileWriteResult = 9
+	StOpenkeyResult   = 1
+	StPrompt          = 7
+	StPromptResult    = 4
+	StReadResult      = 3
+	StReadkeyResult   = 2
+	StSpawnResult     = 11
+	StWaitResult      = 6
+	StWriteResult     = 5
 )

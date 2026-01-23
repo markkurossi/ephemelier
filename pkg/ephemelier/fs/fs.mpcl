@@ -1,0 +1,39 @@
+// -*- go -*-
+//
+// Copyright (c) 2026 Markku Rossi
+//
+// All rights reserved.
+//
+
+package fs
+
+const (
+	KeySize   = 32
+	NonceSize = 12
+)
+
+const (
+	MemOfsKey       = 0
+	MemOfsFD        = 32
+	MemOfsBlock     = 36
+	MemOfsPlainSize = 40
+	MemOfsBlockSize = 48
+	MemOfsNonce     = 50
+	MemSize         = 62
+)
+
+const (
+	HdrOfsFileSize  = 0
+	HdrOfsModTime   = 8
+	HdrOfsBlockSize = 16
+	HdrOfsAlgorithm = 18
+	HdrOfsFlags     = 19
+	HdrOfsNonce     = 20
+)
+
+const (
+	AADOfsBlock    = 0
+	AADOfsFileSize = 4
+	AADOfsFlags    = 12
+	AADSize        = 14
+)

@@ -1,6 +1,6 @@
 // -*- go -*-
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -8,19 +8,31 @@
 package main
 
 import (
+	"ephemelier/fs"
 	"ephemelier/kernel"
+	"ephemelier/memory/semihonest"
 )
+
+// Mem					Ofs
+//  - key [32]byte		0
+//  - fd int32			32
+//  - block int32		36
+//  - PlainSize int64	40
+//  - Blocksize int16	48
+//  - Nonce [12]byte	50
+//                      ==
+//                      62
 
 func main(g, e kernel.PeerInit) (
 	[]byte, kernel.PC, kernel.Syscall, int32, []byte, int32) {
 
 	_ = intern(Init)
 
-	motd := []byte("Ephemelier v0.0 - Copyright (c) 2025 Markku Rossi\r\n")
-
 	var nonce [12]byte
-	var mem [16]byte
+	var mem [fs.MemSize]byte
 
-	return kernel.EncodeMem(nonce, mem, g.key, e.key), intern(StPrompt),
-		kernel.SysWrite, 1, motd, len(motd)
+	key := []byte("files")
+
+	return semihonest.Encode(nonce, mem, g.key, e.key), intern(StOpenkeyResult),
+		kernel.SysOpenkey, 0, key, len(key)
 }
