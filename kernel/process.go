@@ -716,11 +716,29 @@ run:
 				proc.sendFD(int(sys.arg0))
 				break
 			}
+
+			// File header for encrypted files.
+			var fileHeader *FileHeader
+			if OpenFlag(sys.arg0)&Encrypt != 0 {
+				var hdr [EncrFileHdrSize]byte
+				_, err = file.Read(hdr[:])
+				if err == nil {
+					fileHeader, err = NewFileHeader(hdr[:])
+				}
+				if err != nil {
+					sys.SetArg0(mapError(err))
+					proc.sendFD(int(sys.arg0))
+					file.Close()
+					break
+				}
+			}
+
 			fd := NewFileFD(file)
 			sys.SetArg0(proc.AllocFD(fd))
 
-			fi, err := NewFileInfo(info, nil)
+			fi, err := NewFileInfo(info, fileHeader)
 			if err != nil {
+				fd.Close()
 				sys.SetArg0(mapError(err))
 				proc.sendFD(int(sys.arg0))
 				break
