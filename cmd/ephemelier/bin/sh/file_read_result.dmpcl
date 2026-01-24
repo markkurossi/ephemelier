@@ -34,12 +34,24 @@ func main(g memory.G, e memory.E) (
 	block := binary.GetUint32(mem[fs.MemOfsBlock:])
 	size := binary.GetUint64(mem[fs.MemOfsPlainSize:])
 
+	// Create nonce.
+
+	var nonce [fs.NonceSize]byte
+	copy(nonce, mem[fs.MemOfsNonce:])
+
+	var seq [8]byte
+	seq = binary.PutUint64(seq, 0, uint64(block))
+	for i := 0; i < len(seq); i++ {
+		nonce[4+i] ^= seq[i]
+	}
+
+	// Create AAD.
 	var aad [fs.AADSize]byte
 	aad = binary.PutUint32(aad, fs.AADOfsBlock, block)
 	aad = binary.PutUint64(aad, fs.AADOfsFileSize, size)
 
-	plain, ok := chacha20poly1305.Open(mem[fs.MemOfsKey:fs.MemOfsFD],
-		mem[fs.MemOfsNonce:fs.MemSize], g.argBuf, aad[:])
+	plain, ok := chacha20poly1305.Open(mem[fs.MemOfsKey:fs.MemOfsFD], nonce,
+		g.argBuf, aad[:])
 	if !ok {
 		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
 	}
