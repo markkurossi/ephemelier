@@ -25,10 +25,6 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
-const (
-	BlockSize = 1024
-)
-
 var (
 	bo = binary.BigEndian
 )
@@ -38,6 +34,7 @@ func main() {
 	fs := flag.String("fs", "", "filesystem directory")
 	key := flag.String("key", "", "filesystem encryption key")
 	prefix := flag.String("prefix", "", "source/destination file prefix")
+	bs := flag.Int("bs", 1024, "block size")
 	flag.Parse()
 
 	if len(*vault) == 0 {
@@ -56,7 +53,7 @@ func main() {
 
 	switch flag.Args()[0] {
 	case "import":
-		err := importFiles(*vault, *fs, *key, *prefix, flag.Args()[1:])
+		err := importFiles(*vault, *fs, *key, *prefix, *bs, flag.Args()[1:])
 		if err != nil {
 			log.Fatalf("could not import files: %s", err)
 		}
@@ -75,14 +72,16 @@ func main() {
 	}
 }
 
-func importFiles(vault, fs, keyname, prefix string, files []string) error {
+func importFiles(vault, fs, keyname, prefix string, blockSize int,
+	files []string) error {
+
 	key, err := makeKey(vault, keyname)
 	if err != nil {
 		return err
 	}
 
 	for _, file := range files {
-		err := encryptFile(fs, file, prefix, key)
+		err := encryptFile(fs, file, prefix, key, blockSize)
 		if err != nil {
 			return err
 		}
@@ -91,8 +90,12 @@ func importFiles(vault, fs, keyname, prefix string, files []string) error {
 	return nil
 }
 
-func encryptFile(fs, file, prefix string, key []byte) error {
-	buf := make([]byte, BlockSize)
+func encryptFile(fs, file, prefix string, key []byte, blockSize int) error {
+	if blockSize <= chacha20poly1305.Overhead {
+		return fmt.Errorf("bock sizes must be bigger than cipher overhead %v",
+			chacha20poly1305.Overhead)
+	}
+	buf := make([]byte, blockSize)
 
 	// Make sure the directory exists.
 	if !strings.HasPrefix(file, prefix) {
@@ -115,7 +118,7 @@ func encryptFile(fs, file, prefix string, key []byte) error {
 
 	hdr := &kernel.FileHeader{
 		Magic:     kernel.EncrFileMagic,
-		BlockSize: BlockSize,
+		BlockSize: uint16(blockSize),
 		Algorithm: kernel.KeyTypeChaCha20,
 		PlainSize: fi.Size(),
 	}
@@ -151,7 +154,7 @@ func encryptFile(fs, file, prefix string, key []byte) error {
 		return err
 	}
 	for i := 0; ; i++ {
-		n, err := in.Read(buf[:BlockSize-chacha20poly1305.Overhead])
+		n, err := in.Read(buf[:blockSize-chacha20poly1305.Overhead])
 		if n == 0 {
 			break
 		}
@@ -159,14 +162,18 @@ func encryptFile(fs, file, prefix string, key []byte) error {
 			return err
 		}
 
+		// Create nonce.
+
 		var nonce [12]byte
 		copy(nonce[:], hdr.Nonce[:])
 		var seq [8]byte
+
 		bo.PutUint64(seq[:], uint64(i))
 		for i := 0; i < len(seq); i++ {
 			nonce[4+i] ^= seq[i]
 		}
 
+		// Update AAD.
 		bo.PutUint32(aad[0:], uint32(i))
 
 		cipher := aead.Seal(buf[:0], nonce[:], buf[:n], aad[:])
@@ -221,7 +228,12 @@ func decryptFile(fs, file string, key []byte) error {
 	bo.PutUint64(aad[4:], uint64(hdr.PlainSize))
 	bo.PutUint16(aad[:12], uint16(hdr.Flags))
 
-	out, err := os.Create(filepath.Join("x", file))
+	dst := filepath.Join("x", file)
+	err = os.MkdirAll(filepath.Dir(dst), 0755)
+	if err != nil {
+		return err
+	}
+	out, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
