@@ -13,6 +13,8 @@ import (
 
 var layoutTests = []string{
 	"StHttpdCtPlainOpen",
+	"StTlsserverKexFinished",
+	"StHttpdCtDynamic",
 }
 
 func TestLayout(t *testing.T) {
