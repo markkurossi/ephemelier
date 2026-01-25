@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -48,13 +49,29 @@ func main() {
 
 	fmt.Fprintf(out, `digraph circuit
 {
-  ranksep=.75;
   edge [fontname="Arial Narrow", fontsize=10];
   {
-    node [shape=circle, fixedsize=true, fontname="Arial Narrow", fontsize=10];
+    node [
+      shape=doublecircle,
+      fixedsize=true,
+      fontname="Arial Narrow",
+      fontsize=10
+    ];
+    Init [label="init"];
+  }
+  {
+    node [
+      shape=circle,
+      fixedsize=true,
+      fontname="Arial Narrow",
+      fontsize=10
+    ];
 `)
 	for k := range nodes {
-		fmt.Fprintf(out, "    %v\t[label=\"%v\"];\n", k, nodeName(k))
+		if k == "Init" {
+			continue
+		}
+		fmt.Fprintf(out, "    %v\t[label=%q];\n", k, nodeName(k))
 	}
 
 	fmt.Fprintf(out, `  }
@@ -63,7 +80,7 @@ func main() {
 	for k, v := range transitions {
 		for _, t := range v {
 			fmt.Fprintf(out, "  %v\t-> %v\t[label=\"%v\"];\n",
-				k, t.target, t.syscall)
+				k, t.target, strings.ToLower(t.syscall))
 		}
 	}
 	fmt.Fprintf(out, `}
@@ -164,18 +181,112 @@ func splitLine(line string) []string {
 }
 
 func nodeName(node string) string {
+	parts := nodeNameSplit(node)
+	name, _ := layout(parts)
+	return name
+}
+
+func nodeNameSplit(node string) []string {
 	node = strings.TrimPrefix(node, "St")
 
-	var result string
+	var result []string
 	for len(node) > 0 {
 		var i int
 		for i = 1; i < len(node) && unicode.IsLower(rune(node[i])); i++ {
 		}
-		if len(result) > 0 {
-			result += "\\n"
-		}
-		result += node[:i]
+		result = append(result, strings.ToLower(node[:i]))
 		node = node[i:]
+	}
+	return result
+}
+
+type layouter struct {
+	best        []string
+	bestBadness int
+}
+
+var sizes = [][]int{
+	[]int{0},
+	[]int{
+		3552, // nnnnnnnn - 8xn (8*444)
+	},
+	[]int{
+		3108, // nnnnnnn - 7xn (7*444)
+		3108, // nnnnnnn - 7xn (7*444)
+	},
+	[]int{
+		2664, //  nnnnnn  - 6xn (6*444)
+		3387, // nnnnnnnn - 8xn (8*444)
+		2664, //  nnnnnn  - 6xn (6*444)
+	},
+	[]int{
+		1332, //   nnn   - 3Xn (3*444)
+		3108, // nnnnnnn - 7xn (7*444)
+		3108, // nnnnnnn - 7xn (7*444)
+		1332, //   nnn   - 3Xn (3*444)
+	},
+}
+
+func layout(parts []string) (string, int) {
+	ctx := &layouter{
+		bestBadness: math.MaxInt,
+	}
+	ctx.iter(parts, nil)
+
+	return strings.Join(ctx.best, "\n"), ctx.bestBadness
+}
+
+func (layouter *layouter) iter(parts, result []string) {
+	if len(parts) == 0 {
+		var badness int
+		var layout []string
+
+		if len(result) > 4 {
+			var overhead int
+			if len(result)%2 == 0 {
+				overhead = (len(result) - 4) / 2
+				layout = result[overhead : overhead+4]
+			} else {
+				overhead = (len(result) - 3) / 2
+				layout = result[overhead : overhead+3]
+			}
+			for i := 0; i < overhead; i++ {
+				badness += width(result[i])
+				badness += width(result[len(result)-1-i])
+			}
+		} else {
+			layout = result
+		}
+		limits := sizes[len(layout)]
+		for i, l := range layout {
+			w := width(l)
+			if w > limits[i] {
+				badness += w - limits[i]
+			}
+		}
+		if badness < layouter.bestBadness {
+			layouter.bestBadness = badness
+			layouter.best = layout
+		}
+
+		return
+	}
+
+	var first string
+
+	for i := 0; i < len(parts); i++ {
+		if i > 0 {
+			first += " "
+		}
+		first += parts[i]
+		layouter.iter(parts[i+1:], append(result, first))
+	}
+}
+
+func width(string string) int {
+	var result int
+	for _, r := range string {
+		result += charWidths[r]
 	}
 	return result
 }
