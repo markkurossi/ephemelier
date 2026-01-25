@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -70,7 +70,7 @@ func NewProgram(file string) (*Program, error) {
 				return nil, err
 			}
 			circ := &Circuit{
-				Name: makeName(name),
+				Name: MakeName(name),
 				Circ: c,
 			}
 
@@ -86,7 +86,7 @@ func NewProgram(file string) (*Program, error) {
 				return nil, err
 			}
 			dmpcl := &Circuit{
-				Name:  makeName(name),
+				Name:  MakeName(name),
 				DMPCL: data,
 			}
 			prog.ByName[dmpcl.Name] = dmpcl
@@ -163,7 +163,8 @@ func (prog *Program) StateName(pc int) string {
 	return fmt.Sprintf("state %d", pc)
 }
 
-func makeName(name string) string {
+// MakeName creates a state name from the file name.
+func MakeName(name string) string {
 	idx := strings.IndexByte(name, '.')
 	if idx >= 0 {
 		name = name[:idx]
