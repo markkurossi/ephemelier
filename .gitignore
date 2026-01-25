@@ -38,11 +38,12 @@ go.work.sum
 
 cmd/ca/ca
 cmd/ephemelier/ephemelier
+cmd/esmcdoc/esmcdoc
+cmd/fs-tool/fs-tool
 cmd/tlsclient/tlsclient
 cmd/tss/*.share
 cmd/tss/tss
 cmd/vault/vault
-cmd/fs-tool/fs-tool
 
 docs/additive-ss/additive-ss
 docs/spdz/spdz
