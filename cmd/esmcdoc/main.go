@@ -164,9 +164,8 @@ func splitLine(line string) []string {
 }
 
 func nodeName(node string) string {
-	if strings.HasPrefix(node, "St") {
-		node = node[2:]
-	}
+	node = strings.TrimPrefix(node, "St")
+
 	var result string
 	for len(node) > 0 {
 		var i int
