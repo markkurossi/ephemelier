@@ -1,6 +1,6 @@
 // -*- go -*-
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
+	"ephemelier/fs"
 	"ephemelier/kernel"
 	"ephemelier/memory"
 	"ephemelier/memory/semihonest"
@@ -29,12 +30,28 @@ func main(g memory.G, e memory.E) (
 
 	var key [tlsmem.KeySize]byte
 	var iv [12]byte
+	var seq uint64
+
+	// Decrypt file block.
+
+	copy(key, mem[tlsmem.Size+fs.MemOfsKey:])
+	copy(iv, mem[tlsmem.Size+fs.MemOfsNonce:])
+	seq = uint64(binary.GetUint32(mem[tlsmem.Size+fs.MemOfsBlock:]))
+	size := binary.GetUint64(mem[tlsmem.Size+fs.MemOfsPlainSize:])
+
+	plain, ok := fs.Decrypt(key, iv, seq, size, g.argBuf)
+	if !ok {
+		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
+	}
+	mem = binary.PutUint32(mem, tlsmem.Size+fs.MemOfsBlock, uint32(seq+1))
+
+	// Write data to TLS connection.
 
 	copy(key, mem[tlsmem.OfsServerKey:])
 	copy(iv, mem[tlsmem.OfsServerIV:])
-	seq := binary.GetUint64(mem[tlsmem.OfsServerSeq:])
+	seq = binary.GetUint64(mem[tlsmem.OfsServerSeq:])
 
-	cipher := tls.Encrypt(key, iv, seq, tls.CTApplicationData, g.argBuf)
+	cipher := tls.Encrypt(key, iv, seq, tls.CTApplicationData, plain)
 
 	mem = binary.PutUint64(mem, tlsmem.OfsServerSeq, seq+1)
 

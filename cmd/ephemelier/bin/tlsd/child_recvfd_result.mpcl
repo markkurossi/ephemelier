@@ -8,6 +8,7 @@
 package main
 
 import (
+	"ephemelier/fs"
 	"ephemelier/kernel"
 	"ephemelier/memory"
 	"ephemelier/memory/semihonest"
@@ -21,7 +22,7 @@ func main(g, e memory.PeerInit) (
 	}
 
 	var nonce [12]byte
-	var mem [tlsmem.Size + 4]byte
+	var mem [tlsmem.Size + fs.MemSize]byte
 
 	mem = binary.PutUint32(mem, tlsmem.OfsFD, uint32(g.arg0))
 

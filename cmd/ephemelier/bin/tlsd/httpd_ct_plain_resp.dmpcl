@@ -1,6 +1,6 @@
 // -*- go -*-
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
+	"ephemelier/fs"
 	"ephemelier/kernel"
 	"ephemelier/memory"
 	"ephemelier/memory/semihonest"
@@ -25,24 +26,24 @@ func main(g memory.G, e memory.E) (
 	if !ok {
 		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
 	}
-	tlsfd := int32(binary.GetUint32(mem[tlsmem.OfsFD:]))
 
-	mem = binary.PutUint32(mem, tlsmem.Size, uint32(g.arg0))
+	if binary.GetUint16(mem[tlsmem.Size+fs.MemOfsBlockSize:]) == 0 {
+		// First file request, open file encryption key.
 
-	response := []byte("HTTP/1.1 200 OK\nContent-Length: " +
-		strconv.Itoa(int32(binary.GetUint64(g.argBuf[0:]))) + "\n\n")
+		n := make([]byte, tlsmem.Size+fs.MemSize)
+		copy(n, mem)
+		mem = binary.PutUint(n, tlsmem.Size+fs.MemOfsFD, uint32(g.arg0))
+		mem = fs.ParseFileHeader(mem, tlsmem.Size, g.argBuf)
 
-	var key [tlsmem.KeySize]byte
-	var iv [12]byte
+		key := []byte("files")
+		return semihonest.Encode(nonce, mem, g.key, e.key),
+			intern(StHttpdCtPlainOpenkeyResult), kernel.SysOpenkey,
+			0, key, len(key)
+	}
 
-	copy(key, mem[tlsmem.OfsServerKey:])
-	copy(iv, mem[tlsmem.OfsServerIV:])
-	seq := binary.GetUint64(mem[tlsmem.OfsServerSeq:])
-
-	cipher := tls.Encrypt(key, iv, seq, tls.CTApplicationData, response)
-
-	mem = binary.PutUint64(mem, tlsmem.OfsServerSeq, seq+1)
+	mem = binary.PutUint(mem, tlsmem.Size+fs.MemOfsFD, uint32(g.arg0))
+	mem = fs.ParseFileHeader(mem, tlsmem.Size, g.argBuf)
 
 	return semihonest.Encode(nonce, mem, g.key, e.key),
-		intern(StHttpdCtPlainRead), kernel.SysWrite, tlsfd, cipher, len(cipher)
+		intern(StHttpdCtPlainHdr), kernel.SysContinue, 0, nil, 0
 }

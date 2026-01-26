@@ -19,5 +19,6 @@ func main(g, e kernel.PeerResult) (
 		return nil, 0, kernel.SysExit, g.arg0, nil, 0
 	}
 
-	return nil, intern(StReadkeyResult), kernel.SysRead, g.arg0, nil, 32
+	return nil, intern(StHttpdCtPlainReadkeyResult), kernel.SysRead,
+		g.arg0, nil, 32
 }

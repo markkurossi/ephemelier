@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
+	"ephemelier/fs"
 	"ephemelier/kernel"
 	"ephemelier/memory"
 	"ephemelier/memory/semihonest"
@@ -26,14 +27,10 @@ func main(g memory.G, e memory.E) (
 		return nil, 0, kernel.SysExit, -kernel.EINVAL, nil, 0
 	}
 	tlsfd := int32(binary.GetUint32(mem[tlsmem.OfsFD:]))
+	size := int32(binary.GetUint64(mem[tlsmem.Size+fs.MemOfsPlainSize:]))
 
-	if g.arg0 >= 0 {
-		// This function has two returns and we we don't return g.mem,
-		// this branch will have zero memory.
-		return g.mem, intern(StHttpdCtPlainResp), kernel.SysYield, 0, nil, 0
-	}
-
-	response := []byte("HTTP/1.1 404 Not Found\nContent-Length: 0\n\n")
+	response := []byte("HTTP/1.1 200 OK\nContent-Length: " +
+		strconv.Itoa(size) + "\n\n")
 
 	var key [tlsmem.KeySize]byte
 	var iv [12]byte
@@ -46,6 +43,6 @@ func main(g memory.G, e memory.E) (
 
 	mem = binary.PutUint64(mem, tlsmem.OfsServerSeq, seq+1)
 
-	return semihonest.Encode(nonce, mem, g.key, e.key), intern(StHttpdStart),
-		kernel.SysWrite, tlsfd, cipher, len(cipher)
+	return semihonest.Encode(nonce, mem, g.key, e.key),
+		intern(StHttpdCtPlainRead), kernel.SysWrite, tlsfd, cipher, len(cipher)
 }

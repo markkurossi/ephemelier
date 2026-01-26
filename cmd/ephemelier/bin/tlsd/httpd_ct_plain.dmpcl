@@ -1,6 +1,6 @@
 // -*- go -*-
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -37,5 +37,6 @@ func main(g memory.G, e memory.E) (
 		pathLen = g.arg1
 	}
 
-	return nil, intern(StHttpdCtPlainOpen), kernel.SysOpen, 0, path, pathLen
+	return nil, intern(StHttpdCtPlainOpen), kernel.SysOpen, kernel.Encrypt,
+		path, pathLen
 }

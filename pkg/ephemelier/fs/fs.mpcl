@@ -7,6 +7,11 @@
 
 package fs
 
+import (
+	"crypto/cipher/chacha20poly1305"
+	"encoding/binary"
+)
+
 const (
 	KeySize   = 32
 	NonceSize = 12
@@ -37,3 +42,35 @@ const (
 	AADOfsFlags    = 12
 	AADSize        = 14
 )
+
+func ParseFileHeader(mem []byte, ofs int, hdr []byte) []byte {
+	mem = binary.PutUint32(mem, ofs+MemOfsBlock, 0)
+
+	size := binary.GetUint64(hdr[HdrOfsFileSize:])
+	mem = binary.PutUint64(mem, ofs+MemOfsPlainSize, size)
+
+	bsize := binary.GetUint16(hdr[HdrOfsBlockSize:])
+	mem = binary.PutUint16(mem, ofs+MemOfsBlockSize, bsize)
+
+	copy(mem[ofs+MemOfsNonce:], hdr[fs.HdrOfsNonce:])
+
+	return mem
+}
+
+func Decrypt(key []byte, iv []byte, seq, size uint64, data []byte) (
+	[]byte, bool) {
+
+	// Create nonce.
+	var nonce [NonceSize]byte
+	nonce = binary.PutUint64(nonce, 4, seq)
+	for i := 0; i < len(iv); i++ {
+		nonce[i] ^= iv[i]
+	}
+
+	// Create AAD.
+	var aad [AADSize]byte
+	aad = binary.PutUint32(aad, AADOfsBlock, uint32(seq))
+	aad = binary.PutUint64(aad, AADOfsFileSize, size)
+
+	return chacha20poly1305.Open(key, nonce, data, aad[:])
+}

@@ -28,9 +28,10 @@ clean:
 	garbled $(MPCLCFLAGS) -sids $(dir $+)symtab $+
 
 %.stamp : %.dmpcl
-	garbled $(MPCLCFLAGS) -sids $(dir $+)symtab -suffix stamp -i 0,16x00,200x00,60x00,0 -pi 0,16x00,16x00 $+
+	garbled $(MPCLCFLAGS) -sids $(dir $+)symtab -suffix stamp -i 0,16x00,300x00,60x00,0 -pi 0,16x00,16x00 $+
 
-fsfiles := fs/etc/motd fs/etc/httpd/test.html
+fsfiles := fs/etc/motd fs/etc/httpd/index.html fs/etc/httpd/link.html	\
+fs/etc/httpd/favicon.ico
 
 .PHONY: import
 
