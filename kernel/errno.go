@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Markku Rossi
+// Copyright (c) 2025-2026 Markku Rossi
 //
 // All rights reserved.
 //
@@ -396,6 +396,9 @@ func mapError(err error) int32 {
 	}
 	errno, ok := err.(Errno)
 	if ok {
+		return int32(-errno)
+	}
+	if errors.As(err, &errno) {
 		return int32(-errno)
 	}
 

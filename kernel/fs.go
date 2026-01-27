@@ -201,12 +201,13 @@ type FileHeader struct {
 // NewFileHeader creates a new FileHeader from the serialized data.
 func NewFileHeader(buf []byte) (*FileHeader, error) {
 	if len(buf) != int(EncrFileHdrSize) {
-		return nil, fmt.Errorf("invalid encryption header length: %v", len(buf))
+		return nil, fmt.Errorf("invalid encryption header length %v: %w",
+			len(buf), ENOEXEC)
 	}
 
 	magic := bo.Uint32(buf[0:])
 	if magic != EncrFileMagic {
-		return nil, fmt.Errorf("invalid EncrFileMagic %08x", magic)
+		return nil, fmt.Errorf("invalid EncrFileMagic %08x: %w", magic, ENOEXEC)
 	}
 	hdr := &FileHeader{
 		Magic:     magic,
