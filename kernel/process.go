@@ -88,6 +88,8 @@ type RUsage struct {
 	CompTime   time.Duration
 	StreamTime time.Duration
 	GarbleTime time.Duration
+	TSSTime    time.Duration
+	SPDZTime   time.Duration
 	NumGates   uint64
 	NumWires   uint64
 	NumXOR     uint64
@@ -285,6 +287,11 @@ run:
 		if numInputs > 2 {
 			inputs[2] = sys.argBuf
 		}
+
+		// Clear statistics so we get correct info for this code
+		// fragment.
+		proc.iostats = proc.iostats.Add(proc.conn.Stats)
+		proc.conn.Stats.Clear()
 
 		var outputs circuit.IO
 		var result []*big.Int

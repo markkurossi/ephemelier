@@ -11,6 +11,7 @@ import (
 	"crypto/elliptic"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/markkurossi/ephemelier/crypto/spdz"
 	"github.com/markkurossi/ephemelier/crypto/tls"
@@ -184,12 +185,14 @@ func (proc *Process) tlsServerGarbler(sock *FDSocket, key *Key,
 
 		// Compute shared secret αβ·G = Σ(αᵢ·(β·G)) with SPDZ. The
 		// function returns our arithmetic share of the secret.
+		start := time.Now()
 		spdzFinalX, spdzFinalY, err := spdz.P256Add(spdz.Sender, proc.conn,
 			partial.X, partial.Y)
 		if err != nil {
 			proc.tlsPeerErrf(err, "SPDZ P256Add failed: %v", err)
 			return err
 		}
+		proc.rusage.SPDZTime += time.Since(start)
 		_ = spdzFinalY
 		proc.debugf("spdzFinalX: %v\n", spdzFinalX.Text(16))
 
@@ -341,12 +344,14 @@ func (proc *Process) tlsServerEvaluator(sock *FDSocket, key *Key,
 
 		// Compute shared secret αβ·G = Σ(αᵢ·(β·G)) with SPDZ. The
 		// function returns our arithmetic share of the secret.
+		start := time.Now()
 		spdzFinalX, spdzFinalY, err := spdz.P256Add(spdz.Receiver, proc.conn,
 			partial.X, partial.Y)
 		if err != nil {
 			proc.tlsPeerErrf(err, "SPDZ P256Add failed: %v", err)
 			return err
 		}
+		proc.rusage.SPDZTime += time.Since(start)
 		_ = spdzFinalY
 		proc.debugf("spdzFinalX: %v\n", spdzFinalX.Text(16))
 
@@ -423,6 +428,7 @@ func (proc *Process) tlsHandshake(sys *syscall) {
 				sys.SetArg0(mapError(err))
 				return
 			}
+			start := time.Now()
 			peer, err := tss.NewPeer(proc.conn, true)
 			if err != nil {
 				sys.SetArg0(mapError(err))
@@ -433,6 +439,7 @@ func (proc *Process) tlsHandshake(sys *syscall) {
 				sys.SetArg0(int32(-EIO))
 				return
 			}
+			proc.rusage.TSSTime += time.Since(start)
 		}
 		sys.SetArg0(sys.arg1)
 		return
@@ -497,6 +504,7 @@ func (proc *Process) tlsHandshake(sys *syscall) {
 			sys.SetArg0(mapError(err))
 			return
 		}
+		start := time.Now()
 		peer, err := tss.NewPeer(proc.conn, false)
 		if err != nil {
 			sys.SetArg0(mapError(err))
@@ -507,6 +515,7 @@ func (proc *Process) tlsHandshake(sys *syscall) {
 			sys.SetArg0(int32(-EIO))
 			return
 		}
+		proc.rusage.TSSTime += time.Since(start)
 		data, err = tlsfd.conn.MakeCertificateVerify(signature)
 		if err != nil {
 			sys.SetArg0(mapError(err))

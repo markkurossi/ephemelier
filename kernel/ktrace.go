@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/markkurossi/ephemelier/crypto/tls"
+	"github.com/markkurossi/mpc/circuit"
 )
 
 func (proc *Process) ktracePrefix() {
@@ -193,10 +194,24 @@ func (proc *Process) ktraceExit() {
 		proc.rusage.Stime)
 
 	proc.ktracePrefix()
-	fmt.Printf("RUSG c=%v, s=%v, g=%v\n", proc.rusage.CompTime,
+	fmt.Printf("RUSG tss=%v, spdz=%v\n", proc.rusage.TSSTime,
+		proc.rusage.SPDZTime)
+
+	proc.ktracePrefix()
+	fmt.Printf("RUSG cc=%v, stream=%v, g=%v\n", proc.rusage.CompTime,
 		proc.rusage.StreamTime, proc.rusage.GarbleTime)
 
 	proc.ktracePrefix()
 	fmt.Printf("RUSG g=%v, xor=%v, nxor=%v\n", proc.rusage.NumGates,
 		proc.rusage.NumXOR, proc.rusage.NumNonXOR)
+
+	sent := proc.iostats.Sent.Load()
+	rcvd := proc.iostats.Recvd.Load()
+	flcd := proc.iostats.Flushed.Load()
+
+	proc.ktracePrefix()
+	fmt.Printf("RUSG sent=%v, rcvd=%v, flcd=%v\n",
+		circuit.FileSize(sent).String(),
+		circuit.FileSize(rcvd).String(),
+		flcd)
 }
