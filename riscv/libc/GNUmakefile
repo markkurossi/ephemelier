@@ -23,7 +23,7 @@ crt0.o:
 hello: examples/hello.c
 	$(CC) $(CFLAGS) examples/hello.c crt0.o libc.a $(LDFLAGS) -o hello
 
-run: example
+run: hello
 	qemu-riscv64 ./hello
 
 clean:
