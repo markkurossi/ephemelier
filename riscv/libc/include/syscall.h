@@ -10,9 +10,14 @@
 #include <stdint.h>
 
 // RISC-V Linux syscall numbers (subset)
+#define SYS_openat  56
+#define SYS_close   57
 #define SYS_read    63
 #define SYS_write   64
 #define SYS_exit    93
+#define SYS_futex   98
+#define SYS_brk     214
+#define SYS_mmap    222
 
 static inline long
 syscall0(long n)

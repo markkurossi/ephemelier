@@ -7,11 +7,11 @@
 
 #include <unistd.h>
 
+const char msg[] = "Hello, RISC-V!\n";
+
 int
 main()
 {
-  const char msg[] = "Hello, RISC-V!\n";
-
   write(1, msg, sizeof(msg) - 1);
 
   return 0;
