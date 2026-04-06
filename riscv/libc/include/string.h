@@ -4,8 +4,8 @@
  * All rights reserved.
  */
 
-#ifndef STRING_H
-#define STRING_H
+#ifndef _STRING_H_
+#define _STRING_H_
 
 #include <stddef.h>
 
@@ -13,4 +13,4 @@ size_t strlen(const char *s);
 
 size_t strnlen(const char *s, size_t maxlen);
 
-#endif /* not STRING_H */
+#endif /* not _STRING_H_ */

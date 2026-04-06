@@ -4,8 +4,8 @@
  * All rights reserved.
  */
 
-#ifndef STDINT_H
-#define STDINT_H
+#ifndef _STDINT_H_
+#define _STDINT_H_
 
 typedef signed char int8_t;
 typedef short int16_t;
@@ -29,4 +29,4 @@ typedef unsigned long long uint64_t;
 #error "Unknown pointer size"
 #endif
 
-#endif /* not STDINT_H */
+#endif /* not _STDINT_H_ */

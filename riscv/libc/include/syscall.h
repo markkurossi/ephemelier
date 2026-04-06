@@ -4,12 +4,12 @@
  * All rights reserved.
  */
 
-#ifndef SYSCALL_H
-#define SYSCALL_H
+#ifndef _SYSCALL_H_
+#define _SYSCALL_H_
 
 #include <stdint.h>
 
-// RISC-V Linux syscall numbers (subset)
+/* RISC-V Linux syscall numbers (subset). */
 #define SYS_openat  56
 #define SYS_close   57
 #define SYS_read    63
@@ -59,4 +59,4 @@ syscall3(long n, long a, long b, long c)
   return a0;
 }
 
-#endif /* not SYSCALL_H */
+#endif /* not _SYSCALL_H_ */

@@ -4,13 +4,13 @@
  * All rights reserved.
  */
 
-#ifndef STDDEF_H
-#define STDDEF_H
+#ifndef _STDDEF_H_
+#define _STDDEF_H_
+
+#define NULL ((void *) 0)
 
 typedef long ptrdiff_t;
 typedef unsigned long size_t;
 typedef long ssize_t;
 
-#define NULL ((void *) 0)
-
-#endif /* not STDDEF_H */
+#endif /* not _STDDEF_H_ */
