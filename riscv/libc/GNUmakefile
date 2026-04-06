@@ -2,7 +2,7 @@ CC = riscv64-unknown-elf-gcc
 AR = riscv64-unknown-elf-ar
 OBJDUMP = riscv64-unknown-elf-objdump
 
-CFLAGS = -march=rv64im -mabi=lp64 -nostdlib -ffreestanding -fno-builtin -O2 -Wall -Wextra -Iinclude
+CFLAGS = -march=rv64im_zkne -mabi=lp64 -nostdlib -ffreestanding -fno-builtin -O2 -Wall -Wextra -Iinclude
 LDFLAGS = -nostdlib -T linker/linker.ld
 
 LIBCSRC = $(wildcard src/string/*.c) $(wildcard src/syscall/*.c)
@@ -15,7 +15,10 @@ libc.a: $(OBJ)
 	$(AR) rcs $@ $^
 
 crt0.o:
-	$(CC) $(CFLAGS) -c src/crt/crt0.S -o crt0.o
+	$(CC) $(CFLAGS) -c src/crt/crt0.S -o $@
+
+encrypt.o:
+	$(CC) $(CFLAGS) -c src/aes/encrypt.S -o $@
 
 examples/hello: examples/hello.c libc.a crt0.o
 	$(CC) $(CFLAGS) examples/hello.c crt0.o -L. -lc $(LDFLAGS) -o $@
